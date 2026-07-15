@@ -2,11 +2,14 @@
 import type { Project } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
+import ProjectManagementView from "./ProjectManagementView.vue";
+import ProjectSettingsView from "./ProjectSettingsView.vue";
 import TerminalSurface from "./TerminalSurface.vue";
 
 const props = defineProps<{
   selection: SidebarSelection;
   selectedProject?: Project;
+  projects: Project[];
   tabs: TerminalTab[];
   activeTabId?: string;
   isEmpty: boolean;
@@ -15,6 +18,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   create: [projectId: string, directory: string];
   host: [element: HTMLElement];
+  selectProject: [project: Project];
+  addProject: [];
+  saveProject: [project: Project];
+  removeProject: [id: string];
 }>();
 
 function createTerminal(): void {
@@ -33,19 +40,25 @@ function createTerminal(): void {
       @create="createTerminal"
       @host="emit('host', $event)"
     />
-    <section v-if="selection.kind !== 'terminal'" class="main-stub">
-      <span class="stub-icon">{{
-        selection.kind === "project" ? "◆" : selection.kind.includes("command") ? "▱" : "▣"
-      }}</span>
-      <h2 v-if="selection.kind === 'project'">{{ selectedProject?.name }} settings</h2>
-      <h2 v-else-if="selection.kind === 'terminals'">Terminals</h2>
+    <ProjectManagementView
+      v-if="selection.kind === 'projects'"
+      :projects="projects"
+      @select="emit('selectProject', $event)"
+      @add="emit('addProject')"
+    />
+    <ProjectSettingsView
+      v-else-if="selection.kind === 'project' && selectedProject"
+      :project="selectedProject"
+      @save="emit('saveProject', $event)"
+      @remove="emit('removeProject', $event)"
+    />
+    <section v-else-if="selection.kind !== 'terminal'" class="main-stub">
+      <span class="stub-icon">{{ selection.kind.includes("command") ? "▱" : "▣" }}</span>
+      <h2 v-if="selection.kind === 'terminals'">Terminals</h2>
       <h2 v-else-if="selection.kind === 'add-terminal'">Open a new terminal</h2>
       <h2 v-else-if="selection.kind === 'commands'">Commands</h2>
       <h2 v-else>Add a command</h2>
-      <p v-if="selection.kind === 'project'">
-        Project settings for {{ selectedProject?.directory }}
-      </p>
-      <p v-else-if="selection.kind === 'terminals'">
+      <p v-if="selection.kind === 'terminals'">
         Select a terminal or create a new one for this project.
       </p>
       <p v-else-if="selection.kind === 'add-terminal'">Terminal configuration will appear here.</p>

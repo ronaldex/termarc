@@ -3,7 +3,6 @@ import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
 import AppTitlebar from "./components/AppTitlebar.vue";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
-import ProjectManagerDialog from "./components/ProjectManagerDialog.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
 import WorkspaceMain from "./components/WorkspaceMain.vue";
 import { useProjects } from "./composables/useProjects";
@@ -76,17 +75,16 @@ async function closeTerminal(id: string): Promise<void> {
   if (sidebarSelection.value.tabId === id) selectTerminalSection(sidebarSelection.value.projectId);
   await closeTab(id);
 }
-const projectManagerOpen = ref(false);
-const managedProjectId = ref<string>();
 function manageProjects(projectId?: string): void {
-  managedProjectId.value = projectId;
-  projectManagerOpen.value = true;
+  const project = projects.value.find((item) => item.id === projectId);
+  if (project) selectProject(project);
+  else {
+    const projectId = selectedProject.value?.id ?? projects.value[0].id;
+    setSidebarSelection({ id: "projects", kind: "projects", projectId });
+  }
 }
 function addProject(): void {
-  const project = addProjectState();
-  selectProject(project);
-  managedProjectId.value = project.id;
-  projectManagerOpen.value = true;
+  selectProject(addProjectState());
 }
 
 onMounted(async () => {
@@ -100,12 +98,10 @@ onMounted(async () => {
   selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
 });
-watch(
-  () => selectedProject.value?.directory,
-  () => {
-    gitSidebarAvailable.value = true;
-  },
-);
+watch(selectedProject, (project) => {
+  gitSidebarAvailable.value = true;
+  if (project) setDefaultProject(project.id, project.directory);
+});
 watch(activeTabId, (id) => {
   const tab = tabs.find((item) => item.id === id);
   if (tab) {
@@ -156,24 +152,20 @@ onBeforeUnmount(dispose);
       title="Resize terminal sidebar"
       @pointerdown="startResize('left', $event)"
     />
-    <ProjectManagerDialog
-      v-if="projectManagerOpen"
-      :projects="projects"
-      :initial-project-id="managedProjectId"
-      @close="projectManagerOpen = false"
-      @add="addProject"
-      @save="updateProject"
-      @remove="removeProjectState"
-    />
     <WorkspaceMain
       :selection="sidebarSelection"
       :selected-project="selectedProject"
+      :projects="projects"
       :tabs="tabs"
       :active-tab-id="activeTabId"
       :is-empty="isEmpty"
       :set-terminal-container="setTerminalContainer"
       @create="createProjectTerminal"
       @host="attachHost"
+      @select-project="selectProject"
+      @add-project="addProject"
+      @save-project="updateProject"
+      @remove-project="removeProjectState"
     />
     <div
       v-if="rightSidebarOpen && gitSidebarAvailable"
