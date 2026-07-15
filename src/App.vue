@@ -212,6 +212,7 @@ onBeforeUnmount(dispose);
       v-show="rightSidebarOpen"
       :style="{ width: `${rightSidebarWidth}px` }"
       :directory="selectedProject?.directory"
+      :active="rightSidebarOpen"
       @available="gitSidebarAvailable = $event"
       @collapse="rightSidebarOpen = false"
     />

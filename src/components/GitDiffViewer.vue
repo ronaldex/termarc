@@ -1,72 +1,23 @@
 <script setup lang="ts">
-import { DiffModeEnum, DiffView } from "@git-diff-view/vue";
 import "@git-diff-view/vue/styles/diff-view-pure.css";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { getProjectGitDiff, type GitDiff } from "../api/git";
+import { computed, defineAsyncComponent, toRef, watch } from "vue";
+import { useGitDiff } from "../composables/useGitDiff";
+import { splitGitDiff } from "../utils/gitDiff";
 
-type DiffData = {
-  key: string;
-  oldFile: { fileName: string };
-  newFile: { fileName: string };
-  hunks: string[];
-};
-
-const props = defineProps<{ directory?: string }>();
+const AsyncDiffView = defineAsyncComponent(() =>
+  import("@git-diff-view/vue").then(({ DiffView }) => DiffView),
+);
+const props = defineProps<{ directory?: string; active: boolean }>();
 const emit = defineEmits<{ collapse: []; available: [value: boolean] }>();
-const state = ref<GitDiff>();
-const loading = ref(false);
-let timer: number | undefined;
+const { state, loading, refresh } = useGitDiff(toRef(props, "directory"), toRef(props, "active"));
 
 const repositoryName = computed(
   () => state.value?.repository?.split(/[\\/]/).pop() ?? "No repository",
 );
-const files = computed<DiffData[]>(() => splitGitDiff(state.value?.diff ?? ""));
+const files = computed(() => splitGitDiff(state.value?.diff ?? ""));
 
-async function refresh(): Promise<void> {
-  if (!props.directory) {
-    state.value = undefined;
-    emit("available", false);
-    return;
-  }
-
-  loading.value = true;
-  try {
-    state.value = await getProjectGitDiff(props.directory);
-    emit("available", Boolean(state.value.repository));
-  } catch (error) {
-    state.value = { directory: "", diff: "", error: String(error) };
-  } finally {
-    loading.value = false;
-  }
-}
-
-function splitGitDiff(diff: string): DiffData[] {
-  return diff
-    .split(/(?=^diff --git )/m)
-    .filter(Boolean)
-    .map((hunk, index) => {
-      const header = hunk.match(/^diff --git a\/(.+) b\/(.+)$/m);
-      const oldFile = hunk.match(/^--- (?:a\/)?(.+)$/m)?.[1] ?? header?.[1] ?? "Deleted file";
-      const newFile = hunk.match(/^\+\+\+ (?:b\/)?(.+)$/m)?.[1] ?? header?.[2] ?? "New file";
-
-      return {
-        key: `${oldFile}-${newFile}-${index}`,
-        oldFile: { fileName: oldFile === "/dev/null" ? newFile : oldFile },
-        newFile: { fileName: newFile === "/dev/null" ? oldFile : newFile },
-        hunks: [hunk],
-      };
-    });
-}
-
-watch(
-  () => props.directory,
-  () => void refresh(),
-  { immediate: true },
-);
-
-timer = window.setInterval(() => void refresh(), 2_000);
-onBeforeUnmount(() => {
-  if (timer !== undefined) window.clearInterval(timer);
+watch(state, (result) => {
+  if (result) emit("available", Boolean(result.repository));
 });
 </script>
 
@@ -95,11 +46,11 @@ onBeforeUnmount(() => {
     </div>
     <div v-else-if="!files.length" class="diff-message">Working tree is clean.</div>
     <div v-else class="diff-content">
-      <DiffView
+      <AsyncDiffView
         v-for="file in files"
         :key="file.key"
         :data="file"
-        :diff-view-mode="DiffModeEnum.Unified"
+        :diff-view-mode="4"
         diff-view-theme="dark"
         :diff-view-highlight="true"
         :diff-view-wrap="true"
