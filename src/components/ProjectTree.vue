@@ -11,7 +11,7 @@ const props = defineProps<{
   selection: SidebarSelection;
 }>();
 const emit = defineEmits<{
-  manage: [];
+  manage: [projectId: string];
   close: [id: string];
   toggleProject: [id: string];
   toggleTerminals: [id: string];
@@ -56,7 +56,9 @@ function initials(name: string): string {
           <span class="project-badge">{{ initials(project.name) }}</span>
           <strong>{{ project.name }}</strong>
         </button>
-        <button class="project-menu" title="Project settings" @click="emit('manage')">•••</button>
+        <button class="project-menu" title="Project settings" @click="emit('manage', project.id)">
+          •••
+        </button>
       </div>
 
       <div v-if="project.terminalOpen || project.commandsOpen" class="project-content">

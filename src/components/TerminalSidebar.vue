@@ -14,7 +14,7 @@ const props = defineProps<{
   selection: SidebarSelection;
 }>();
 const emit = defineEmits<{
-  manage: [];
+  manage: [projectId?: string];
   close: [id: string];
   toggle: [];
   addProject: [];
@@ -75,7 +75,7 @@ useProjectTreeNavigation({
         :tabs="tabs"
         :filter="filter"
         :selection="selection"
-        @manage="emit('manage')"
+        @manage="emit('manage', $event)"
         @close="emit('close', $event)"
         @toggle-project="emit('toggleProject', $event)"
         @toggle-terminals="emit('toggleTerminals', $event)"
