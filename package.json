@@ -1,0 +1,30 @@
+{
+  "name": "termdeck",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@cloudworxx/tauri-plugin-mac-rounded-corners": "^1.1.1",
+    "@git-diff-view/vue": "^0.1.7",
+    "@tauri-apps/api": "2.11.1",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/xterm": "6.0.0",
+    "vue": "^3.5.39"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "prettier": "^3.9.5",
+    "typescript": "7.0.2",
+    "vite": "8.1.4"
+  }
+}
