@@ -185,6 +185,9 @@ button {
 .project {
   background: transparent;
 }
+.project + .project .project-row {
+  border-top: 1px solid #34363c;
+}
 .project-row {
   position: relative;
   display: flex;
