@@ -11,7 +11,6 @@ const props = defineProps<{
   selection: SidebarSelection;
 }>();
 const emit = defineEmits<{
-  manage: [projectId: string];
   close: [id: string];
   toggleProject: [id: string];
   toggleTerminals: [id: string];
@@ -55,9 +54,6 @@ function initials(name: string): string {
         >
           <span class="project-badge">{{ initials(project.name) }}</span>
           <strong>{{ project.name }}</strong>
-        </button>
-        <button class="project-menu" title="Project settings" @click="emit('manage', project.id)">
-          •••
         </button>
       </div>
 
@@ -252,14 +248,6 @@ button {
   background: #34373c;
   font-size: 8px;
   font-weight: 700;
-}
-.project-menu {
-  padding: 5px;
-  color: #61646b;
-  opacity: 0;
-}
-.project-row:hover .project-menu {
-  opacity: 1;
 }
 .project-content {
   padding: 0 11px 11px 13px;

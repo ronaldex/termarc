@@ -75,7 +75,6 @@ useProjectTreeNavigation({
         :tabs="tabs"
         :filter="filter"
         :selection="selection"
-        @manage="emit('manage', $event)"
         @close="emit('close', $event)"
         @toggle-project="emit('toggleProject', $event)"
         @toggle-terminals="emit('toggleTerminals', $event)"
