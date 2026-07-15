@@ -16,6 +16,7 @@ const emit = defineEmits<{
   toggleTerminals: [id: string];
   toggleCommands: [id: string];
   focus: [selection: SidebarSelection];
+  activate: [selection: SidebarSelection];
 }>();
 
 function projectTabs(project: ProjectTreeProject): TerminalTab[] {
@@ -113,7 +114,7 @@ function initials(name: string): string {
               class="add-row"
               :class="{ 'tree-active': isTreeActive(`${project.id}:add-terminal`) }"
               @click="
-                emit('focus', {
+                emit('activate', {
                   id: `${project.id}:add-terminal`,
                   kind: 'add-terminal',
                   projectId: project.id,

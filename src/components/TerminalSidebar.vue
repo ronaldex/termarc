@@ -80,6 +80,7 @@ useProjectTreeNavigation({
         @toggle-terminals="emit('toggleTerminals', $event)"
         @toggle-commands="emit('toggleCommands', $event)"
         @focus="choose"
+        @activate="emit('activate', $event)"
       />
 
       <SidebarFooter @toggle="emit('toggle')" @add="emit('addProject')" />
