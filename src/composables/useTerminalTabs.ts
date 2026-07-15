@@ -1,9 +1,9 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { computed, markRaw, nextTick, reactive, ref } from "vue";
-import type { PtyEvent, PtyStarted, TerminalStatus, TerminalTab } from "../types/terminal";
+import { resizeTerminal, startTerminal, stopTerminal, writeTerminal } from "../api/terminals";
+import type { TerminalStatus, TerminalTab } from "../types/terminal";
 
 export function useTerminalTabs() {
   const tabs = reactive<TerminalTab[]>([]);
@@ -14,6 +14,7 @@ export function useTerminalTabs() {
   let resizeObserver: ResizeObserver | undefined;
   let resizeFrame: number | undefined;
   let nextTabNumber = 1;
+  let defaultProject = { projectId: "project-1", cwd: "." };
 
   function createTerminal(): Terminal {
     return new Terminal({
@@ -56,13 +57,14 @@ export function useTerminalTabs() {
     });
   }
 
-  async function createTab(cwd = "."): Promise<void> {
+  async function createTab(projectId: string, cwd: string): Promise<TerminalTab> {
     const number = nextTabNumber++;
     const tab = reactive({
       id: `terminal-${number}`,
       number,
       title: `Terminal ${number}`,
       detail: "Starting shell…",
+      projectId,
       cwd,
       status: "starting" as TerminalStatus,
       terminal: markRaw(createTerminal()),
@@ -75,13 +77,14 @@ export function useTerminalTabs() {
     tabs.push(tab);
     activeTabId.value = tab.id;
     await nextTick();
-    if (!tab.container || tab.disposed) return;
+    if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
     tab.terminal.open(tab.container);
     installTerminalInput(tab);
     enableWebgl(tab);
     fitTab(tab);
     void startTab(tab);
+    return tab;
   }
 
   function setTerminalContainer(tab: TerminalTab, element: Element | null): void {
@@ -114,7 +117,7 @@ export function useTerminalTabs() {
     );
     tab.terminal.onResize(({ cols, rows }) => {
       if (tab.id === activeTabId.value && tab.session) {
-        void invoke("resize_pty", { id: tab.session.id, rows, cols }).catch(console.error);
+        void resizeTerminal(tab.session.id, rows, cols).catch(console.error);
       }
     });
   }
@@ -152,11 +155,9 @@ export function useTerminalTabs() {
     if (tab.disposed || tab.id !== activeTabId.value) return;
     tab.fitAddon.fit();
     if (tab.session)
-      void invoke("resize_pty", {
-        id: tab.session.id,
-        rows: tab.terminal.rows,
-        cols: tab.terminal.cols,
-      }).catch(console.error);
+      void resizeTerminal(tab.session.id, tab.terminal.rows, tab.terminal.cols).catch(
+        console.error,
+      );
   }
 
   function scheduleFit(): void {
@@ -171,7 +172,7 @@ export function useTerminalTabs() {
     const session = tab.session;
     if (!session || !bytes.length || tab.disposed) return;
     tab.writeQueue = tab.writeQueue
-      .then(() => invoke("write_to_pty", { id: session.id, data: Array.from(bytes) }))
+      .then(() => writeTerminal(session.id, bytes))
       .catch((error) => {
         console.error("PTY write failed", error);
         setTabStatus(tab, "error", String(error));
@@ -184,30 +185,24 @@ export function useTerminalTabs() {
     setTabStatus(tab, "starting", "Starting shell…");
     tab.terminal.reset();
     fitTab(tab);
-    const onOutput = new Channel<ArrayBuffer>();
-    onOutput.onmessage = (data) => {
-      if (!tab.disposed && generation === tab.startGeneration)
-        tab.terminal.write(new Uint8Array(data));
-    };
-    const onEvent = new Channel<PtyEvent>();
-    onEvent.onmessage = (message) => {
-      if (tab.disposed || generation !== tab.startGeneration) return;
-      if (message.event === "exit") {
-        const code = message.exitCode ?? 0;
-        if (code !== 0) return;
-        // Exited shells are no longer useful as terminal tabs. Remove them from
-        // the project immediately, just like closing the terminal manually.
-        void closeTab(tab.id);
-      } else setTabStatus(tab, "error", message.message ?? "PTY error");
-    };
     try {
-      const started = await invoke<PtyStarted>("start_pty", {
-        request: { rows: tab.terminal.rows, cols: tab.terminal.cols, cwd: tab.cwd },
-        onOutput,
-        onEvent,
+      const started = await startTerminal({
+        rows: tab.terminal.rows,
+        cols: tab.terminal.cols,
+        cwd: tab.cwd,
+        onOutput: (data) => {
+          if (!tab.disposed && generation === tab.startGeneration)
+            tab.terminal.write(new Uint8Array(data));
+        },
+        onEvent: (message) => {
+          if (tab.disposed || generation !== tab.startGeneration) return;
+          if (message.event === "exit") {
+            if ((message.exitCode ?? 0) === 0) void closeTab(tab.id);
+          } else setTabStatus(tab, "error", message.message ?? "PTY error");
+        },
       });
       if (tab.disposed || generation !== tab.startGeneration) {
-        await invoke("stop_pty", { id: started.id });
+        await stopTerminal(started.id);
         return;
       }
       tab.session = started;
@@ -229,7 +224,7 @@ export function useTerminalTabs() {
     tab.session = undefined;
     setTabStatus(tab, "stopped", "Stopping…");
     try {
-      await invoke("stop_pty", { id: session.id });
+      await stopTerminal(session.id);
     } catch (error) {
       setTabStatus(tab, "error", String(error));
     }
@@ -251,7 +246,7 @@ export function useTerminalTabs() {
     tab.session = undefined;
     tab.terminal.dispose();
     tabs.splice(index, 1);
-    if (session) void invoke("stop_pty", { id: session.id }).catch(console.error);
+    if (session) void stopTerminal(session.id).catch(console.error);
     if (activeTabId.value === id) activeTabId.value = nextId;
     await nextTick();
     scheduleFit();
@@ -282,7 +277,7 @@ export function useTerminalTabs() {
     }
     if (event.key.toLowerCase() === "t") {
       event.preventDefault();
-      void createTab();
+      void createTab(defaultProject.projectId, defaultProject.cwd);
     }
     if (event.key.toLowerCase() === "w" && activeTab.value) {
       event.preventDefault();
@@ -294,10 +289,14 @@ export function useTerminalTabs() {
     resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(host);
   }
-  function start(cwd = "."): void {
+  function setDefaultProject(projectId: string, cwd: string): void {
+    defaultProject = { projectId, cwd };
+  }
+  function start(projectId: string, cwd: string): void {
+    setDefaultProject(projectId, cwd);
     window.addEventListener("keydown", handleKeyboard, { capture: true });
     document.fonts.ready.then(scheduleFit).catch(console.error);
-    void createTab(cwd);
+    void createTab(projectId, cwd);
   }
   function dispose(): void {
     resizeObserver?.disconnect();
@@ -306,7 +305,7 @@ export function useTerminalTabs() {
     for (const tab of tabs) {
       tab.disposed = true;
       tab.terminal.dispose();
-      if (tab.session) void invoke("stop_pty", { id: tab.session.id });
+      if (tab.session) void stopTerminal(tab.session.id);
     }
   }
 
@@ -324,6 +323,7 @@ export function useTerminalTabs() {
     statusLabel,
     setTerminalContainer,
     attachHost,
+    setDefaultProject,
     start,
     dispose,
   };

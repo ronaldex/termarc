@@ -1,20 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import type { Project } from "../types/project";
+import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
-
-export type Project = {
-  id: string;
-  name: string;
-  directory: string;
-  terminalOpen: boolean;
-  commandsOpen: boolean;
-};
-export type SidebarSelection = {
-  id: string;
-  kind: "project" | "terminals" | "terminal" | "add-terminal" | "commands" | "add-command";
-  projectId: string;
-  tabId?: string;
-};
 
 const props = defineProps<{
   tabs: TerminalTab[];
@@ -44,7 +32,7 @@ const sidebarElement = ref<HTMLElement>();
 function projectTabs(project: Project): TerminalTab[] {
   const query = filter.value.trim().toLowerCase();
   return props.tabs.filter(
-    (tab) => tab.cwd === project.directory && (!query || tab.title.toLowerCase().includes(query)),
+    (tab) => tab.projectId === project.id && (!query || tab.title.toLowerCase().includes(query)),
   );
 }
 const tree = computed<SidebarSelection[]>(() =>

@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
 import { DiffModeEnum, DiffView } from "@git-diff-view/vue";
 import "@git-diff-view/vue/styles/diff-view-pure.css";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-
-type GitDiff = {
-  directory: string;
-  repository?: string;
-  diff: string;
-  error?: string;
-};
+import { getProjectGitDiff, type GitDiff } from "../api/git";
 
 type DiffData = {
   key: string;
@@ -38,7 +31,7 @@ async function refresh(): Promise<void> {
 
   loading.value = true;
   try {
-    state.value = await invoke<GitDiff>("get_git_diff_directory", { directory: props.directory });
+    state.value = await getProjectGitDiff(props.directory);
     emit("available", Boolean(state.value.repository));
   } catch (error) {
     state.value = { directory: "", diff: "", error: String(error) };

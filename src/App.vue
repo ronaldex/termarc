@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { loadProjects, saveProjects } from "./api/projects";
 import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
-import TerminalSidebar, {
-  type Project,
-  type SidebarSelection,
-} from "./components/TerminalSidebar.vue";
+import TerminalSidebar from "./components/TerminalSidebar.vue";
 import TerminalSurface from "./components/TerminalSurface.vue";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
+import type { Project } from "./types/project";
+import type { SidebarSelection } from "./types/sidebar";
 
 const {
   tabs,
@@ -25,6 +23,7 @@ const {
   statusLabel,
   setTerminalContainer,
   attachHost,
+  setDefaultProject,
   start,
   dispose,
 } = useTerminalTabs();
@@ -53,25 +52,24 @@ const selectedProject = computed(() =>
 function focusSidebar(selection: SidebarSelection): void {
   sidebarSelection.value = selection;
   activeProjectId.value = selection.projectId;
+  const project = projects.value.find((item) => item.id === selection.projectId);
+  if (project) setDefaultProject(project.id, project.directory);
   if (selection.tabId) activeTabId.value = selection.tabId;
 }
 function activateSidebar(selection: SidebarSelection): void {
   focusSidebar(selection);
   if (selection.kind === "terminal" && selection.tabId) selectTab(selection.tabId);
-  if (selection.kind === "add-terminal")
-    void createProjectTerminal(selectedProject.value?.directory ?? ".");
+  if (selection.kind === "add-terminal" && selectedProject.value)
+    void createProjectTerminal(selectedProject.value.id, selectedProject.value.directory);
 }
-async function createProjectTerminal(cwd = "."): Promise<void> {
-  await createTab(cwd);
-  const tab = tabs[tabs.length - 1];
-  if (tab)
-    focusSidebar({
-      id: tab.id,
-      kind: "terminal",
-      projectId:
-        projects.value.find((project) => project.directory === cwd)?.id ?? activeProjectId.value,
-      tabId: tab.id,
-    });
+async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
+  const tab = await createTab(projectId, cwd);
+  focusSidebar({
+    id: tab.id,
+    kind: "terminal",
+    projectId,
+    tabId: tab.id,
+  });
 }
 async function closeTerminal(id: string): Promise<void> {
   if (sidebarSelection.value.tabId === id) {
@@ -160,7 +158,7 @@ let projectsLoaded = false;
 onMounted(async () => {
   void enableModernWindowStyle({ cornerRadius: 14, offsetX: -5, offsetY: -4 });
   try {
-    const saved = await invoke<Project[]>("load_projects");
+    const saved = await loadProjects();
     if (saved.length) {
       projects.value = saved;
       activeProjectId.value = saved[0].id;
@@ -170,7 +168,9 @@ onMounted(async () => {
     console.error("Could not load projects", error);
   }
   projectsLoaded = true;
-  start(projects.value.find((p) => p.id === activeProjectId.value)?.directory ?? ".");
+  const initialProject =
+    projects.value.find((p) => p.id === activeProjectId.value) ?? projects.value[0];
+  start(initialProject.id, initialProject.directory);
 });
 watch(
   () => selectedProject.value?.directory,
@@ -181,14 +181,14 @@ watch(
 watch(
   projects,
   (value) => {
-    if (projectsLoaded) void invoke("save_projects", { projects: value }).catch(console.error);
+    if (projectsLoaded) void saveProjects(value).catch(console.error);
   },
   { deep: true },
 );
 watch(activeTabId, (id) => {
   const tab = tabs.find((item) => item.id === id);
   if (tab) {
-    const project = projects.value.find((item) => item.directory === tab.cwd);
+    const project = projects.value.find((item) => item.id === tab.projectId);
     if (project)
       sidebarSelection.value = {
         id: tab.id,
@@ -254,6 +254,7 @@ onBeforeUnmount(dispose);
       @create="
         (cwd) =>
           createProjectTerminal(
+            activeProjectId,
             cwd ?? projects.find((p) => p.id === activeProjectId)?.directory ?? '.',
           )
       "
@@ -315,7 +316,12 @@ onBeforeUnmount(dispose);
         :active-tab-id="activeTabId"
         :is-empty="isEmpty"
         :set-terminal-container="setTerminalContainer"
-        @create="createTab"
+        @create="
+          createProjectTerminal(
+            activeProjectId,
+            projects.find((project) => project.id === activeProjectId)?.directory ?? '.',
+          )
+        "
         @host="attachHost"
       />
       <section v-if="sidebarSelection.kind !== 'terminal'" class="main-stub">
