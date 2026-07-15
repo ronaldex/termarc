@@ -21,6 +21,7 @@ export type TerminalTab = {
   number: number;
   title: string;
   detail: string;
+  projectId: string;
   cwd: string;
   status: TerminalStatus;
   terminal: Terminal;

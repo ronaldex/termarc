@@ -11,7 +11,7 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
 <style scoped>
 .button {
   padding: 6px 10px;
-  border: 1px solid #303645;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   color: #b8c0d2;
   background: #1a1e28;

@@ -1,0 +1,33 @@
+import { describe, expect, it } from "vitest";
+import { splitGitDiff } from "./gitDiff";
+
+describe("splitGitDiff", () => {
+  it("splits multiple files and preserves hunks", () => {
+    const diff = [
+      "diff --git a/one.txt b/one.txt\n--- a/one.txt\n+++ b/one.txt\n@@ -1 +1 @@\n-old\n+new\n",
+      "diff --git a/two.txt b/two.txt\n--- a/two.txt\n+++ b/two.txt\n@@ -0,0 +1 @@\n+two\n",
+    ].join("");
+
+    const files = splitGitDiff(diff);
+
+    expect(files).toHaveLength(2);
+    expect(files.map((file) => file.newFile.fileName)).toEqual(["one.txt", "two.txt"]);
+    expect(files[0]!.hunks[0]).toContain("+new");
+  });
+
+  it("uses the surviving name for created and deleted files", () => {
+    const created = splitGitDiff(
+      "diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+new\n",
+    )[0];
+    const deleted = splitGitDiff(
+      "diff --git a/old.txt b/old.txt\n--- a/old.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n",
+    )[0];
+
+    expect(created!.oldFile.fileName).toBe("new.txt");
+    expect(deleted!.newFile.fileName).toBe("old.txt");
+  });
+
+  it("returns no files for an empty diff", () => {
+    expect(splitGitDiff("")).toEqual([]);
+  });
+});

@@ -1,79 +1,23 @@
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
-import { DiffModeEnum, DiffView } from "@git-diff-view/vue";
 import "@git-diff-view/vue/styles/diff-view-pure.css";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, defineAsyncComponent, toRef, watch } from "vue";
+import { useGitDiff } from "../composables/useGitDiff";
+import { splitGitDiff } from "../utils/gitDiff";
 
-type GitDiff = {
-  directory: string;
-  repository?: string;
-  diff: string;
-  error?: string;
-};
-
-type DiffData = {
-  key: string;
-  oldFile: { fileName: string };
-  newFile: { fileName: string };
-  hunks: string[];
-};
-
-const props = defineProps<{ directory?: string }>();
+const AsyncDiffView = defineAsyncComponent(() =>
+  import("@git-diff-view/vue").then(({ DiffView }) => DiffView),
+);
+const props = defineProps<{ directory?: string; active: boolean }>();
 const emit = defineEmits<{ collapse: []; available: [value: boolean] }>();
-const state = ref<GitDiff>();
-const loading = ref(false);
-let timer: number | undefined;
+const { state, loading, refresh } = useGitDiff(toRef(props, "directory"), toRef(props, "active"));
 
 const repositoryName = computed(
   () => state.value?.repository?.split(/[\\/]/).pop() ?? "No repository",
 );
-const files = computed<DiffData[]>(() => splitGitDiff(state.value?.diff ?? ""));
+const files = computed(() => splitGitDiff(state.value?.diff ?? ""));
 
-async function refresh(): Promise<void> {
-  if (!props.directory) {
-    state.value = undefined;
-    emit("available", false);
-    return;
-  }
-
-  loading.value = true;
-  try {
-    state.value = await invoke<GitDiff>("get_git_diff_directory", { directory: props.directory });
-    emit("available", Boolean(state.value.repository));
-  } catch (error) {
-    state.value = { directory: "", diff: "", error: String(error) };
-  } finally {
-    loading.value = false;
-  }
-}
-
-function splitGitDiff(diff: string): DiffData[] {
-  return diff
-    .split(/(?=^diff --git )/m)
-    .filter(Boolean)
-    .map((hunk, index) => {
-      const header = hunk.match(/^diff --git a\/(.+) b\/(.+)$/m);
-      const oldFile = hunk.match(/^--- (?:a\/)?(.+)$/m)?.[1] ?? header?.[1] ?? "Deleted file";
-      const newFile = hunk.match(/^\+\+\+ (?:b\/)?(.+)$/m)?.[1] ?? header?.[2] ?? "New file";
-
-      return {
-        key: `${oldFile}-${newFile}-${index}`,
-        oldFile: { fileName: oldFile === "/dev/null" ? newFile : oldFile },
-        newFile: { fileName: newFile === "/dev/null" ? oldFile : newFile },
-        hunks: [hunk],
-      };
-    });
-}
-
-watch(
-  () => props.directory,
-  () => void refresh(),
-  { immediate: true },
-);
-
-timer = window.setInterval(() => void refresh(), 2_000);
-onBeforeUnmount(() => {
-  if (timer !== undefined) window.clearInterval(timer);
+watch(state, (result) => {
+  if (result) emit("available", Boolean(result.repository));
 });
 </script>
 
@@ -102,11 +46,11 @@ onBeforeUnmount(() => {
     </div>
     <div v-else-if="!files.length" class="diff-message">Working tree is clean.</div>
     <div v-else class="diff-content">
-      <DiffView
+      <AsyncDiffView
         v-for="file in files"
         :key="file.key"
         :data="file"
-        :diff-view-mode="DiffModeEnum.Unified"
+        :diff-view-mode="4"
         diff-view-theme="dark"
         :diff-view-highlight="true"
         :diff-view-wrap="true"
@@ -126,7 +70,7 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  background: #10131a;
+  background: var(--color-panel-bg);
 }
 .diff-header {
   display: flex;
@@ -152,14 +96,14 @@ onBeforeUnmount(() => {
 .refresh-button {
   width: 25px;
   height: 25px;
-  border: 1px solid #303645;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   color: #aeb7ca;
   background: #191d27;
   cursor: pointer;
 }
 .refresh-button:hover {
-  color: #eef2fa;
+  color: var(--color-text-strong);
   background: #242a38;
 }
 .refresh-button.loading {
@@ -177,12 +121,12 @@ onBeforeUnmount(() => {
 }
 .diff-message {
   padding: 18px 14px;
-  color: #737c91;
+  color: var(--color-text-muted);
   font-size: 11px;
   line-height: 1.5;
 }
 .diff-message.error {
-  color: #f7768e;
+  color: var(--color-status-error);
 }
 .diff-content {
   min-height: 0;
@@ -200,7 +144,7 @@ onBeforeUnmount(() => {
   align-items: center;
   margin-top: auto;
   padding: 0 11px;
-  border-top: 1px solid #252a38;
+  border-top: 1px solid var(--color-border);
 }
 .diff-footer button {
   display: grid;
