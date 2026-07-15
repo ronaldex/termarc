@@ -70,7 +70,7 @@ watch(state, (result) => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  background: #10131a;
+  background: var(--color-panel-bg);
 }
 .diff-header {
   display: flex;
@@ -96,14 +96,14 @@ watch(state, (result) => {
 .refresh-button {
   width: 25px;
   height: 25px;
-  border: 1px solid #303645;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   color: #aeb7ca;
   background: #191d27;
   cursor: pointer;
 }
 .refresh-button:hover {
-  color: #eef2fa;
+  color: var(--color-text-strong);
   background: #242a38;
 }
 .refresh-button.loading {
@@ -121,12 +121,12 @@ watch(state, (result) => {
 }
 .diff-message {
   padding: 18px 14px;
-  color: #737c91;
+  color: var(--color-text-muted);
   font-size: 11px;
   line-height: 1.5;
 }
 .diff-message.error {
-  color: #f7768e;
+  color: var(--color-status-error);
 }
 .diff-content {
   min-height: 0;
@@ -144,7 +144,7 @@ watch(state, (result) => {
   align-items: center;
   margin-top: auto;
   padding: 0 11px;
-  border-top: 1px solid #252a38;
+  border-top: 1px solid var(--color-border);
 }
 .diff-footer button {
   display: grid;

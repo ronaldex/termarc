@@ -143,10 +143,10 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .project-manager {
   width: min(650px, 90vw);
-  border: 1px solid #303645;
+  border: 1px solid var(--color-border-strong);
   border-radius: 12px;
   outline: none;
-  color: #d8dee9;
+  color: var(--color-text);
   background: #151923;
   box-shadow: 0 20px 60px #0009;
 }
@@ -191,7 +191,7 @@ function handleKeydown(event: KeyboardEvent): void {
 .project-picker small {
   display: block;
   overflow: hidden;
-  color: #737c91;
+  color: var(--color-text-muted);
   font-size: 10px;
   text-overflow: ellipsis;
 }
@@ -214,10 +214,10 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .project-manager input {
   padding: 9px;
-  border: 1px solid #303645;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
-  color: #eef2fa;
-  background: #0e1117;
+  color: var(--color-text-strong);
+  background: var(--color-sidebar-bg-deep);
 }
 .form-actions {
   display: flex;
@@ -233,12 +233,12 @@ function handleKeydown(event: KeyboardEvent): void {
   cursor: pointer;
 }
 .form-actions .danger {
-  color: #f7768e;
+  color: var(--color-status-error);
   background: #321f28;
 }
 .empty-manager {
   padding: 22px;
-  color: #737c91;
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 </style>

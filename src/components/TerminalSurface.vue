@@ -43,7 +43,7 @@ onMounted(() => {
   min-height: 0;
   overflow: hidden;
   padding: 11px 6px 8px 12px;
-  background: #0b0d12;
+  background: var(--color-app-bg);
 }
 #terminal-host {
   position: relative;
@@ -64,19 +64,19 @@ onMounted(() => {
 .terminal-instance :deep(.xterm-viewport) {
   /* xterm's bundled stylesheet defaults the viewport to black. Keep it
      identical to the terminal surface so no black strip appears on resize. */
-  background-color: #0b0d12 !important;
+  background-color: var(--color-app-bg) !important;
   scrollbar-color: #353b4b transparent;
   scrollbar-width: thin;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-track),
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-corner) {
-  background: #0b0d12;
+  background: var(--color-app-bg);
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar) {
   width: 8px;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  border: 2px solid #0b0d12;
+  border: 2px solid var(--color-app-bg);
   border-radius: 8px;
   background: #353b4b;
 }

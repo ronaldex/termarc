@@ -66,7 +66,7 @@ function createTerminal(): void {
   min-width: 0;
   overflow: hidden;
   grid-template-rows: minmax(0, 1fr);
-  background: #0b0d12;
+  background: var(--color-app-bg);
 }
 .main-panel > .terminal-shell {
   min-height: 0;
@@ -81,7 +81,7 @@ function createTerminal(): void {
   padding: 40px;
   color: #747e93;
   text-align: center;
-  background: #0b0d12;
+  background: var(--color-app-bg);
 }
 .stub-icon {
   display: grid;
@@ -96,7 +96,7 @@ function createTerminal(): void {
 }
 h2 {
   margin: 0 0 7px;
-  color: #d8dee9;
+  color: var(--color-text);
   font-size: 16px;
 }
 p {

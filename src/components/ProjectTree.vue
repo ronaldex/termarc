@@ -203,7 +203,7 @@ button {
   position: absolute;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: #6284ff;
+  background: var(--color-focus);
   content: "";
 }
 .project-row.tree-active::before {
@@ -330,7 +330,7 @@ button {
   left: -13px;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: #6284ff;
+  background: var(--color-focus);
   content: "";
 }
 .process-select {
@@ -399,7 +399,7 @@ button {
   left: -36px;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: #6284ff;
+  background: var(--color-focus);
   content: "";
 }
 .add-row:hover {

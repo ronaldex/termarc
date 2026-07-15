@@ -90,15 +90,19 @@ useProjectTreeNavigation({
 
 <style scoped>
 .sidebar {
-  --bg: #12151d;
-  --line: #252a38;
+  --bg: var(--color-sidebar-bg);
+  --line: var(--color-border);
   --muted: #777a82;
   position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   color: #d5d6d9;
-  background: linear-gradient(180deg, #12151d 0%, #0e1117 100%);
+  background: linear-gradient(
+    180deg,
+    var(--color-sidebar-bg) 0%,
+    var(--color-sidebar-bg-deep) 100%
+  );
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   user-select: none;
 }

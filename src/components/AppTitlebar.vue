@@ -45,14 +45,14 @@ const emit = defineEmits<{
   align-items: center;
   gap: 22px;
   padding: 0 12px 0 16px;
-  border-bottom: 1px solid #252a38;
+  border-bottom: 1px solid var(--color-border);
   color: #b8c0d2;
-  background: #12151d;
+  background: var(--color-sidebar-bg);
   user-select: none;
 }
 .app-title {
   margin-left: 72px;
-  color: #eef2fa;
+  color: var(--color-text-strong);
   font-size: 12px;
   font-weight: 700;
 }
@@ -77,13 +77,13 @@ const emit = defineEmits<{
   background: #687087;
 }
 .title-dot.running {
-  background: #9ece6a;
+  background: var(--color-status-running);
 }
 .title-dot.starting {
-  background: #e0af68;
+  background: var(--color-status-starting);
 }
 .title-dot.error {
-  background: #f7768e;
+  background: var(--color-status-error);
 }
 .terminal-actions {
   display: flex;
@@ -97,7 +97,7 @@ const emit = defineEmits<{
   transition: none;
 }
 .terminal-actions :deep(.button:hover:not(:disabled)) {
-  border-color: #303645;
+  border-color: var(--color-border-strong);
   color: #fff;
   background: #242a38;
 }

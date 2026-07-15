@@ -202,8 +202,8 @@ onBeforeUnmount(dispose);
 
 <style>
 :root {
-  color: #d8dee9;
-  background: #0b0d12;
+  color: var(--color-text);
+  background: var(--color-app-bg);
   font-family:
     Inter,
     ui-sans-serif,
@@ -236,7 +236,7 @@ button {
   height: 100%;
   grid-template-columns: auto 4px minmax(0, 1fr) 4px auto;
   grid-template-rows: 42px minmax(0, 1fr);
-  background: #0b0d12;
+  background: var(--color-app-bg);
   overflow: hidden;
 }
 .app-shell.without-git-sidebar {
@@ -272,7 +272,7 @@ button {
   display: flex;
   flex-direction: column;
   border-left: 1px solid #20232d;
-  background: #10131a;
+  background: var(--color-panel-bg);
 }
 .right-rail-footer {
   display: flex;
@@ -280,7 +280,7 @@ button {
   margin-top: auto;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid #252a38;
+  border-top: 1px solid var(--color-border);
 }
 .right-rail button {
   display: grid;
