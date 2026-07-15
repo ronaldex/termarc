@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import type { TerminalTab } from "../types/terminal";
-import BaseButton from "./BaseButton.vue";
-
 defineProps<{ activeTab?: TerminalTab }>();
-const emit = defineEmits<{
-  clear: [];
-  restart: [];
-  stop: [];
-}>();
 </script>
 
 <template>
@@ -17,23 +10,6 @@ const emit = defineEmits<{
       <span class="title-dot" :class="activeTab?.status ?? 'stopped'" />
       <strong>{{ activeTab?.title ?? "No terminal" }}</strong>
       <span>{{ activeTab?.detail ?? "Create a terminal to begin" }}</span>
-    </div>
-    <div class="terminal-actions">
-      <BaseButton type="button" :disabled="!activeTab" @click="emit('clear')">Clear</BaseButton>
-      <BaseButton
-        type="button"
-        :disabled="!activeTab || activeTab.status === 'starting'"
-        @click="emit('restart')"
-      >
-        Restart
-      </BaseButton>
-      <BaseButton
-        type="button"
-        :disabled="!activeTab?.session || activeTab.status === 'starting'"
-        @click="emit('stop')"
-      >
-        Stop
-      </BaseButton>
     </div>
   </header>
 </template>
@@ -84,24 +60,5 @@ const emit = defineEmits<{
 }
 .title-dot.error {
   background: var(--color-status-error);
-}
-.terminal-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-.terminal-actions :deep(.button) {
-  padding: 5px 10px;
-  font-weight: 400;
-  transition: none;
-}
-.terminal-actions :deep(.button:hover:not(:disabled)) {
-  border-color: var(--color-border-strong);
-  color: #fff;
-  background: #242a38;
-}
-.terminal-actions :deep(.button:disabled) {
-  opacity: 0.4;
 }
 </style>

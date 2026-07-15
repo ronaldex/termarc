@@ -19,9 +19,6 @@ const {
   createTab,
   selectTab,
   closeTab,
-  restartTab,
-  stopTab,
-  clearActiveTab,
   setTerminalContainer,
   attachHost,
   setDefaultProject,
@@ -123,12 +120,7 @@ onBeforeUnmount(dispose);
 
 <template>
   <div class="app-shell" :class="{ 'without-git-sidebar': !gitSidebarAvailable }">
-    <AppTitlebar
-      :active-tab="activeTab"
-      @clear="clearActiveTab"
-      @restart="activeTab && restartTab(activeTab)"
-      @stop="activeTab && stopTab(activeTab)"
-    />
+    <AppTitlebar :active-tab="activeTab" />
     <TerminalSidebar
       :class="{ 'sidebar-hidden': !leftSidebarOpen }"
       :style="{ width: `${leftSidebarOpen ? leftSidebarWidth : 48}px` }"
