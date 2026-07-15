@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { loadProjects, saveProjects } from "./api/projects";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
 import TerminalSurface from "./components/TerminalSurface.vue";
+import { useProjects } from "./composables/useProjects";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
+import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
@@ -32,26 +33,27 @@ const rightSidebarOpen = ref(true);
 const gitSidebarAvailable = ref(true);
 const leftSidebarWidth = ref(398);
 const rightSidebarWidth = ref(320);
-const projects = ref<Project[]>([
-  {
-    id: "project-1",
-    name: "Current project",
-    directory: ".",
-    terminalOpen: true,
-    commandsOpen: true,
-  },
-]);
-const sidebarSelection = ref<SidebarSelection>({
-  id: "project-1",
-  kind: "project",
-  projectId: "project-1",
-});
-const selectedProject = computed(() =>
-  projects.value.find((project) => project.id === sidebarSelection.value.projectId),
-);
+const {
+  projects,
+  load: loadProjectConfiguration,
+  add: addProjectState,
+  update: updateProject,
+  remove: removeProjectState,
+  toggleProject,
+  toggleTerminals,
+  toggleCommands,
+} = useProjects();
+const {
+  selection: sidebarSelection,
+  activeProjectId,
+  selectedProject,
+  focus: setSidebarSelection,
+  selectProject,
+  selectTerminal,
+  selectTerminalSection,
+} = useWorkspaceSelection(projects);
 function focusSidebar(selection: SidebarSelection): void {
-  sidebarSelection.value = selection;
-  activeProjectId.value = selection.projectId;
+  setSidebarSelection(selection);
   const project = projects.value.find((item) => item.id === selection.projectId);
   if (project) setDefaultProject(project.id, project.directory);
   if (selection.tabId) activeTabId.value = selection.tabId;
@@ -64,18 +66,10 @@ function activateSidebar(selection: SidebarSelection): void {
 }
 async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
   const tab = await createTab(projectId, cwd);
-  focusSidebar({
-    id: tab.id,
-    kind: "terminal",
-    projectId,
-    tabId: tab.id,
-  });
+  selectTerminal(projectId, tab.id);
 }
 async function closeTerminal(id: string): Promise<void> {
-  if (sidebarSelection.value.tabId === id) {
-    const projectId = sidebarSelection.value.projectId;
-    sidebarSelection.value = { id: `${projectId}:terminals`, kind: "terminals", projectId };
-  }
+  if (sidebarSelection.value.tabId === id) selectTerminalSection(sidebarSelection.value.projectId);
   await closeTab(id);
 }
 const projectManagerOpen = ref(false);
@@ -89,45 +83,17 @@ function editProject(project: Project): void {
 }
 function saveProject(): void {
   if (!editingProject.value) return;
-  const index = projects.value.findIndex((p) => p.id === editingProject.value!.id);
-  if (index >= 0) projects.value[index] = { ...editingProject.value };
+  updateProject(editingProject.value);
   editingProject.value = null;
 }
 function removeProject(id: string): void {
-  if (projects.value.length === 1) return;
-  projects.value = projects.value.filter((p) => p.id !== id);
-  if (activeProjectId.value === id) activeProjectId.value = projects.value[0].id;
+  removeProjectState(id);
 }
-const activeProjectId = ref("project-1");
 function addProject(): void {
-  const id = `project-${Date.now()}`;
-  const project: Project = {
-    id,
-    name: "New project",
-    directory: ".",
-    terminalOpen: true,
-    commandsOpen: true,
-  };
-  projects.value.push(project);
-  activeProjectId.value = id;
+  const project = addProjectState();
+  selectProject(project);
   projectManagerOpen.value = true;
   editingProject.value = { ...project };
-}
-function toggleProject(id: string): void {
-  const project = projects.value.find((p) => p.id === id);
-  if (project) {
-    project.terminalOpen = !project.terminalOpen;
-    project.commandsOpen = project.terminalOpen;
-    activeProjectId.value = id;
-  }
-}
-function toggleTerminals(id: string): void {
-  const project = projects.value.find((p) => p.id === id);
-  if (project) project.terminalOpen = !project.terminalOpen;
-}
-function toggleCommands(id: string): void {
-  const project = projects.value.find((p) => p.id === id);
-  if (project) project.commandsOpen = !project.commandsOpen;
 }
 
 function startResize(side: "left" | "right", event: PointerEvent): void {
@@ -154,22 +120,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-let projectsLoaded = false;
 onMounted(async () => {
   void enableModernWindowStyle({ cornerRadius: 14, offsetX: -5, offsetY: -4 });
   try {
-    const saved = await loadProjects();
-    if (saved.length) {
-      projects.value = saved;
-      activeProjectId.value = saved[0].id;
-      sidebarSelection.value = { id: saved[0].id, kind: "project", projectId: saved[0].id };
-    }
+    await loadProjectConfiguration();
   } catch (error) {
     console.error("Could not load projects", error);
   }
-  projectsLoaded = true;
-  const initialProject =
-    projects.value.find((p) => p.id === activeProjectId.value) ?? projects.value[0];
+  const initialProject = projects.value[0];
+  selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
 });
 watch(
@@ -178,24 +137,11 @@ watch(
     gitSidebarAvailable.value = true;
   },
 );
-watch(
-  projects,
-  (value) => {
-    if (projectsLoaded) void saveProjects(value).catch(console.error);
-  },
-  { deep: true },
-);
 watch(activeTabId, (id) => {
   const tab = tabs.find((item) => item.id === id);
   if (tab) {
     const project = projects.value.find((item) => item.id === tab.projectId);
-    if (project)
-      sidebarSelection.value = {
-        id: tab.id,
-        kind: "terminal",
-        projectId: project.id,
-        tabId: tab.id,
-      };
+    if (project) selectTerminal(project.id, tab.id);
   }
 });
 watch(
@@ -203,11 +149,7 @@ watch(
   (ids) => {
     const selected = sidebarSelection.value;
     if (selected.kind === "terminal" && selected.tabId && !ids.includes(selected.tabId)) {
-      sidebarSelection.value = {
-        id: `${selected.projectId}:terminals`,
-        kind: "terminals",
-        projectId: selected.projectId,
-      };
+      selectTerminalSection(selected.projectId);
     }
   },
 );
