@@ -3,8 +3,8 @@ import { onBeforeUnmount, ref } from "vue";
 export function useSidebarLayout() {
   const leftOpen = ref(true);
   const rightOpen = ref(true);
-  const leftWidth = ref(398);
-  const rightWidth = ref(320);
+  const leftWidth = ref(240);
+  const rightWidth = ref(480);
   let stopResize: (() => void) | undefined;
 
   function startResize(side: "left" | "right", event: PointerEvent): void {
@@ -16,7 +16,7 @@ export function useSidebarLayout() {
       const delta = moveEvent.clientX - initialX;
       const width = side === "left" ? initialWidth + delta : initialWidth - delta;
       if (side === "left") leftWidth.value = clamp(width, 180, 420);
-      else rightWidth.value = clamp(width, 240, 620);
+      else rightWidth.value = clamp(width, 320, 620);
     };
     const stop = () => {
       window.removeEventListener("pointermove", resize);
