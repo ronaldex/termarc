@@ -7,6 +7,7 @@ import ProjectManagerDialog from "./components/ProjectManagerDialog.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
 import WorkspaceMain from "./components/WorkspaceMain.vue";
 import { useProjects } from "./composables/useProjects";
+import { useSidebarLayout } from "./composables/useSidebarLayout";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
 import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
 import type { SidebarSelection } from "./types/sidebar";
@@ -28,13 +29,17 @@ const {
   start,
   dispose,
 } = useTerminalTabs();
-const leftSidebarOpen = ref(true);
-const rightSidebarOpen = ref(true);
 const gitSidebarAvailable = ref(true);
-const leftSidebarWidth = ref(398);
-const rightSidebarWidth = ref(320);
+const {
+  leftOpen: leftSidebarOpen,
+  rightOpen: rightSidebarOpen,
+  leftWidth: leftSidebarWidth,
+  rightWidth: rightSidebarWidth,
+  startResize,
+} = useSidebarLayout();
 const {
   projects,
+  treeProjects,
   load: loadProjectConfiguration,
   add: addProjectState,
   update: updateProject,
@@ -82,30 +87,6 @@ function addProject(): void {
   selectProject(project);
   managedProjectId.value = project.id;
   projectManagerOpen.value = true;
-}
-
-function startResize(side: "left" | "right", event: PointerEvent): void {
-  event.preventDefault();
-  const initialX = event.clientX;
-  const initialWidth = side === "left" ? leftSidebarWidth.value : rightSidebarWidth.value;
-
-  const resize = (moveEvent: PointerEvent) => {
-    const delta = moveEvent.clientX - initialX;
-    const width = side === "left" ? initialWidth + delta : initialWidth - delta;
-    if (side === "left") leftSidebarWidth.value = clamp(width, 180, 420);
-    else rightSidebarWidth.value = clamp(width, 240, 620);
-  };
-  const stop = () => {
-    window.removeEventListener("pointermove", resize);
-    window.removeEventListener("pointerup", stop);
-  };
-
-  window.addEventListener("pointermove", resize);
-  window.addEventListener("pointerup", stop, { once: true });
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 onMounted(async () => {
@@ -157,7 +138,7 @@ onBeforeUnmount(dispose);
       :style="{ width: `${leftSidebarOpen ? leftSidebarWidth : 48}px` }"
       :collapsed="!leftSidebarOpen"
       :tabs="tabs"
-      :projects="projects"
+      :projects="treeProjects"
       :selection="sidebarSelection"
       @focus="focusSidebar"
       @activate="activateSidebar"

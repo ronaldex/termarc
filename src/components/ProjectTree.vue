@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { Project } from "../types/project";
+import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
 import SidebarChevron from "./SidebarChevron.vue";
 
 const props = defineProps<{
-  projects: Project[];
+  projects: ProjectTreeProject[];
   tabs: TerminalTab[];
   filter: string;
   selection: SidebarSelection;
@@ -19,7 +19,7 @@ const emit = defineEmits<{
   focus: [selection: SidebarSelection];
 }>();
 
-function projectTabs(project: Project): TerminalTab[] {
+function projectTabs(project: ProjectTreeProject): TerminalTab[] {
   const query = props.filter.trim().toLowerCase();
   return props.tabs.filter(
     (tab) => tab.projectId === project.id && (!query || tab.title.toLowerCase().includes(query)),

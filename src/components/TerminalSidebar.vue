@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, toRefs } from "vue";
 import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigation";
-import type { Project } from "../types/project";
+import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
 import ProjectTree from "./ProjectTree.vue";
@@ -10,7 +10,7 @@ import SidebarFooter from "./SidebarFooter.vue";
 const props = defineProps<{
   tabs: TerminalTab[];
   collapsed?: boolean;
-  projects: Project[];
+  projects: ProjectTreeProject[];
   selection: SidebarSelection;
 }>();
 const emit = defineEmits<{

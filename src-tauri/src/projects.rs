@@ -18,8 +18,6 @@ pub(crate) struct ProjectConfig {
     directory: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     commands: Option<Vec<ProjectCommand>>,
-    terminal_open: bool,
-    commands_open: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

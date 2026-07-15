@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, type Ref } from "vue";
-import type { Project } from "../types/project";
+import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
 
@@ -10,7 +10,7 @@ export type ProjectTreeNavigationAction =
   | { type: "toggle-commands"; projectId: string };
 
 export function flattenProjectTree(
-  projects: readonly Project[],
+  projects: readonly ProjectTreeProject[],
   tabs: readonly TerminalTab[],
   filter = "",
 ): SidebarSelection[] {
@@ -58,7 +58,7 @@ export function projectTreeNavigationActions(
   key: string,
   nodes: readonly SidebarSelection[],
   selection: SidebarSelection,
-  projects: readonly Project[],
+  projects: readonly ProjectTreeProject[],
   sidebarHasFocus: boolean,
 ): ProjectTreeNavigationAction[] {
   if (!nodes.length) return [];
@@ -124,7 +124,7 @@ export function projectTreeNavigationActions(
 }
 
 export function useProjectTreeNavigation(options: {
-  projects: Ref<Project[]>;
+  projects: Ref<ProjectTreeProject[]>;
   tabs: Ref<TerminalTab[]>;
   filter: Ref<string>;
   selection: Ref<SidebarSelection>;

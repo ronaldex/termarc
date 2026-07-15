@@ -13,6 +13,11 @@ export type Project = {
   name: string;
   directory: string;
   commands?: ProjectCommand[];
+};
+
+export type ProjectTreeState = {
   terminalOpen: boolean;
   commandsOpen: boolean;
 };
+
+export type ProjectTreeProject = Project & ProjectTreeState;
