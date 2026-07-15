@@ -256,14 +256,6 @@ export function useTerminalTabs() {
     activeTab.value?.terminal.clear();
     activeTab.value?.terminal.focus();
   }
-  function statusLabel(tab: TerminalTab): string {
-    if (tab.status === "running") return tab.session ? shellName(tab.session.shell) : "Running";
-    if (tab.status === "starting") return "Starting…";
-    return tab.status === "error" ? "Exited with error" : "Stopped";
-  }
-  function shellName(shell: string): string {
-    return shell.split(/[\\/]/).pop() || shell;
-  }
   function handleKeyboard(event: KeyboardEvent): void {
     const shortcut = event.metaKey || (event.ctrlKey && event.shiftKey);
     if (!shortcut) return;
@@ -320,7 +312,6 @@ export function useTerminalTabs() {
     restartTab,
     stopTab,
     clearActiveTab,
-    statusLabel,
     setTerminalContainer,
     attachHost,
     setDefaultProject,

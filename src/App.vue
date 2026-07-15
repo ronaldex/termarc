@@ -21,7 +21,6 @@ const {
   restartTab,
   stopTab,
   clearActiveTab,
-  statusLabel,
   setTerminalContainer,
   attachHost,
   setDefaultProject,
@@ -186,26 +185,15 @@ onBeforeUnmount(dispose);
       :style="{ width: `${leftSidebarOpen ? leftSidebarWidth : 48}px` }"
       :collapsed="!leftSidebarOpen"
       :tabs="tabs"
-      :active-tab-id="activeTabId"
-      :status-label="statusLabel"
       :projects="projects"
-      :active-project-id="activeProjectId"
       :selection="sidebarSelection"
       @focus="focusSidebar"
       @activate="activateSidebar"
-      @create="
-        (cwd) =>
-          createProjectTerminal(
-            activeProjectId,
-            cwd ?? projects.find((p) => p.id === activeProjectId)?.directory ?? '.',
-          )
-      "
       @add-project="addProject"
       @manage="manageProjects"
       @toggle-project="toggleProject"
       @toggle-terminals="toggleTerminals"
       @toggle-commands="toggleCommands"
-      @select="selectTab"
       @close="closeTerminal"
       @toggle="leftSidebarOpen = !leftSidebarOpen"
     />
