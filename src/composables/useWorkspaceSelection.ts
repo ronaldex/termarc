@@ -29,6 +29,10 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     focus({ id: `${projectId}:terminals`, kind: "terminals", projectId });
   }
 
+  function openSettings(): void {
+    focus({ id: "app-settings", kind: "app-settings" });
+  }
+
   watch(
     projects,
     (value) => {
@@ -47,5 +51,6 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     selectProject,
     selectTerminal,
     selectTerminalSection,
+    openSettings,
   };
 }

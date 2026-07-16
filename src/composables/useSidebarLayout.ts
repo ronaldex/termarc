@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref } from "vue";
 
 export function useSidebarLayout() {
   const leftOpen = ref(true);
-  const rightOpen = ref(true);
+  const rightOpen = ref(false);
   const leftWidth = ref(240);
   const rightWidth = ref(480);
   let stopResize: (() => void) | undefined;

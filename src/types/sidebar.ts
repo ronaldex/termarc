@@ -1,9 +1,16 @@
 export type SidebarSelectionKind =
-  "projects" | "project" | "terminals" | "terminal" | "add-terminal" | "commands" | "add-command";
+  | "projects"
+  | "project"
+  | "terminals"
+  | "terminal"
+  | "add-terminal"
+  | "commands"
+  | "add-command"
+  | "app-settings";
 
 export type SidebarSelection = {
   id: string;
   kind: SidebarSelectionKind;
-  projectId: string;
+  projectId?: string;
   tabId?: string;
 };
