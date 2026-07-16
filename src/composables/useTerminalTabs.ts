@@ -1,11 +1,26 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { Terminal } from "@xterm/xterm";
-import { computed, markRaw, nextTick, reactive, ref } from "vue";
+import { Terminal, type ILink, type IMarker } from "@xterm/xterm";
+import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
+import { openTerminalPath, resolveTerminalPath } from "../api/paths";
 import { resizeTerminal, startTerminal, stopTerminal, writeTerminal } from "../api/terminals";
+import { useAppSettings } from "./useAppSettings";
 import type { TerminalStatus, TerminalTab } from "../types/terminal";
 
+type PendingLink = {
+  marker: IMarker;
+  startX: number;
+  uri: string;
+};
+
+type CapturedLink = PendingLink & {
+  endLineOffset: number;
+  endX: number;
+};
+
 export function useTerminalTabs() {
+  const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
   const activeTabId = ref<string>();
   const activeTab = computed(() => tabs.find((tab) => tab.id === activeTabId.value));
@@ -14,6 +29,8 @@ export function useTerminalTabs() {
   let resizeObserver: ResizeObserver | undefined;
   let resizeFrame: number | undefined;
   let nextTabNumber = 1;
+  let commandKeyPressed = false;
+  let lastPointerPosition: { x: number; y: number } | undefined;
   let defaultProject = { projectId: "project-1", cwd: "." };
 
   function createTerminal(): Terminal {
@@ -24,8 +41,8 @@ export function useTerminalTabs() {
       cursorStyle: "bar",
       cursorWidth: 2,
       drawBoldTextInBrightColors: true,
-      fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-      fontSize: 13,
+      fontFamily: settings.terminalFontFamily,
+      fontSize: settings.terminalFontSize,
       fontWeight: "400",
       fontWeightBold: "600",
       lineHeight: 1.18,
@@ -80,6 +97,7 @@ export function useTerminalTabs() {
     if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
     tab.terminal.open(tab.container);
+    installTerminalLinks(tab);
     installTerminalInput(tab);
     enableWebgl(tab);
     fitTab(tab);
@@ -89,6 +107,137 @@ export function useTerminalTabs() {
 
   function setTerminalContainer(tab: TerminalTab, element: Element | null): void {
     tab.container = element instanceof HTMLDivElement ? element : undefined;
+  }
+
+  function openTerminalUri(cwd: string, uri: string): void {
+    try {
+      const url = new URL(uri);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        void openUrl(url.href).catch((error) =>
+          console.error("Could not open terminal link", error),
+        );
+      } else if (url.protocol === "file:") {
+        // OSC 8 file links (including eza's) commonly include the local hostname.
+        void resolveAndOpenPath(cwd, decodeURIComponent(url.pathname));
+      }
+    } catch {
+      // Ignore malformed or unsupported links emitted by terminal applications.
+    }
+  }
+
+  function installTerminalLinks(tab: TerminalTab): void {
+    const capturedLinks: CapturedLink[] = [];
+    let pendingLink: PendingLink | undefined;
+
+    // Handle OSC 8 ourselves. xterm renders OSC 8 links with a dotted underline
+    // unconditionally, while Termdeck only reveals links while Command is held.
+    tab.terminal.parser.registerOscHandler(8, (data) => {
+      const separator = data.indexOf(";");
+      const uri = separator >= 0 ? data.slice(separator + 1) : "";
+      if (uri) {
+        pendingLink?.marker.dispose();
+        pendingLink = {
+          marker: tab.terminal.registerMarker(0),
+          startX: tab.terminal.buffer.active.cursorX + 1,
+          uri,
+        };
+      } else if (pendingLink) {
+        const endLine = tab.terminal.buffer.active.baseY + tab.terminal.buffer.active.cursorY;
+        capturedLinks.push({
+          marker: pendingLink.marker,
+          startX: pendingLink.startX,
+          endLineOffset: endLine - pendingLink.marker.line,
+          endX: Math.max(1, tab.terminal.buffer.active.cursorX),
+          uri: pendingLink.uri,
+        });
+        pendingLink = undefined;
+      }
+      return true;
+    });
+
+    const urlPattern = /https?:\/\/[^\s"'<>]+/gi;
+    const pathPattern = /(?:~|\/|\.\.?\/)[^\s"'<>]+|(?:[\w@.+-]+\/)+(?:[\w@.+:-]+)?/g;
+    tab.terminal.registerLinkProvider({
+      provideLinks(lineNumber, callback) {
+        if (!commandKeyPressed) {
+          callback(undefined);
+          return;
+        }
+
+        const oscLinks = capturedLinks
+          .filter((link) => {
+            if (link.marker.isDisposed) return false;
+            const line = lineNumber - 1;
+            return line >= link.marker.line && line <= link.marker.line + link.endLineOffset;
+          })
+          .map((link): ILink => ({
+            text: link.uri,
+            range: {
+              start: { x: link.startX, y: link.marker.line + 1 },
+              end: {
+                x: link.endX,
+                y: link.marker.line + link.endLineOffset + 1,
+              },
+            },
+            activate: (event) => {
+              if (event.metaKey) openTerminalUri(tab.cwd, link.uri);
+            },
+          }));
+        const line = tab.terminal.buffer.active.getLine(lineNumber - 1)?.translateToString(true);
+        if (!line) {
+          callback(oscLinks.length ? oscLinks : undefined);
+          return;
+        }
+
+        const webLinks = [...line.matchAll(urlPattern)].map((match): ILink | undefined => {
+          const text = match[0].replace(/[),.;]+$/, "");
+          if (match.index === undefined) return undefined;
+          return {
+            text,
+            range: {
+              start: { x: match.index + 1, y: lineNumber },
+              end: { x: match.index + text.length, y: lineNumber },
+            },
+            activate: (event) => {
+              if (event.metaKey) openTerminalUri(tab.cwd, text);
+            },
+          };
+        });
+        const pathMatches = [...line.matchAll(pathPattern)].filter(
+          (match) => !webLinks.some((link) => link && rangesOverlap(match, link)),
+        );
+        void Promise.all(
+          pathMatches.map(async (match): Promise<ILink | undefined> => {
+            const text = match[0].replace(/[),.;]+$/, "");
+            const resolved = await resolveTerminalPath(tab.cwd, text).catch(() => null);
+            if (!resolved || match.index === undefined) return undefined;
+            return {
+              text,
+              range: {
+                start: { x: match.index + 1, y: lineNumber },
+                end: { x: match.index + text.length, y: lineNumber },
+              },
+              activate: (event) => {
+                if (!event.metaKey) return;
+                void openTerminalPath(resolved.path).catch((error) =>
+                  console.error("Could not open terminal path", error),
+                );
+              },
+            };
+          }),
+        ).then((pathLinks) => {
+          const links = [...oscLinks, ...webLinks, ...pathLinks].filter(
+            (link): link is ILink => link !== undefined,
+          );
+          callback(links.length ? links : undefined);
+        });
+      },
+    });
+  }
+
+  async function resolveAndOpenPath(cwd: string, path: string): Promise<void> {
+    const resolved = await resolveTerminalPath(cwd, path);
+    if (resolved) await openTerminalPath(resolved.path);
   }
 
   function installTerminalInput(tab: TerminalTab): void {
@@ -256,7 +405,40 @@ export function useTerminalTabs() {
     activeTab.value?.terminal.clear();
     activeTab.value?.terminal.focus();
   }
+
+  watch(
+    () => settings.terminalFontFamily,
+    (fontFamily) => {
+      for (const tab of tabs) tab.terminal.options.fontFamily = fontFamily;
+      scheduleFit();
+    },
+  );
+
+  watch(
+    () => settings.terminalFontSize,
+    (fontSize) => {
+      for (const tab of tabs) tab.terminal.options.fontSize = fontSize;
+      scheduleFit();
+    },
+  );
+
+  function setCommandKeyPressed(pressed: boolean): void {
+    if (commandKeyPressed === pressed) return;
+    commandKeyPressed = pressed;
+    const position = lastPointerPosition;
+    if (!position) return;
+    document.elementFromPoint(position.x, position.y)?.dispatchEvent(
+      new MouseEvent("mousemove", {
+        bubbles: true,
+        clientX: position.x,
+        clientY: position.y,
+        metaKey: pressed,
+      }),
+    );
+  }
+
   function handleKeyboard(event: KeyboardEvent): void {
+    setCommandKeyPressed(event.metaKey);
     const shortcut = event.metaKey || (event.ctrlKey && event.shiftKey);
     if (!shortcut) return;
     if (/^[1-9]$/.test(event.key)) {
@@ -276,8 +458,19 @@ export function useTerminalTabs() {
       void closeTab(activeTab.value.id);
     }
   }
+  function handleKeyUp(event: KeyboardEvent): void {
+    setCommandKeyPressed(event.metaKey);
+  }
+  function handlePointerMove(event: PointerEvent): void {
+    lastPointerPosition = { x: event.clientX, y: event.clientY };
+  }
+  function handleWindowBlur(): void {
+    setCommandKeyPressed(false);
+  }
   function attachHost(host: HTMLElement): void {
+    terminalHost?.removeEventListener("pointermove", handlePointerMove);
     terminalHost = host;
+    terminalHost.addEventListener("pointermove", handlePointerMove);
     resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(host);
   }
@@ -287,13 +480,18 @@ export function useTerminalTabs() {
   function start(projectId: string, cwd: string): void {
     setDefaultProject(projectId, cwd);
     window.addEventListener("keydown", handleKeyboard, { capture: true });
+    window.addEventListener("keyup", handleKeyUp, { capture: true });
+    window.addEventListener("blur", handleWindowBlur);
     document.fonts.ready.then(scheduleFit).catch(console.error);
     void createTab(projectId, cwd);
   }
   function dispose(): void {
     resizeObserver?.disconnect();
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    terminalHost?.removeEventListener("pointermove", handlePointerMove);
     window.removeEventListener("keydown", handleKeyboard, { capture: true });
+    window.removeEventListener("keyup", handleKeyUp, { capture: true });
+    window.removeEventListener("blur", handleWindowBlur);
     for (const tab of tabs) {
       tab.disposed = true;
       tab.terminal.dispose();
@@ -318,4 +516,11 @@ export function useTerminalTabs() {
     start,
     dispose,
   };
+}
+
+function rangesOverlap(match: RegExpMatchArray, link: ILink): boolean {
+  if (match.index === undefined) return false;
+  const start = match.index + 1;
+  const end = start + match[0].length - 1;
+  return start <= link.range.end.x && end >= link.range.start.x;
 }

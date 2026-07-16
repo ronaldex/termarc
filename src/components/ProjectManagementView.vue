@@ -165,7 +165,7 @@ button {
 .details small {
   overflow: hidden;
   color: #9699a1;
-  font-family: "SFMono-Regular", Consolas, monospace;
+  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;

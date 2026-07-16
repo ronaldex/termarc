@@ -42,7 +42,7 @@ defineProps<{ activeTab?: TerminalTab }>();
 .active-terminal span:last-child {
   overflow: hidden;
   color: #778196;
-  font-family: monospace;
+  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

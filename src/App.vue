@@ -9,7 +9,10 @@ import { useProjects } from "./composables/useProjects";
 import { useSidebarLayout } from "./composables/useSidebarLayout";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
 import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
+import { useAppSettings } from "./composables/useAppSettings";
 import type { SidebarSelection } from "./types/sidebar";
+
+const { load: loadAppSettings } = useAppSettings();
 
 const {
   tabs,
@@ -51,6 +54,7 @@ const {
   selectProject,
   selectTerminal,
   selectTerminalSection,
+  openSettings,
 } = useWorkspaceSelection(projects);
 function focusSidebar(selection: SidebarSelection): void {
   setSidebarSelection(selection);
@@ -84,8 +88,17 @@ function addProject(): void {
   selectProject(addProjectState());
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.metaKey && event.key === ",") {
+    event.preventDefault();
+    openSettings();
+  }
+}
+
 onMounted(async () => {
   void enableModernWindowStyle({ cornerRadius: 14, offsetX: -5, offsetY: -4 });
+  loadAppSettings();
+  window.addEventListener("keydown", handleKeydown);
   try {
     await loadProjectConfiguration();
   } catch (error) {
@@ -115,7 +128,10 @@ watch(
     }
   },
 );
-onBeforeUnmount(dispose);
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleKeydown);
+  dispose();
+});
 </script>
 
 <template>
@@ -222,6 +238,18 @@ button {
   grid-template-rows: 42px minmax(0, 1fr);
   background: var(--color-app-bg);
   overflow: hidden;
+}
+.app-shell
+  :not(
+    .terminal-shell,
+    .terminal-shell *,
+    input,
+    textarea,
+    [contenteditable="true"],
+    [contenteditable="true"] *
+  ) {
+  -webkit-user-select: none;
+  user-select: none;
 }
 .app-shell.without-git-sidebar {
   grid-template-columns: auto 4px minmax(0, 1fr) 0 0;

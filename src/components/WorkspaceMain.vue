@@ -4,6 +4,7 @@ import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
 import ProjectManagementView from "./ProjectManagementView.vue";
 import ProjectSettingsView from "./ProjectSettingsView.vue";
+import AppSettingsView from "./AppSettingsView.vue";
 import TerminalSurface from "./TerminalSurface.vue";
 
 const props = defineProps<{
@@ -52,6 +53,7 @@ function createTerminal(): void {
       @save="emit('saveProject', $event)"
       @remove="emit('removeProject', $event)"
     />
+    <AppSettingsView v-else-if="selection.kind === 'app-settings'" />
     <section v-else-if="selection.kind !== 'terminal'" class="main-stub">
       <span class="stub-icon">{{ selection.kind.includes("command") ? "▱" : "▣" }}</span>
       <h2 v-if="selection.kind === 'terminals'">Terminals</h2>
