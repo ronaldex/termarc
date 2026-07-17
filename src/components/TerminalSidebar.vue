@@ -171,7 +171,7 @@ button {
   outline: 0;
   color: #bfc1c6;
   background: transparent;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .filter-row input::placeholder {
   color: #64676e;
@@ -182,6 +182,6 @@ button {
 .filter-row > button {
   padding: 4px 7px;
   color: #62656c;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 </style>

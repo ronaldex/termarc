@@ -12,6 +12,12 @@ describe("splitGitDiff", () => {
 
     expect(files).toHaveLength(2);
     expect(files.map((file) => file.newFile.fileName)).toEqual(["one.txt", "two.txt"]);
+    expect(files[0]).toMatchObject({
+      path: "one.txt",
+      status: "modified",
+      additions: 1,
+      deletions: 1,
+    });
     expect(files[0]!.hunks[0]).toContain("+new");
   });
 
@@ -23,8 +29,23 @@ describe("splitGitDiff", () => {
       "diff --git a/old.txt b/old.txt\n--- a/old.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n",
     )[0];
 
+    expect(created).toMatchObject({ path: "new.txt", status: "added", additions: 1, deletions: 0 });
+    expect(deleted).toMatchObject({
+      path: "old.txt",
+      status: "deleted",
+      additions: 0,
+      deletions: 1,
+    });
     expect(created!.oldFile.fileName).toBe("new.txt");
     expect(deleted!.newFile.fileName).toBe("old.txt");
+  });
+
+  it("identifies renamed files", () => {
+    const renamed = splitGitDiff(
+      "diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n",
+    )[0];
+
+    expect(renamed).toMatchObject({ path: "new.txt", status: "renamed" });
   });
 
   it("returns no files for an empty diff", () => {

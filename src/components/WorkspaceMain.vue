@@ -161,10 +161,10 @@ function saveCommand(project: Project, commandId: string): void {
 h2 {
   margin: 0 0 7px;
   color: var(--color-text);
-  font-size: 16px;
+  font-size: 1rem;
 }
 p {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 </style>

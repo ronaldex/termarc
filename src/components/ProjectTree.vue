@@ -173,7 +173,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
                 })
               "
             >
-              <span>＋</span> Add terminal
+              <span class="add-terminal-icon">＋</span> Add terminal
             </button>
           </template>
         </div>
@@ -341,7 +341,7 @@ button {
 .project-toggle strong {
   overflow: hidden;
   color: #dedfe2;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -354,7 +354,7 @@ button {
   border-radius: 3px;
   color: #c6c8cd;
   background: #34373c;
-  font-size: 8px;
+  font-size: 0.5rem;
   font-weight: 700;
 }
 .project-content {
@@ -373,7 +373,7 @@ button {
   gap: 7px;
   padding: 0 0 0 1px;
   color: #777a82;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 650;
   letter-spacing: 0.12em;
 }
@@ -397,7 +397,7 @@ button {
 .group-icon {
   width: 12px;
   color: #858890;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-align: center;
 }
 .group-select i {
@@ -408,7 +408,7 @@ button {
 }
 .group-select small {
   color: #62656c;
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -422,7 +422,15 @@ button {
   margin-left: var(--tree-item-icon-left);
   padding: 0;
   color: #777a82;
-  font-size: 11px;
+  font-size: 0.6875rem;
+}
+.add-terminal-icon {
+  display: grid;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  place-items: center;
+  line-height: 1;
 }
 .command-row {
   width: calc(100% - var(--tree-item-icon-left));
@@ -441,7 +449,7 @@ button {
   width: 12px;
   color: #858b99;
   font-family: "JetBrains Mono", monospace;
-  font-size: 8px;
+  font-size: 0.5rem;
 }
 .command-labels {
   display: flex;
@@ -458,12 +466,12 @@ button {
 }
 .command-labels strong {
   color: #c7c8cc;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 .command-labels small {
   color: #696c73;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 400;
 }
 .command-actions {
@@ -481,7 +489,7 @@ button {
   border-radius: 5px;
   color: #aeb3bd;
   background: #24272d;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .command-actions button:hover {
   border-color: #555b67;
@@ -524,7 +532,7 @@ button {
   display: inline-grid;
   width: 12px;
   place-items: center;
-  font-size: 13px;
+  font-size: 1rem;
   line-height: 1;
 }
 </style>

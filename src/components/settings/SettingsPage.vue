@@ -39,18 +39,18 @@ withDefaults(
 }
 .page-header strong {
   color: var(--color-text-strong);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .edit-icon {
   color: #8a8d95;
-  font-size: 16px;
+  font-size: 1rem;
   transform: rotate(-30deg);
 }
 .page-kind {
   padding-left: 14px;
   border-left: 1px solid #303238;
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .edit-icon + .page-kind {
   margin-left: 2px;

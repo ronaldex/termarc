@@ -28,12 +28,12 @@ defineProps<{ title?: string; description: string }>();
 .copy strong {
   margin-bottom: 3px;
   color: #e0e1e4;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .copy small {
   color: #9699a1;
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.35;
 }
 @media (max-width: 760px) {

@@ -154,13 +154,13 @@ form {
 .command-details strong {
   margin-bottom: 3px;
   color: #e0e1e4;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .command-details code {
   overflow: hidden;
   color: #858993;
-  font-size: 10px;
+  font-size: 0.625rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -174,17 +174,17 @@ form {
   color: #aeb8d1;
   background: #272c38;
   font-family: "JetBrains Mono", monospace;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .command-mode {
   padding: 4px 7px;
   border-radius: 10px;
   color: #9ca5ba;
   background: #222630;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .saved {
   color: var(--color-status-running);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 </style>

@@ -38,12 +38,12 @@ withDefaults(
 .field-copy strong {
   margin-bottom: 3px;
   color: #e0e1e4;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .field-copy small {
   color: #9699a1;
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.35;
 }
 .settings-field :deep(input:not([type="checkbox"])),
@@ -57,7 +57,7 @@ withDefaults(
   color: #e4e5e8;
   background: #17181b;
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .settings-field :deep(input:not([type="checkbox"])) {
   height: 31px;

@@ -53,13 +53,13 @@ function modeLabel(): string {
 }
 .page-header strong {
   color: var(--color-text-strong);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .page-kind {
   padding-left: 14px;
   border-left: 1px solid #303238;
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .command-content {
   display: flex;
@@ -86,7 +86,7 @@ function modeLabel(): string {
 h2 {
   margin: 0 0 10px;
   color: #e0e2e7;
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 code {
   max-width: 100%;
@@ -96,7 +96,7 @@ code {
   border-radius: 6px;
   color: #b7bbc5;
   background: #17181b;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -110,13 +110,13 @@ code {
   border-radius: 10px;
   color: #9298a6;
   background: #22252d;
-  font-size: 9px;
+  font-size: 0.5625rem;
   text-transform: capitalize;
 }
 p {
   margin: 12px 0 18px;
   color: #747985;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .actions {
   display: flex;
@@ -129,7 +129,7 @@ button {
   border-radius: 6px;
   color: #d5d7dc;
   background: #1a1c21;
-  font-size: 10px;
+  font-size: 0.625rem;
   cursor: pointer;
 }
 button:hover {

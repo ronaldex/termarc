@@ -144,11 +144,11 @@ button {
 }
 .process-title {
   color: #c7c8cc;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .process-labels small {
   color: #696c73;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 400;
 }
 .path-label {
@@ -163,13 +163,13 @@ button {
   color: #d8d9dc;
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .shortcut {
   width: 20px;
   margin-left: auto;
   color: #575a61;
-  font-size: 10px;
+  font-size: 0.625rem;
   text-align: center;
 }
 .close {
@@ -177,7 +177,7 @@ button {
   right: 0;
   width: 20px;
   color: #6e7178;
-  font-size: 15px;
+  font-size: 0.9375rem;
   opacity: 0;
 }
 .process-row:hover .close {
