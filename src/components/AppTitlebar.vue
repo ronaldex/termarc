@@ -1,15 +1,29 @@
 <script setup lang="ts">
-import type { TerminalTab } from "../types/terminal";
-defineProps<{ activeTab?: TerminalTab }>();
+import { computed } from "vue";
+import type { TerminalTabState } from "../types/terminal";
+import { terminalDisplayModel } from "../utils/terminalLabels";
+import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
+
+const props = defineProps<{ activeTab?: TerminalTabState }>();
+const display = computed(() =>
+  props.activeTab ? terminalDisplayModel(props.activeTab) : undefined,
+);
 </script>
 
 <template>
   <header class="titlebar" data-tauri-drag-region>
     <span class="app-title">Termdeck</span>
     <div class="active-terminal" data-tauri-drag-region>
-      <span class="title-dot" :class="activeTab?.status ?? 'stopped'" />
-      <strong>{{ activeTab?.title ?? "No terminal" }}</strong>
-      <span>{{ activeTab?.detail ?? "Create a terminal to begin" }}</span>
+      <TerminalStatusIndicator
+        :status="activeTab?.status ?? 'stopped'"
+        :busy="display?.busy"
+        :running="display?.running"
+        variant="titlebar"
+      />
+      <strong>{{ display?.primaryLabel ?? "No terminal" }}</strong>
+      <span>{{
+        display?.secondaryLabel ?? activeTab?.detail ?? "Create a terminal to begin"
+      }}</span>
     </div>
   </header>
 </template>
@@ -45,20 +59,5 @@ defineProps<{ activeTab?: TerminalTab }>();
   font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.title-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #687087;
-}
-.title-dot.running {
-  background: var(--color-status-running);
-}
-.title-dot.starting {
-  background: var(--color-status-starting);
-}
-.title-dot.error {
-  background: var(--color-status-error);
 }
 </style>

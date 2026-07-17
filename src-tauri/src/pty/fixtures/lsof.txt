@@ -1,0 +1,6 @@
+p100
+fcwd
+n/tmp/project
+p500
+fcwd
+n/Users/example

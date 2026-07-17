@@ -65,6 +65,20 @@ The frontend includes a focused xterm.js 6.0 compatibility shim that encodes
 it from plain Enter. This can be removed once Kitty keyboard support reaches a
 stable xterm.js release.
 
+## Pi status integration
+
+Termdeck detects the Pi process automatically. To also show whether Pi is
+processing or waiting for input, install the included minimal Pi extension:
+
+```sh
+mkdir -p ~/.pi/agent/extensions
+cp extensions/pi/termdeck-status.ts ~/.pi/agent/extensions/termdeck-status.ts
+```
+
+Restart Pi (or run `/reload`) after installing it. The extension emits private
+terminal control sequences on Pi lifecycle events; Termdeck consumes them
+without displaying any terminal output.
+
 ## Roadmap
 
 - explicit backpressure and output batching for many simultaneous PTYs

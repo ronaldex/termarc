@@ -2,7 +2,9 @@ use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_s
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fs,
     io::Write,
+    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -16,10 +18,14 @@ use tauri::{
 
 use crate::paths::expand_user_path;
 
+mod process_status;
+
 struct PtySession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    pid: Option<u32>,
+    integration_dir: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -55,6 +61,14 @@ pub(crate) struct PtyStarted {
     id: String,
     pid: Option<u32>,
     shell: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PtyStatus {
+    process_name: Option<String>,
+    agent: Option<String>,
+    cwd: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -105,10 +119,21 @@ pub(crate) fn start_pty(
         .map_err(|error| format!("could not create PTY: {error}"))?;
 
     let shell = default_shell();
+    let id = format!("pty-{}", state.next_id.fetch_add(1, Ordering::Relaxed) + 1);
+    let integration = prepare_shell_integration(&shell, &id);
     let mut command = CommandBuilder::new(&shell);
 
+    if let Some(integration) = &integration {
+        integration.configure(&mut command);
+    }
+
     #[cfg(not(windows))]
-    command.arg("-l");
+    if integration
+        .as_ref()
+        .is_none_or(ShellIntegration::uses_shell_login)
+    {
+        command.arg("-l");
+    }
 
     if let Some(cwd) = request.cwd.as_deref() {
         command.cwd(expand_user_path(cwd));
@@ -117,10 +142,15 @@ pub(crate) fn start_pty(
     command.env("COLORTERM", "truecolor");
     command.env("TERM_PROGRAM", "Termdeck");
 
-    let mut child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|error| format!("could not start {shell}: {error}"))?;
+    let mut child = match pair.slave.spawn_command(command) {
+        Ok(child) => child,
+        Err(error) => {
+            if let Some(integration) = &integration {
+                let _ = fs::remove_dir_all(&integration.directory);
+            }
+            return Err(format!("could not start {shell}: {error}"));
+        }
+    };
     let pid = child.process_id();
     let killer = child.clone_killer();
     drop(pair.slave);
@@ -134,7 +164,6 @@ pub(crate) fn start_pty(
         .take_writer()
         .map_err(|error| format!("could not open PTY writer: {error}"))?;
 
-    let id = format!("pty-{}", state.next_id.fetch_add(1, Ordering::Relaxed) + 1);
     state
         .sessions
         .lock()
@@ -145,6 +174,10 @@ pub(crate) fn start_pty(
                 master: pair.master,
                 writer,
                 killer,
+                pid,
+                integration_dir: integration
+                    .as_ref()
+                    .map(|integration| integration.directory.clone()),
             },
         );
 
@@ -172,15 +205,11 @@ pub(crate) fn start_pty(
     let sessions = Arc::clone(&state.sessions);
     thread::spawn(move || match child.wait() {
         Ok(status) => {
-            if let Ok(mut sessions) = sessions.lock() {
-                sessions.remove(&session_id);
-            }
+            remove_session(&sessions, &session_id);
             let _ = on_event.send(PtyEvent::exit(status.exit_code()));
         }
         Err(error) => {
-            if let Ok(mut sessions) = sessions.lock() {
-                sessions.remove(&session_id);
-            }
+            remove_session(&sessions, &session_id);
             let _ = on_event.send(PtyEvent::error(format!(
                 "could not wait for shell: {error}"
             )));
@@ -243,6 +272,39 @@ pub(crate) fn resize_pty(
 }
 
 #[tauri::command]
+pub(crate) async fn get_pty_status(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<PtyStatus, String> {
+    let mut statuses = get_pty_statuses(vec![id.clone()], state).await?;
+    statuses
+        .remove(&id)
+        .ok_or_else(|| format!("unknown PTY session: {id}"))
+}
+
+#[tauri::command]
+pub(crate) async fn get_pty_statuses(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, PtyStatus>, String> {
+    let requested = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "PTY session state is poisoned".to_string())?;
+        // Sessions can close while a frontend status refresh is in flight. Skip
+        // stale ids so one closed terminal does not discard the whole batch.
+        ids.into_iter()
+            .filter_map(|id| sessions.get(&id).map(|session| (id, session.pid)))
+            .collect::<Vec<_>>()
+    };
+
+    tauri::async_runtime::spawn_blocking(move || process_status::inspect(&requested))
+        .await
+        .map_err(|error| format!("could not inspect PTY processes: {error}"))
+}
+
+#[tauri::command]
 pub(crate) fn stop_pty(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let mut sessions = state
         .sessions
@@ -256,6 +318,95 @@ pub(crate) fn stop_pty(id: String, state: State<'_, AppState>) -> Result<(), Str
         .killer
         .kill()
         .map_err(|error| format!("could not stop PTY: {error}"))
+}
+
+struct ShellIntegration {
+    directory: PathBuf,
+    kind: ShellIntegrationKind,
+}
+
+enum ShellIntegrationKind {
+    Zsh,
+    Bash { rc_file: PathBuf },
+}
+
+impl ShellIntegration {
+    fn uses_shell_login(&self) -> bool {
+        matches!(self.kind, ShellIntegrationKind::Zsh)
+    }
+
+    fn configure(&self, command: &mut CommandBuilder) {
+        match &self.kind {
+            ShellIntegrationKind::Zsh => command.env("ZDOTDIR", &self.directory),
+            ShellIntegrationKind::Bash { rc_file } => {
+                command.arg("--rcfile");
+                command.arg(rc_file);
+            }
+        }
+    }
+}
+
+fn prepare_shell_integration(shell: &str, id: &str) -> Option<ShellIntegration> {
+    let shell_name = PathBuf::from(shell)
+        .file_name()?
+        .to_string_lossy()
+        .trim_start_matches('-')
+        .to_ascii_lowercase();
+    if !matches!(shell_name.as_str(), "zsh" | "bash") {
+        return None;
+    }
+
+    let directory = std::env::temp_dir().join(format!("termdeck-{id}"));
+    fs::create_dir_all(&directory).ok()?;
+    let result = if shell_name == "zsh" {
+        write_zsh_integration(&directory).map(|()| ShellIntegration {
+            directory: directory.clone(),
+            kind: ShellIntegrationKind::Zsh,
+        })
+    } else {
+        let rc_file = directory.join("termdeck.bashrc");
+        fs::write(
+            &rc_file,
+            "if [ -f \"$HOME/.bash_profile\" ]; then . \"$HOME/.bash_profile\"; elif [ -f \"$HOME/.bash_login\" ]; then . \"$HOME/.bash_login\"; elif [ -f \"$HOME/.profile\" ]; then . \"$HOME/.profile\"; fi\ntermdeck_report_status() { local exit_status=$?; if [ -z \"${TERMDECK_PROMPT_SEEN-}\" ]; then exit_status=0; TERMDECK_PROMPT_SEEN=1; fi; printf '\\033]777;termdeck;shell;%s\\033\\\\' \"$exit_status\"; }\nPROMPT_COMMAND=\"termdeck_report_status${PROMPT_COMMAND:+; $PROMPT_COMMAND}\"\n",
+        )
+        .map(|()| ShellIntegration {
+            directory: directory.clone(),
+            kind: ShellIntegrationKind::Bash { rc_file },
+        })
+    };
+
+    result.ok().or_else(|| {
+        let _ = fs::remove_dir_all(&directory);
+        None
+    })
+}
+
+fn write_zsh_integration(directory: &PathBuf) -> std::io::Result<()> {
+    write_user_startup_file(directory, ".zshenv")?;
+    write_user_startup_file(directory, ".zprofile")?;
+    write_user_startup_file(directory, ".zlogin")?;
+    fs::write(
+        directory.join(".zshrc"),
+        "[ -f \"$HOME/.zshrc\" ] && source \"$HOME/.zshrc\"\ntermdeck_report_status() { local exit_status=$?; if [[ -z ${TERMDECK_PROMPT_SEEN-} ]]; then exit_status=0; typeset -g TERMDECK_PROMPT_SEEN=1; fi; printf '\\033]777;termdeck;shell;%s\\033\\\\' \"$exit_status\"; }\nprecmd_functions+=(termdeck_report_status)\n",
+    )
+}
+
+fn write_user_startup_file(directory: &PathBuf, name: &str) -> std::io::Result<()> {
+    fs::write(
+        directory.join(name),
+        format!("[ -f \"$HOME/{name}\" ] && source \"$HOME/{name}\"\n"),
+    )
+}
+
+fn remove_session(sessions: &Arc<Mutex<HashMap<String, PtySession>>>, session_id: &str) {
+    let integration_dir = sessions
+        .lock()
+        .ok()
+        .and_then(|mut sessions| sessions.remove(session_id))
+        .and_then(|session| session.integration_dir);
+    if let Some(directory) = integration_dir {
+        let _ = fs::remove_dir_all(directory);
+    }
 }
 
 #[cfg(windows)]

@@ -1,17 +1,36 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
+import { useScrollActiveItem } from "../composables/useScrollActiveItem";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
-import type { TerminalTab } from "../types/terminal";
+import type { TerminalTabState } from "../types/terminal";
+import { terminalMatchesFilter } from "../utils/terminalLabels";
+import OverlayScrollArea from "./OverlayScrollArea.vue";
 import SidebarChevron from "./SidebarChevron.vue";
+import TerminalTreeRow from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
   projects: ProjectTreeProject[];
-  tabs: TerminalTab[];
+  tabs: TerminalTabState[];
   filter: string;
   selection: SidebarSelection;
 }>();
+const projectList = ref<InstanceType<typeof OverlayScrollArea>>();
+const activeItem = ref<HTMLElement>();
+const filteredTabsByProject = computed(() => {
+  const tabsByProject = new Map<string, TerminalTabState[]>();
+  for (const tab of props.tabs) {
+    if (!terminalMatchesFilter(tab, props.filter)) continue;
+    const tabs = tabsByProject.get(tab.projectId) ?? [];
+    tabs.push(tab);
+    tabsByProject.set(tab.projectId, tabs);
+  }
+  return tabsByProject;
+});
+
 const emit = defineEmits<{
   close: [id: string];
+  rename: [id: string, name: string];
   toggleProject: [id: string];
   toggleTerminals: [id: string];
   toggleCommands: [id: string];
@@ -19,15 +38,16 @@ const emit = defineEmits<{
   activate: [selection: SidebarSelection];
 }>();
 
-function projectTabs(project: ProjectTreeProject): TerminalTab[] {
-  const query = props.filter.trim().toLowerCase();
-  return props.tabs.filter(
-    (tab) => tab.projectId === project.id && (!query || tab.title.toLowerCase().includes(query)),
-  );
+function projectTabs(project: ProjectTreeProject): TerminalTabState[] {
+  return filteredTabsByProject.value.get(project.id) ?? [];
 }
 function isTreeActive(id: string): boolean {
   return props.selection.id === id;
 }
+function setActiveItem(element: Element | null, id: string): void {
+  if (id === props.selection.id && element instanceof HTMLElement) activeItem.value = element;
+}
+
 function initials(name: string): string {
   return name
     .split(/[\s-_]+/)
@@ -37,12 +57,23 @@ function initials(name: string): string {
     .slice(0, 2)
     .toUpperCase();
 }
+
+useScrollActiveItem(() => props.selection.id, activeItem, projectList);
 </script>
 
 <template>
-  <div class="project-list">
-    <section v-for="project in projects" :key="project.id" class="project">
-      <div class="project-row" :class="{ 'tree-active': isTreeActive(project.id) }">
+  <OverlayScrollArea ref="projectList" class="project-list">
+    <section
+      v-for="project in projects"
+      :key="project.id"
+      class="project"
+      :class="{ collapsed: !project.terminalOpen && !project.commandsOpen }"
+    >
+      <div
+        :ref="(element) => setActiveItem(element, project.id)"
+        class="project-row"
+        :class="{ 'tree-active': isTreeActive(project.id) }"
+      >
         <SidebarChevron
           class="project-chevron"
           :open="project.terminalOpen || project.commandsOpen"
@@ -61,6 +92,7 @@ function initials(name: string): string {
       <div v-if="project.terminalOpen || project.commandsOpen" class="project-content">
         <div class="group">
           <div
+            :ref="(element) => setActiveItem(element, `${project.id}:terminals`)"
             class="group-heading"
             :class="{ 'tree-active': isTreeActive(`${project.id}:terminals`) }"
           >
@@ -88,29 +120,18 @@ function initials(name: string): string {
             <div
               v-for="tab in projectTabs(project)"
               :key="tab.id"
-              class="process-row"
-              :class="{ 'tree-active': isTreeActive(tab.id) }"
+              :ref="(element) => setActiveItem(element, tab.id)"
             >
-              <button
-                class="process-select"
-                @click="
-                  emit('focus', {
-                    id: tab.id,
-                    kind: 'terminal',
-                    projectId: project.id,
-                    tabId: tab.id,
-                  })
-                "
-              >
-                <span class="status-dot" :class="tab.status"></span
-                ><span class="process-title">{{ tab.title }}</span>
-              </button>
-              <span class="shortcut">⌘{{ tab.number }}</span
-              ><button class="close" title="Close terminal" @click="emit('close', tab.id)">
-                ×
-              </button>
+              <TerminalTreeRow
+                :tab="tab"
+                :active="isTreeActive(tab.id)"
+                @focus="emit('focus', $event)"
+                @rename="(id, name) => emit('rename', id, name)"
+                @close="emit('close', $event)"
+              />
             </div>
             <button
+              :ref="(element) => setActiveItem(element, `${project.id}:add-terminal`)"
               class="add-row"
               :class="{ 'tree-active': isTreeActive(`${project.id}:add-terminal`) }"
               @click="
@@ -128,6 +149,7 @@ function initials(name: string): string {
 
         <div class="group">
           <div
+            :ref="(element) => setActiveItem(element, `${project.id}:commands`)"
             class="group-heading"
             :class="{ 'tree-active': isTreeActive(`${project.id}:commands`) }"
           >
@@ -152,6 +174,7 @@ function initials(name: string): string {
           </div>
           <button
             v-if="project.commandsOpen"
+            :ref="(element) => setActiveItem(element, `${project.id}:add-command`)"
             class="add-row command-add"
             :class="{ 'tree-active': isTreeActive(`${project.id}:add-command`) }"
             @click="
@@ -167,7 +190,7 @@ function initials(name: string): string {
         </div>
       </div>
     </section>
-  </div>
+  </OverlayScrollArea>
 </template>
 
 <style scoped>
@@ -181,13 +204,15 @@ button {
 .project-list {
   min-height: 0;
   flex: 1;
-  overflow: auto;
 }
 .project {
   background: transparent;
 }
 .project + .project .project-row {
   border-top: 1px solid #34363c;
+}
+.project.collapsed + .project .project-row {
+  border-top: 0;
 }
 .project-row {
   position: relative;
@@ -254,6 +279,7 @@ button {
   font-weight: 700;
 }
 .project-content {
+  --tree-item-icon-left: 18px;
   padding: 0 11px 11px 13px;
 }
 .group {
@@ -307,79 +333,13 @@ button {
   font-weight: 400;
   letter-spacing: 0;
 }
-.process-row {
-  position: relative;
-  display: flex;
-  height: 32px;
-  align-items: center;
-  padding-left: 27px;
-  border-radius: 3px;
-}
-.process-row.tree-active::before {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: -13px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--color-focus);
-  content: "";
-}
-.process-select {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 10px;
-  padding: 0;
-  text-align: left;
-}
-.status-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #666970;
-}
-.status-dot.running {
-  background: #8f939b;
-}
-.status-dot.starting {
-  background: #d5a85c;
-}
-.status-dot.error {
-  background: #d76770;
-}
-.process-title {
-  overflow: hidden;
-  color: #c7c8cc;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.shortcut {
-  color: #575a61;
-  font-size: 10px;
-}
-.close {
-  width: 20px;
-  color: #6e7178;
-  font-size: 15px;
-  opacity: 0;
-}
-.process-row:hover .close {
-  opacity: 1;
-}
-.process-row:hover .shortcut {
-  display: none;
-}
 .add-row {
   position: relative;
   display: flex;
   height: 28px;
   align-items: center;
-  gap: 10px;
-  margin-left: 23px;
+  gap: 7px;
+  margin-left: var(--tree-item-icon-left);
   padding: 0;
   color: #666970;
   font-size: 11px;
@@ -388,7 +348,7 @@ button {
   position: absolute;
   top: 3px;
   bottom: 3px;
-  left: -36px;
+  left: calc(-1 * var(--tree-item-icon-left) - 13px);
   width: 3px;
   border-radius: 0 2px 2px 0;
   background: var(--color-focus);
@@ -399,7 +359,7 @@ button {
 }
 .add-row span {
   display: inline-grid;
-  width: 6px;
+  width: 12px;
   place-items: center;
   font-size: 13px;
   line-height: 1;

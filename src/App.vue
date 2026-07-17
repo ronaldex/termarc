@@ -22,9 +22,11 @@ const {
   createTab,
   selectTab,
   closeTab,
+  renameTab,
   setTerminalContainer,
   attachHost,
   setDefaultProject,
+  isTerminalFocused,
   start,
   dispose,
 } = useTerminalTabs();
@@ -144,6 +146,7 @@ onBeforeUnmount(() => {
       :tabs="tabs"
       :projects="treeProjects"
       :selection="sidebarSelection"
+      :is-terminal-focused="isTerminalFocused"
       @focus="focusSidebar"
       @activate="activateSidebar"
       @add-project="addProject"
@@ -152,6 +155,7 @@ onBeforeUnmount(() => {
       @toggle-terminals="toggleTerminals"
       @toggle-commands="toggleCommands"
       @close="closeTerminal"
+      @rename="renameTab"
       @toggle="leftSidebarOpen = !leftSidebarOpen"
     />
     <div

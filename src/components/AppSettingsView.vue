@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { sendAgentReadyNotification } from "../services/agentNotifications";
 import { useAppSettings } from "../composables/useAppSettings";
 
 const { settings } = useAppSettings();
+
+function testAgentReadyNotification(): void {
+  void sendAgentReadyNotification({
+    body: "Termdeck notifications are working.",
+    notification: settings.notifyWhenAgentReady,
+    sound: settings.playSoundWhenAgentReady,
+  });
+}
 </script>
 
 <template>
@@ -35,6 +44,24 @@ const { settings } = useAppSettings();
               required
             />
           </label>
+          <label class="toggle-field">
+            <span class="field-copy"
+              ><strong>Agent ready notifications</strong
+              ><small>Notify you whenever Pi finishes processing.</small></span
+            >
+            <input v-model="settings.notifyWhenAgentReady" type="checkbox" />
+          </label>
+          <label class="toggle-field">
+            <span class="field-copy"
+              ><strong>Agent ready sound</strong
+              ><small>Play a sound whenever Pi finishes processing.</small></span
+            >
+            <input v-model="settings.playSoundWhenAgentReady" type="checkbox" />
+          </label>
+          <div class="test-notification">
+            <span>Use this to confirm that your selected alerts are working.</span>
+            <button type="button" @click="testAgentReadyNotification">Test notification</button>
+          </div>
         </div>
       </form>
     </div>
@@ -123,7 +150,7 @@ form {
   font-size: 10px;
   line-height: 1.35;
 }
-input {
+input:not([type="checkbox"]) {
   width: 100%;
   height: 31px;
   padding: 0 10px;
@@ -134,9 +161,41 @@ input {
   background: #17181b;
   font-size: 11px;
 }
-input:focus {
+input:not([type="checkbox"]):focus {
   border-color: #61656f;
   box-shadow: 0 0 0 1px #61656f33;
+}
+.toggle-field input {
+  width: 16px;
+  height: 16px;
+  justify-self: start;
+  accent-color: #7aa2f7;
+}
+.test-notification {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 15px;
+  border-top: 1px solid #33353a;
+  color: #9699a1;
+  font-size: 10px;
+}
+.test-notification button {
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 1px solid #3a3c42;
+  border-radius: 6px;
+  color: #e4e5e8;
+  background: #17181b;
+  font-size: 11px;
+  cursor: pointer;
+}
+.test-notification button:hover {
+  border-color: #61656f;
+  background: #1d1f24;
 }
 @media (max-width: 760px) {
   .settings-card label {

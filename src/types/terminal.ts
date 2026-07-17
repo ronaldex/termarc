@@ -14,16 +14,40 @@ export type PtyStarted = {
   shell: string;
 };
 
+export type AgentKind = "pi";
+export type AgentState = "processing" | "waiting";
+
+export type PtyStatus = {
+  processName?: string;
+  agent?: AgentKind;
+  cwd?: string;
+};
+
 export type TerminalStatus = "starting" | "running" | "stopped" | "error";
 
-export type TerminalTab = {
+export type TerminalActivity = {
+  processName?: string;
+  agent?: AgentKind;
+  agentState?: AgentState;
+  lastCommandExitCode?: number;
+  currentCwd?: string;
+};
+
+/** Serializable state consumed by workspace and sidebar components. */
+export type TerminalTabState = TerminalActivity & {
   id: string;
   number: number;
   title: string;
+  name?: string;
+  terminalTitle?: string;
   detail: string;
   projectId: string;
   cwd: string;
   status: TerminalStatus;
+};
+
+/** Runtime-only resources owned by the terminal tabs facade. */
+export type TerminalRuntime = {
   terminal: Terminal;
   fitAddon: FitAddon;
   webglAddon?: WebglAddon;
@@ -34,3 +58,5 @@ export type TerminalTab = {
   writeQueue: Promise<unknown>;
   disposed: boolean;
 };
+
+export type TerminalTab = TerminalTabState & TerminalRuntime;
