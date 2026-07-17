@@ -1,6 +1,7 @@
 import type { FitAddon } from "@xterm/addon-fit";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { Terminal } from "@xterm/xterm";
+import type { ProjectCommandMode } from "./project";
 
 export type PtyEvent = {
   event: "exit" | "error";
@@ -25,6 +26,15 @@ export type PtyStatus = {
 
 export type TerminalStatus = "starting" | "running" | "stopped" | "error";
 
+export type TerminalLaunch =
+  | { kind: "shell" }
+  | {
+      kind: "command";
+      commandId: string;
+      commandLine: string;
+      mode: ProjectCommandMode;
+    };
+
 export type TerminalActivity = {
   processName?: string;
   agent?: AgentKind;
@@ -43,6 +53,7 @@ export type TerminalTabState = TerminalActivity & {
   detail: string;
   projectId: string;
   cwd: string;
+  launch: TerminalLaunch;
   status: TerminalStatus;
 };
 
@@ -55,6 +66,7 @@ export type TerminalRuntime = {
   container?: HTMLDivElement;
   session?: PtyStarted;
   startGeneration: number;
+  stopRequested: boolean;
   writeQueue: Promise<unknown>;
   disposed: boolean;
 };

@@ -8,6 +8,14 @@ const project: ProjectTreeProject = {
   id: "project-1",
   name: "Project",
   directory: "/project",
+  commands: [
+    {
+      id: "command-1",
+      name: "Build",
+      command: "npm run build",
+      mode: "single-shot",
+    },
+  ],
   terminalOpen: true,
   commandsOpen: true,
 };
@@ -17,10 +25,13 @@ const terminal = {
   title: "Terminal 1",
   projectId: project.id,
   cwd: project.directory,
+  launch: { kind: "shell" },
 } as TerminalTab;
 
-function selection(id: string, kind: SidebarSelection["kind"]): SidebarSelection {
-  return { id, kind, projectId: project.id, tabId: kind === "terminal" ? id : undefined };
+function selection(id: string, kind: "project" | "terminal"): SidebarSelection {
+  return kind === "terminal"
+    ? { id, kind, projectId: project.id, tabId: id }
+    : { id, kind, projectId: project.id };
 }
 
 describe("flattenProjectTree", () => {
@@ -31,8 +42,14 @@ describe("flattenProjectTree", () => {
       "terminal",
       "add-terminal",
       "commands",
-      "add-command",
+      "command",
     ]);
+  });
+
+  it("hides the commands section when a project has no commands", () => {
+    const nodes = flattenProjectTree([{ ...project, commands: [] }], [terminal]);
+
+    expect(nodes.some((node) => node.kind === "commands" || node.kind === "command")).toBe(false);
   });
 
   it("contains only the project when it is fully collapsed", () => {
@@ -79,6 +96,13 @@ describe("projectTreeNavigationActions", () => {
     ).toEqual([
       { type: "toggle-terminals", projectId: project.id },
       { type: "toggle-commands", projectId: project.id },
+    ]);
+  });
+
+  it("activates a command with ArrowRight", () => {
+    const command = nodes.find((node) => node.kind === "command")!;
+    expect(projectTreeNavigationActions("ArrowRight", nodes, command, [project], true)).toEqual([
+      { type: "activate", selection: command },
     ]);
   });
 

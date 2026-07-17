@@ -8,7 +8,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_FONT_FAMILY =
-  '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace';
+  '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace';
 
 const DEFAULT_SETTINGS: AppSettings = {
   terminalFontFamily: DEFAULT_FONT_FAMILY,
@@ -21,6 +21,7 @@ const STORAGE_KEY = "termdeck-settings";
 const STORAGE_VERSION = 1;
 const LEGACY_FONT_FAMILIES = new Set([
   '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
+  '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
   '"JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
 ]);
 

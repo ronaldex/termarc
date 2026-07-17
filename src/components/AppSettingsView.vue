@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { sendAgentReadyNotification } from "../services/agentNotifications";
 import { useAppSettings } from "../composables/useAppSettings";
+import { sendAgentReadyNotification } from "../services/agentNotifications";
+import SettingsActionRow from "./settings/SettingsActionRow.vue";
+import SettingsButton from "./settings/SettingsButton.vue";
+import SettingsCard from "./settings/SettingsCard.vue";
+import SettingsField from "./settings/SettingsField.vue";
+import SettingsPage from "./settings/SettingsPage.vue";
+import SettingsSection from "./settings/SettingsSection.vue";
 
 const { settings } = useAppSettings();
 
@@ -14,193 +20,50 @@ function testAgentReadyNotification(): void {
 </script>
 
 <template>
-  <section class="settings-view">
-    <header class="page-header">
-      <strong>Termdeck</strong>
-      <span class="edit-icon" aria-hidden="true">⌁</span>
-      <span class="page-kind">App settings</span>
-    </header>
-
-    <div class="page-content">
-      <span class="section-label">TERMINAL</span>
-      <form>
-        <div class="settings-card">
-          <label>
-            <span class="field-copy"
-              ><strong>Font family</strong
-              ><small>The font family used for the terminal.</small></span
-            >
+  <SettingsPage title="Termdeck" kind="App settings">
+    <form>
+      <SettingsSection title="TERMINAL">
+        <SettingsCard>
+          <SettingsField title="Font family" description="The font family used for the terminal.">
             <input v-model="settings.terminalFontFamily" required spellcheck="false" />
-          </label>
-          <label>
-            <span class="field-copy"
-              ><strong>Font size</strong><small>The font size in pixels.</small></span
-            >
+          </SettingsField>
+          <SettingsField title="Font size" description="The font size in pixels.">
             <input
+              v-model.number="settings.terminalFontSize"
               type="number"
               min="8"
               max="72"
-              v-model.number="settings.terminalFontSize"
               required
             />
-          </label>
-          <label class="toggle-field">
-            <span class="field-copy"
-              ><strong>Agent ready notifications</strong
-              ><small>Notify you whenever Pi finishes processing.</small></span
-            >
+          </SettingsField>
+          <SettingsField
+            title="Agent ready notifications"
+            description="Notify you whenever Pi finishes processing."
+          >
             <input v-model="settings.notifyWhenAgentReady" type="checkbox" />
-          </label>
-          <label class="toggle-field">
-            <span class="field-copy"
-              ><strong>Agent ready sound</strong
-              ><small>Play a sound whenever Pi finishes processing.</small></span
-            >
+          </SettingsField>
+          <SettingsField
+            title="Agent ready sound"
+            description="Play a sound whenever Pi finishes processing."
+          >
             <input v-model="settings.playSoundWhenAgentReady" type="checkbox" />
-          </label>
-          <div class="test-notification">
-            <span>Use this to confirm that your selected alerts are working.</span>
-            <button type="button" @click="testAgentReadyNotification">Test notification</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </section>
+          </SettingsField>
+          <SettingsActionRow
+            description="Use this to confirm that your selected alerts are working."
+          >
+            <SettingsButton type="button" @click="testAgentReadyNotification">
+              Test notification
+            </SettingsButton>
+          </SettingsActionRow>
+        </SettingsCard>
+      </SettingsSection>
+    </form>
+  </SettingsPage>
 </template>
 
 <style scoped>
-.settings-view {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  color: var(--color-text);
-  background: #111214;
-}
-.page-header {
-  display: flex;
-  height: 38px;
-  align-items: center;
-  gap: 12px;
-  padding: 0 22px;
-  border-bottom: 1px solid var(--color-border);
-  background: #111214;
-}
-.page-header strong {
-  color: var(--color-text-strong);
-  font-size: 12px;
-}
-.edit-icon {
-  color: #8a8d95;
-  font-size: 16px;
-  transform: rotate(-30deg);
-}
-.page-kind {
-  margin-left: 2px;
-  padding-left: 14px;
-  border-left: 1px solid #303238;
-  color: var(--color-text-muted);
-  font-size: 10px;
-}
-.page-content {
-  width: min(760px, calc(100% - 44px));
-  padding: 34px 0 48px;
-  margin: 0 auto;
-}
-.section-label {
-  display: block;
-  margin: 0 0 14px;
-  color: #8a8d95;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.05em;
-}
 form {
   display: flex;
   flex-direction: column;
-}
-.settings-card {
-  overflow: hidden;
-  border: 1px solid #33353a;
-  border-radius: 10px;
-  background: #121315;
-}
-.settings-card label {
-  display: grid;
-  min-height: 64px;
-  grid-template-columns: minmax(190px, 1fr) minmax(250px, 330px);
-  align-items: center;
-  gap: 24px;
-  padding: 12px 15px;
-}
-.settings-card label + label {
-  border-top: 1px solid #33353a;
-}
-.field-copy strong,
-.field-copy small {
-  display: block;
-}
-.field-copy strong {
-  margin-bottom: 3px;
-  color: #e0e1e4;
-  font-size: 12px;
-  font-weight: 500;
-}
-.field-copy small {
-  color: #9699a1;
-  font-size: 10px;
-  line-height: 1.35;
-}
-input:not([type="checkbox"]) {
-  width: 100%;
-  height: 31px;
-  padding: 0 10px;
-  border: 1px solid #3a3c42;
-  border-radius: 6px;
-  outline: none;
-  color: #e4e5e8;
-  background: #17181b;
-  font-size: 11px;
-}
-input:not([type="checkbox"]):focus {
-  border-color: #61656f;
-  box-shadow: 0 0 0 1px #61656f33;
-}
-.toggle-field input {
-  width: 16px;
-  height: 16px;
-  justify-self: start;
-  accent-color: #7aa2f7;
-}
-.test-notification {
-  display: flex;
-  min-height: 52px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 15px;
-  border-top: 1px solid #33353a;
-  color: #9699a1;
-  font-size: 10px;
-}
-.test-notification button {
-  height: 28px;
-  flex: 0 0 auto;
-  padding: 0 10px;
-  border: 1px solid #3a3c42;
-  border-radius: 6px;
-  color: #e4e5e8;
-  background: #17181b;
-  font-size: 11px;
-  cursor: pointer;
-}
-.test-notification button:hover {
-  border-color: #61656f;
-  background: #1d1f24;
-}
-@media (max-width: 760px) {
-  .settings-card label {
-    grid-template-columns: 1fr;
-    gap: 9px;
-  }
 }
 </style>

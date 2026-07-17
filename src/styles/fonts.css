@@ -1,13 +1,20 @@
+/*
+ * Use a complete patched monospace face instead of mixing JetBrains Mono with
+ * the much wider Symbols Nerd Font fallback. Matching text and icon advances
+ * keeps every glyph inside xterm's cell grid.
+ */
 @font-face {
-  font-family: "Symbols Nerd Font Mono";
-  src: url("../assets/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-family: "Termdeck JetBrainsMono Nerd Font";
+  src: url("../assets/fonts/JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
+  font-display: block;
   font-style: normal;
   font-weight: 400;
 }
 
 @font-face {
-  font-family: "Symbols Nerd Font Mono";
-  src: url("../assets/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-family: "Termdeck JetBrainsMono Nerd Font";
+  src: url("../assets/fonts/JetBrainsMonoNerdFontMono-SemiBold.ttf") format("truetype");
+  font-display: block;
   font-style: normal;
   font-weight: 600;
 }

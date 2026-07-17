@@ -90,7 +90,8 @@ watch(state, (result) => {
 .diff-header span {
   margin-top: 3px;
   color: #778196;
-  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
+  font-family:
+    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 10px;
 }
 .refresh-button {
@@ -114,7 +115,8 @@ watch(state, (result) => {
   padding: 9px 14px;
   border-bottom: 1px solid #1b1e26;
   color: #687287;
-  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
+  font-family:
+    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -6,10 +6,12 @@ export type TerminalAppearance = {
 };
 
 export async function prepareTerminalFonts(): Promise<void> {
-  // xterm measures its cell size when it opens. Do not let its initial render
-  // use a fallback font while the bundled faces are still loading.
-  await document.fonts.load('400 13px "JetBrains Mono"', "term-deck");
-  await document.fonts.load('400 13px "Symbols Nerd Font Mono"', "\u{f07c}");
+  // xterm measures its cell size when it opens. Load both bundled weights
+  // first so text and Nerd Font icons always use the same monospace metrics.
+  await Promise.all([
+    document.fonts.load('400 13px "Termdeck JetBrainsMono Nerd Font"', "term-deck \u{f07c}"),
+    document.fonts.load('600 13px "Termdeck JetBrainsMono Nerd Font"', "term-deck \u{f07c}"),
+  ]);
   await document.fonts.ready;
 }
 
@@ -26,8 +28,6 @@ export function createTerminal(appearance: TerminalAppearance): Terminal {
     fontWeight: "400",
     fontWeightBold: "600",
     lineHeight: 1.18,
-    // Nerd Font symbols can have wider metrics than the primary text face.
-    // Keep fallback glyphs inside their xterm cell so icons do not overlap text.
     rescaleOverlappingGlyphs: true,
     scrollback: 10_000,
     smoothScrollDuration: 100,

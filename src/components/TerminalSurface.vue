@@ -102,7 +102,8 @@ onMounted(() => {
   border-radius: 13px;
   color: #8be9fd;
   background: #151a25;
-  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
+  font-family:
+    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 .empty-state strong {
   color: #d1d7e3;

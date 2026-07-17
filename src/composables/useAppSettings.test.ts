@@ -47,11 +47,33 @@ describe("useAppSettings persistence", () => {
       notifyWhenAgentReady: false,
       playSoundWhenAgentReady: false,
     });
-    expect(settings.terminalFontFamily).toContain("Symbols Nerd Font Mono");
+    expect(settings.terminalFontFamily).toContain("Termdeck JetBrainsMono Nerd Font");
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toEqual({
       version: 1,
       settings: { ...settings },
     });
+  });
+
+  it("migrates the old mixed-width Nerd Font fallback", async () => {
+    const storage = mockStorage(
+      JSON.stringify({
+        version: 1,
+        settings: {
+          terminalFontFamily:
+            '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
+          terminalFontSize: 13,
+          notifyWhenAgentReady: false,
+          playSoundWhenAgentReady: true,
+        },
+      }),
+    );
+    const { useAppSettings } = await import("./useAppSettings");
+
+    const { settings, load } = useAppSettings();
+    load();
+
+    expect(settings.terminalFontFamily).toContain("Termdeck JetBrainsMono Nerd Font");
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
   });
 
   it("rejects out-of-range font sizes and non-boolean preferences", async () => {
