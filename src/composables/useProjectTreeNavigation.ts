@@ -1,7 +1,8 @@
 import { computed, onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
-import type { TerminalTab } from "../types/terminal";
+import type { TerminalTabState } from "../types/terminal";
+import { terminalMatchesFilter } from "../utils/terminalLabels";
 
 export type ProjectTreeNavigationAction =
   | { type: "focus"; selection: SidebarSelection }
@@ -11,11 +12,9 @@ export type ProjectTreeNavigationAction =
 
 export function flattenProjectTree(
   projects: readonly ProjectTreeProject[],
-  tabs: readonly TerminalTab[],
+  tabs: readonly TerminalTabState[],
   filter = "",
 ): SidebarSelection[] {
-  const query = filter.trim().toLowerCase();
-
   return projects.flatMap((project) => {
     const nodes: SidebarSelection[] = [projectSelection(project.id)];
     if (!(project.terminalOpen || project.commandsOpen)) return nodes;
@@ -24,10 +23,7 @@ export function flattenProjectTree(
     if (project.terminalOpen) {
       nodes.push(
         ...tabs
-          .filter(
-            (tab) =>
-              tab.projectId === project.id && (!query || tab.title.toLowerCase().includes(query)),
-          )
+          .filter((tab) => tab.projectId === project.id && terminalMatchesFilter(tab, filter))
           .map((tab) => ({
             id: tab.id,
             kind: "terminal" as const,
@@ -125,7 +121,7 @@ export function projectTreeNavigationActions(
 
 export function useProjectTreeNavigation(options: {
   projects: Ref<ProjectTreeProject[]>;
-  tabs: Ref<TerminalTab[]>;
+  tabs: Ref<TerminalTabState[]>;
   filter: Ref<string>;
   selection: Ref<SidebarSelection>;
   sidebarElement: Ref<HTMLElement | undefined>;

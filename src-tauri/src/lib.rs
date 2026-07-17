@@ -1,4 +1,5 @@
 mod git;
+mod notifications;
 mod paths;
 mod plugins;
 mod projects;
@@ -20,6 +21,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
                 .on_navigation(move |_webview, url| {
@@ -35,12 +37,16 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             pty::start_pty,
+            notifications::notify_agent_ready,
+            notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
             paths::open_terminal_path,
             projects::load_projects,
             projects::save_projects,
             pty::write_to_pty,
             pty::resize_pty,
+            pty::get_pty_status,
+            pty::get_pty_statuses,
             git::get_git_diff_directory,
             pty::stop_pty,
             mac_rounded_corners::enable_rounded_corners,

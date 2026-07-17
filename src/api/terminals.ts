@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { PtyEvent, PtyStarted } from "../types/terminal";
+import type { PtyEvent, PtyStarted, PtyStatus } from "../types/terminal";
 
 export type StartTerminalOptions = {
   rows: number;
@@ -28,6 +28,14 @@ export function writeTerminal(id: string, data: Uint8Array): Promise<void> {
 
 export function resizeTerminal(id: string, rows: number, cols: number): Promise<void> {
   return invoke("resize_pty", { id, rows, cols });
+}
+
+export function getTerminalStatus(id: string): Promise<PtyStatus> {
+  return invoke<PtyStatus>("get_pty_status", { id });
+}
+
+export function getTerminalStatuses(ids: string[]): Promise<Record<string, PtyStatus>> {
+  return invoke<Record<string, PtyStatus>>("get_pty_statuses", { ids });
 }
 
 export function stopTerminal(id: string): Promise<void> {

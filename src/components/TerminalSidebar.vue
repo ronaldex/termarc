@@ -3,19 +3,21 @@ import { ref, toRefs } from "vue";
 import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigation";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
-import type { TerminalTab } from "../types/terminal";
+import type { TerminalTabState } from "../types/terminal";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
 
 const props = defineProps<{
-  tabs: TerminalTab[];
+  tabs: TerminalTabState[];
   collapsed?: boolean;
   projects: ProjectTreeProject[];
   selection: SidebarSelection;
+  isTerminalFocused: () => boolean;
 }>();
 const emit = defineEmits<{
   manage: [projectId?: string];
   close: [id: string];
+  rename: [id: string, name: string];
   toggle: [];
   addProject: [];
   toggleProject: [id: string];
@@ -30,7 +32,12 @@ const sidebarElement = ref<HTMLElement>();
 const { projects, tabs, selection } = toRefs(props);
 
 function choose(node: SidebarSelection): void {
+  const terminalWasFocused = props.isTerminalFocused();
   emit("focus", node);
+  if (terminalWasFocused && node.kind === "terminal" && node.tabId) {
+    emit("activate", node);
+    return;
+  }
   requestAnimationFrame(() => sidebarElement.value?.focus());
 }
 
@@ -76,6 +83,7 @@ useProjectTreeNavigation({
         :filter="filter"
         :selection="selection"
         @close="emit('close', $event)"
+        @rename="(id, name) => emit('rename', id, name)"
         @toggle-project="emit('toggleProject', $event)"
         @toggle-terminals="emit('toggleTerminals', $event)"
         @toggle-commands="emit('toggleCommands', $event)"
