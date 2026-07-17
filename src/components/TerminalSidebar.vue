@@ -23,6 +23,9 @@ const emit = defineEmits<{
   toggleProject: [id: string];
   toggleTerminals: [id: string];
   toggleCommands: [id: string];
+  runCommand: [projectId: string, commandId: string];
+  reloadCommand: [projectId: string, commandId: string];
+  stopCommand: [projectId: string, commandId: string];
   focus: [selection: SidebarSelection];
   activate: [selection: SidebarSelection];
 }>();
@@ -87,6 +90,9 @@ useProjectTreeNavigation({
         @toggle-project="emit('toggleProject', $event)"
         @toggle-terminals="emit('toggleTerminals', $event)"
         @toggle-commands="emit('toggleCommands', $event)"
+        @run-command="(projectId, commandId) => emit('runCommand', projectId, commandId)"
+        @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
+        @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
         @focus="choose"
         @activate="emit('activate', $event)"
       />

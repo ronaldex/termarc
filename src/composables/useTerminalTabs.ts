@@ -16,7 +16,7 @@ import {
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
 import { installTerminalLinks } from "../terminal/terminalLinks";
 import { useAppSettings } from "./useAppSettings";
-import type { TerminalStatus, TerminalTab } from "../types/terminal";
+import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
 
 export function useTerminalTabs() {
   const { settings } = useAppSettings();
@@ -34,7 +34,11 @@ export function useTerminalTabs() {
   let defaultProject = { projectId: "project-1", cwd: "." };
   const activityMonitor = createTerminalActivityMonitor({ tabs });
 
-  async function createTab(projectId: string, cwd: string): Promise<TerminalTab> {
+  async function createTab(
+    projectId: string,
+    cwd: string,
+    options: { launch?: TerminalLaunch; name?: string } = {},
+  ): Promise<TerminalTab> {
     await prepareTerminalFonts();
 
     const number = nextTabNumber++;
@@ -42,10 +46,12 @@ export function useTerminalTabs() {
       id: `terminal-${number}`,
       number,
       title: `Terminal ${number}`,
+      name: options.name,
       currentCwd: cwd,
       detail: "Starting shell…",
       projectId,
       cwd,
+      launch: options.launch ?? { kind: "shell" },
       status: "starting" as TerminalStatus,
       terminal: markRaw(
         createTerminal({
@@ -56,6 +62,7 @@ export function useTerminalTabs() {
       fitAddon: markRaw(new FitAddon()),
       webglFailed: false,
       startGeneration: 0,
+      stopRequested: false,
       writeQueue: Promise.resolve(),
       disposed: false,
     }) as TerminalTab;
@@ -224,7 +231,10 @@ export function useTerminalTabs() {
     tab.agent = undefined;
     tab.agentState = undefined;
     tab.lastCommandExitCode = undefined;
-    setTabStatus(tab, "starting", "Starting shell…");
+    tab.stopRequested = false;
+    const isCommand = tab.launch.kind === "command";
+    let processExited = false;
+    setTabStatus(tab, "starting", isCommand ? "Starting command…" : "Starting shell…");
     tab.terminal.reset();
     fitTab(tab);
     try {
@@ -232,6 +242,10 @@ export function useTerminalTabs() {
         rows: tab.terminal.rows,
         cols: tab.terminal.cols,
         cwd: tab.cwd,
+        launch:
+          tab.launch.kind === "command"
+            ? { kind: "command", command: tab.launch.commandLine }
+            : { kind: "shell" },
         onOutput: (data) => {
           if (!tab.disposed && generation === tab.startGeneration)
             tab.terminal.write(new Uint8Array(data));
@@ -239,20 +253,33 @@ export function useTerminalTabs() {
         onEvent: (message) => {
           if (tab.disposed || generation !== tab.startGeneration) return;
           if (message.event === "exit") {
+            processExited = true;
             const exitCode = message.exitCode ?? 0;
-            if (exitCode === 0) {
+            if (isCommand) {
+              tab.session = undefined;
+              setTabStatus(
+                tab,
+                tab.stopRequested || exitCode === 0 ? "stopped" : "error",
+                tab.stopRequested ? "Command stopped" : `Command exited with status ${exitCode}`,
+              );
+            } else if (exitCode === 0) {
               void closeTab(tab.id);
             } else {
               tab.session = undefined;
               setTabStatus(tab, "error", `Process exited with status ${exitCode}`);
             }
-          } else setTabStatus(tab, "error", message.message ?? "PTY error");
+          } else {
+            processExited = true;
+            tab.session = undefined;
+            setTabStatus(tab, "error", message.message ?? "PTY error");
+          }
         },
       });
       if (tab.disposed || generation !== tab.startGeneration) {
-        await stopTerminal(started.id);
+        await stopTerminal(started.id).catch(() => undefined);
         return;
       }
+      if (processExited) return;
       tab.session = started;
       setTabStatus(
         tab,
@@ -262,6 +289,7 @@ export function useTerminalTabs() {
       void activityMonitor.refresh();
       if (tab.id === activeTabId.value) tab.terminal.focus();
     } catch (error) {
+      if (tab.disposed || generation !== tab.startGeneration) return;
       setTabStatus(tab, "error", String(error));
       tab.terminal.write(`\r\n\x1b[31mFailed to start PTY: ${String(error)}\x1b[0m\r\n`);
     }
@@ -269,11 +297,17 @@ export function useTerminalTabs() {
 
   async function stopTab(tab: TerminalTab): Promise<void> {
     const session = tab.session;
-    if (!session) return;
     tab.session = undefined;
+    tab.stopRequested = true;
+    tab.startGeneration++;
     setTabStatus(tab, "stopped", "Stopping…");
+    if (!session) {
+      setTabStatus(tab, "stopped", "Command stopped");
+      return;
+    }
     try {
       await stopTerminal(session.id);
+      setTabStatus(tab, "stopped", "Command stopped");
     } catch (error) {
       setTabStatus(tab, "error", String(error));
     }

@@ -8,9 +8,11 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     kind: "project",
     projectId: "project-1",
   });
-  const activeProjectId = computed(() => selection.value.projectId);
+  const activeProjectId = computed(() =>
+    "projectId" in selection.value ? selection.value.projectId : undefined,
+  );
   const selectedProject = computed(() =>
-    projects.value.find((project) => project.id === selection.value.projectId),
+    projects.value.find((project) => project.id === activeProjectId.value),
   );
 
   function focus(next: SidebarSelection): void {
@@ -36,7 +38,7 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
   watch(
     projects,
     (value) => {
-      if (value.some((project) => project.id === selection.value.projectId)) return;
+      if (value.some((project) => project.id === activeProjectId.value)) return;
       const first = value[0];
       if (first) selectProject(first);
     },

@@ -10,6 +10,7 @@ function tab(overrides: Partial<TerminalTabState> = {}): TerminalTabState {
     detail: "running",
     projectId: "project-1",
     cwd: "/workspace",
+    launch: { kind: "shell" },
     status: "running",
     ...overrides,
   };

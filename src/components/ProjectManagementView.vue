@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { Project } from "../types/project";
+import SettingsButton from "./settings/SettingsButton.vue";
+import SettingsCard from "./settings/SettingsCard.vue";
+import SettingsPage from "./settings/SettingsPage.vue";
+import SettingsSection from "./settings/SettingsSection.vue";
 
 defineProps<{ projects: Project[] }>();
 const emit = defineEmits<{ select: [project: Project]; add: [] }>();
@@ -16,17 +20,12 @@ function initials(name: string): string {
 </script>
 
 <template>
-  <section class="projects-view">
-    <header class="page-header">
-      <strong>Projects</strong><span class="page-kind">Workspace settings</span>
-    </header>
-
-    <div class="page-content">
-      <div class="section-heading">
-        <span>PROJECTS</span>
-        <button class="add-button" @click="emit('add')">＋ Add project</button>
-      </div>
-      <div class="project-card">
+  <SettingsPage title="Projects" kind="Workspace settings" :show-edit-icon="false">
+    <SettingsSection title="PROJECTS">
+      <template #action>
+        <SettingsButton type="button" @click="emit('add')">＋ Add project</SettingsButton>
+      </template>
+      <SettingsCard>
         <button
           v-for="project in projects"
           :key="project.id"
@@ -44,77 +43,12 @@ function initials(name: string): string {
           >
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
         </button>
-      </div>
-    </div>
-  </section>
+      </SettingsCard>
+    </SettingsSection>
+  </SettingsPage>
 </template>
 
 <style scoped>
-.projects-view {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  color: var(--color-text);
-  background: #111214;
-}
-.page-header {
-  display: flex;
-  height: 38px;
-  align-items: center;
-  gap: 14px;
-  padding: 0 22px;
-  border-bottom: 1px solid var(--color-border);
-  background: #111214;
-}
-.page-header strong {
-  color: var(--color-text-strong);
-  font-size: 12px;
-}
-.page-kind {
-  padding-left: 14px;
-  border-left: 1px solid #303238;
-  color: var(--color-text-muted);
-  font-size: 10px;
-}
-.page-content {
-  width: min(760px, calc(100% - 44px));
-  padding: 34px 0 48px;
-  margin: 0 auto;
-}
-.section-heading {
-  display: flex;
-  height: 32px;
-  align-items: start;
-  justify-content: space-between;
-  color: #8a8d95;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.05em;
-}
-button {
-  font: inherit;
-}
-.add-button {
-  height: 26px;
-  margin-top: -8px;
-  padding: 0 10px;
-  border: 1px solid #3a3c42;
-  border-radius: 5px;
-  color: #d8d9dc;
-  background: #1a1b1f;
-  font-size: 10px;
-  cursor: pointer;
-}
-.add-button:hover {
-  border-color: #50535b;
-  background: #202126;
-}
-.project-card {
-  overflow: hidden;
-  border: 1px solid #33353a;
-  border-radius: 10px;
-  background: #121315;
-}
 .project-row {
   display: flex;
   width: 100%;
@@ -165,7 +99,8 @@ button {
 .details small {
   overflow: hidden;
   color: #9699a1;
-  font-family: "JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace;
+  font-family:
+    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;

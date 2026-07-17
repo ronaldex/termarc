@@ -23,7 +23,12 @@ export function flattenProjectTree(
     if (project.terminalOpen) {
       nodes.push(
         ...tabs
-          .filter((tab) => tab.projectId === project.id && terminalMatchesFilter(tab, filter))
+          .filter(
+            (tab) =>
+              tab.launch.kind === "shell" &&
+              tab.projectId === project.id &&
+              terminalMatchesFilter(tab, filter),
+          )
           .map((tab) => ({
             id: tab.id,
             kind: "terminal" as const,
@@ -38,13 +43,18 @@ export function flattenProjectTree(
       });
     }
 
-    nodes.push({ id: `${project.id}:commands`, kind: "commands", projectId: project.id });
-    if (project.commandsOpen) {
-      nodes.push({
-        id: `${project.id}:add-command`,
-        kind: "add-command",
-        projectId: project.id,
-      });
+    if (project.commands?.length) {
+      nodes.push({ id: `${project.id}:commands`, kind: "commands", projectId: project.id });
+    }
+    if (project.commandsOpen && project.commands?.length) {
+      nodes.push(
+        ...project.commands.map((command) => ({
+          id: `${project.id}:command:${command.id}`,
+          kind: "command" as const,
+          projectId: project.id,
+          commandId: command.id,
+        })),
+      );
     }
     return nodes;
   });
@@ -70,6 +80,7 @@ export function projectTreeNavigationActions(
     return next ? [{ type: "focus", selection: next }] : [];
   }
 
+  if (!("projectId" in current)) return [];
   const project = projects.find((item) => item.id === current.projectId);
   if (!project) return [];
 
@@ -82,7 +93,7 @@ export function projectTreeNavigationActions(
         ...(project.terminalOpen
           ? [{ type: "toggle-terminals" as const, projectId: project.id }]
           : []),
-        ...(project.commandsOpen
+        ...(project.commands?.length && project.commandsOpen
           ? [{ type: "toggle-commands" as const, projectId: project.id }]
           : []),
       ];
@@ -102,7 +113,7 @@ export function projectTreeNavigationActions(
         ...(!project.terminalOpen
           ? [{ type: "toggle-terminals" as const, projectId: project.id }]
           : []),
-        ...(!project.commandsOpen
+        ...(project.commands?.length && !project.commandsOpen
           ? [{ type: "toggle-commands" as const, projectId: project.id }]
           : []),
       ];

@@ -47,12 +47,20 @@ impl AppState {
 }
 
 #[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum PtyLaunch {
+    Shell,
+    Command { command: String },
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StartPtyRequest {
     rows: u16,
     cols: u16,
     #[serde(default)]
     cwd: Option<String>,
+    launch: PtyLaunch,
 }
 
 #[derive(Serialize)]
@@ -118,31 +126,43 @@ pub(crate) fn start_pty(
         })
         .map_err(|error| format!("could not create PTY: {error}"))?;
 
-    let shell = default_shell();
-    let id = format!("pty-{}", state.next_id.fetch_add(1, Ordering::Relaxed) + 1);
-    let integration = prepare_shell_integration(&shell, &id);
-    let mut command = CommandBuilder::new(&shell);
-
-    if let Some(integration) = &integration {
-        integration.configure(&mut command);
+    if matches!(&request.launch, PtyLaunch::Command { command } if command.trim().is_empty()) {
+        return Err("command must not be empty".to_string());
     }
 
-    #[cfg(not(windows))]
-    if integration
-        .as_ref()
-        .is_none_or(ShellIntegration::uses_shell_login)
-    {
-        command.arg("-l");
+    let shell = default_shell();
+    let id = format!("pty-{}", state.next_id.fetch_add(1, Ordering::Relaxed) + 1);
+    let integration = match &request.launch {
+        PtyLaunch::Shell => prepare_shell_integration(&shell, &id),
+        PtyLaunch::Command { .. } => None,
+    };
+    let mut process = CommandBuilder::new(&shell);
+
+    match &request.launch {
+        PtyLaunch::Command { command } => configure_fixed_command(&mut process, &shell, command),
+        PtyLaunch::Shell => {
+            if let Some(integration) = &integration {
+                integration.configure(&mut process);
+            }
+
+            #[cfg(not(windows))]
+            if integration
+                .as_ref()
+                .is_none_or(ShellIntegration::uses_shell_login)
+            {
+                process.arg("-l");
+            }
+        }
     }
 
     if let Some(cwd) = request.cwd.as_deref() {
-        command.cwd(expand_user_path(cwd));
+        process.cwd(expand_user_path(cwd));
     }
-    command.env("TERM", "xterm-256color");
-    command.env("COLORTERM", "truecolor");
-    command.env("TERM_PROGRAM", "Termdeck");
+    process.env("TERM", "xterm-256color");
+    process.env("COLORTERM", "truecolor");
+    process.env("TERM_PROGRAM", "Termdeck");
 
-    let mut child = match pair.slave.spawn_command(command) {
+    let mut child = match pair.slave.spawn_command(process) {
         Ok(child) => child,
         Err(error) => {
             if let Some(integration) = &integration {
@@ -318,6 +338,26 @@ pub(crate) fn stop_pty(id: String, state: State<'_, AppState>) -> Result<(), Str
         .killer
         .kill()
         .map_err(|error| format!("could not stop PTY: {error}"))
+}
+
+#[cfg(not(windows))]
+fn configure_fixed_command(process: &mut CommandBuilder, _shell: &str, command: &str) {
+    process.arg("-lc");
+    process.arg(command);
+}
+
+#[cfg(windows)]
+fn configure_fixed_command(process: &mut CommandBuilder, shell: &str, command: &str) {
+    let shell_name = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(shell)
+        .to_ascii_lowercase();
+    if shell_name == "cmd" || shell_name == "cmd.exe" {
+        process.args(["/D", "/S", "/C", command]);
+    } else {
+        process.args(["-NoLogo", "-Command", command]);
+    }
 }
 
 struct ShellIntegration {

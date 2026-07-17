@@ -1,10 +1,13 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { PtyEvent, PtyStarted, PtyStatus } from "../types/terminal";
 
+export type PtyLaunch = { kind: "shell" } | { kind: "command"; command: string };
+
 export type StartTerminalOptions = {
   rows: number;
   cols: number;
   cwd: string;
+  launch: PtyLaunch;
   onOutput: (data: ArrayBuffer) => void;
   onEvent: (event: PtyEvent) => void;
 };
@@ -16,7 +19,12 @@ export async function startTerminal(options: StartTerminalOptions): Promise<PtyS
   onEvent.onmessage = options.onEvent;
 
   return invoke<PtyStarted>("start_pty", {
-    request: { rows: options.rows, cols: options.cols, cwd: options.cwd },
+    request: {
+      rows: options.rows,
+      cols: options.cols,
+      cwd: options.cwd,
+      launch: options.launch,
+    },
     onOutput,
     onEvent,
   });

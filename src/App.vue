@@ -10,6 +10,8 @@ import { useSidebarLayout } from "./composables/useSidebarLayout";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
 import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
 import { useAppSettings } from "./composables/useAppSettings";
+import { useCommandRuns } from "./composables/useCommandRuns";
+import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
 const { load: loadAppSettings } = useAppSettings();
@@ -23,6 +25,8 @@ const {
   selectTab,
   closeTab,
   renameTab,
+  restartTab,
+  stopTab,
   setTerminalContainer,
   attachHost,
   setDefaultProject,
@@ -30,6 +34,7 @@ const {
   start,
   dispose,
 } = useTerminalTabs();
+const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const gitSidebarAvailable = ref(true);
 const {
   leftOpen: leftSidebarOpen,
@@ -63,10 +68,15 @@ function focusSidebar(selection: SidebarSelection): void {
   const project = projects.value.find((item) => item.id === selection.projectId);
   if (project) setDefaultProject(project.id, project.directory);
   if (selection.tabId) activeTabId.value = selection.tabId;
+  if (selection.kind === "command") {
+    const tab = commandRuns.find(selection.projectId, selection.commandId);
+    if (tab) activeTabId.value = tab.id;
+  }
 }
 function activateSidebar(selection: SidebarSelection): void {
   focusSidebar(selection);
-  if (selection.kind === "terminal" && selection.tabId) selectTab(selection.tabId);
+  if (selection.kind === "terminal") selectTab(selection.tabId);
+  if (selection.kind === "command") void runCommand(selection.projectId, selection.commandId);
   if (selection.kind === "add-terminal" && selectedProject.value)
     void createProjectTerminal(selectedProject.value.id, selectedProject.value.directory);
 }
@@ -88,6 +98,52 @@ function manageProjects(projectId?: string): void {
 }
 function addProject(): void {
   selectProject(addProjectState());
+}
+function selectCommand(projectId: string, commandId?: string): void {
+  setSidebarSelection(
+    commandId
+      ? {
+          id: `${projectId}:command:${commandId}`,
+          kind: "command",
+          projectId,
+          commandId,
+        }
+      : { id: `${projectId}:add-command`, kind: "add-command", projectId },
+  );
+}
+function editCommand(projectId: string, commandId: string): void {
+  setSidebarSelection({
+    id: `${projectId}:command:${commandId}:settings`,
+    kind: "edit-command",
+    projectId,
+    commandId,
+  });
+}
+async function runCommand(projectId: string, commandId: string): Promise<void> {
+  const project = projects.value.find((item) => item.id === projectId);
+  const command = project?.commands?.find((item) => item.id === commandId);
+  if (!project || !command) return;
+  const tab = await commandRuns.run(project, command);
+  activeTabId.value = tab.id;
+  selectCommand(projectId, commandId);
+}
+async function reloadCommand(projectId: string, commandId: string): Promise<void> {
+  await runCommand(projectId, commandId);
+}
+async function stopCommand(projectId: string, commandId: string): Promise<void> {
+  await commandRuns.stop(projectId, commandId);
+}
+function showCommands(projectId: string): void {
+  setSidebarSelection({ id: `${projectId}:commands`, kind: "commands", projectId });
+}
+function saveCommand(project: Project, commandId: string): void {
+  updateProject(project);
+  selectCommand(project.id, commandId);
+}
+async function removeCommand(project: Project, commandId: string): Promise<void> {
+  await commandRuns.remove(project.id, commandId);
+  updateProject(project);
+  showCommands(project.id);
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -118,7 +174,9 @@ watch(activeTabId, (id) => {
   const tab = tabs.find((item) => item.id === id);
   if (tab) {
     const project = projects.value.find((item) => item.id === tab.projectId);
-    if (project) selectTerminal(project.id, tab.id);
+    if (!project) return;
+    if (tab.launch.kind === "command") selectCommand(project.id, tab.launch.commandId);
+    else selectTerminal(project.id, tab.id);
   }
 });
 watch(
@@ -154,6 +212,9 @@ onBeforeUnmount(() => {
       @toggle-project="toggleProject"
       @toggle-terminals="toggleTerminals"
       @toggle-commands="toggleCommands"
+      @run-command="runCommand"
+      @reload-command="reloadCommand"
+      @stop-command="stopCommand"
       @close="closeTerminal"
       @rename="renameTab"
       @toggle="leftSidebarOpen = !leftSidebarOpen"
@@ -178,6 +239,14 @@ onBeforeUnmount(() => {
       @add-project="addProject"
       @save-project="updateProject"
       @remove-project="removeProjectState"
+      @save-command="saveCommand"
+      @remove-command="removeCommand"
+      @select-command="selectCommand"
+      @edit-command="editCommand"
+      @show-commands="showCommands"
+      @run-command="runCommand"
+      @reload-command="reloadCommand"
+      @stop-command="stopCommand"
     />
     <div
       v-if="rightSidebarOpen && gitSidebarAvailable"
