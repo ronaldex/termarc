@@ -15,7 +15,7 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
   border-radius: 6px;
   color: #b8c0d2;
   background: #1a1e28;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   cursor: pointer;
   transition: 120ms ease;

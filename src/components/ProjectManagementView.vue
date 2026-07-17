@@ -77,7 +77,7 @@ function initials(name: string): string {
   border-radius: 4px;
   color: #c6c8cd;
   background: #34373c;
-  font-size: 8px;
+  font-size: 0.5rem;
   font-weight: 700;
 }
 .details {
@@ -93,7 +93,7 @@ function initials(name: string): string {
 .details strong {
   margin-bottom: 3px;
   color: #e0e1e4;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .details small {
@@ -101,7 +101,7 @@ function initials(name: string): string {
   color: #9699a1;
   font-family:
     "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -112,12 +112,12 @@ function initials(name: string): string {
 .metadata strong {
   margin-bottom: 2px;
   color: #d8d9dc;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
 }
 .metadata small {
   color: #777a82;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .project-row svg {
   width: 13px;

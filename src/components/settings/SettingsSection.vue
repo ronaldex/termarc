@@ -28,7 +28,7 @@ const slots = useSlots();
   align-items: flex-start;
   justify-content: space-between;
   color: #8a8d95;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 650;
   letter-spacing: 0.05em;
 }

@@ -187,12 +187,12 @@ form {
 }
 .mode-option strong {
   margin-bottom: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
 }
 .mode-option small {
   color: #858993;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .radio {
   width: 12px;
@@ -207,6 +207,6 @@ form {
 .saved {
   margin-right: auto;
   color: var(--color-status-running);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 </style>

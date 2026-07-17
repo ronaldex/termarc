@@ -107,10 +107,10 @@ onMounted(() => {
 }
 .empty-state strong {
   color: #d1d7e3;
-  font-size: 13px;
+  font-size: 1rem;
 }
 .empty-state p {
   margin: 6px 0 16px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 </style>

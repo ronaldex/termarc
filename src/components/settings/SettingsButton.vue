@@ -25,13 +25,13 @@ withDefaults(
   color: #d8d9dc;
   background: #1a1b1f;
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   cursor: pointer;
 }
 .settings-button.compact {
   height: 27px;
   padding-inline: 10px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .settings-button:hover:not(:disabled) {
   border-color: #50535b;

@@ -43,7 +43,7 @@ const display = computed(() =>
 .app-title {
   margin-left: 72px;
   color: var(--color-text-strong);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .active-terminal {
@@ -51,7 +51,7 @@ const display = computed(() =>
   min-width: 0;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .active-terminal span:last-child {
   overflow: hidden;

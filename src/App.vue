@@ -14,7 +14,7 @@ import { useCommandRuns } from "./composables/useCommandRuns";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
-const { load: loadAppSettings } = useAppSettings();
+const { settings, load: loadAppSettings } = useAppSettings();
 
 const {
   tabs,
@@ -151,6 +151,10 @@ function handleKeydown(event: KeyboardEvent) {
     event.preventDefault();
     openSettings();
   }
+  if (event.metaKey && event.key.toLowerCase() === "d" && gitSidebarAvailable.value) {
+    event.preventDefault();
+    rightSidebarOpen.value = !rightSidebarOpen.value;
+  }
 }
 
 onMounted(async () => {
@@ -166,6 +170,14 @@ onMounted(async () => {
   selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
 });
+watch(
+  () => settings.terminalFontSize,
+  (fontSize) => {
+    document.documentElement.style.fontSize = `${fontSize * (16 / 13)}px`;
+  },
+  { immediate: true },
+);
+
 watch(selectedProject, (project) => {
   gitSidebarAvailable.value = true;
   if (project) setDefaultProject(project.id, project.directory);
@@ -267,6 +279,7 @@ onBeforeUnmount(() => {
       :style="{ width: `${rightSidebarWidth}px` }"
       :directory="selectedProject?.directory"
       :active="rightSidebarOpen"
+      :font-size="settings.terminalFontSize"
       @available="gitSidebarAvailable = $event"
       @collapse="rightSidebarOpen = false"
     />

@@ -30,7 +30,7 @@ defineEmits<{ toggle: []; add: [] }>();
   border: 0;
   color: #696c73;
   background: transparent;
-  font-size: 11px;
+  font-size: 0.6875rem;
   cursor: pointer;
 }
 .add-project:hover {
