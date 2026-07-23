@@ -5,9 +5,9 @@
 <style scoped>
 .settings-footer {
   display: flex;
-  min-height: 54px;
+  min-height: 3.5rem;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 0.75rem;
 }
 </style>

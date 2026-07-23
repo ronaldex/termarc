@@ -17,33 +17,33 @@ withDefaults(
 
 <style scoped>
 .settings-button {
-  height: 31px;
+  height: 2rem;
   flex: 0 0 auto;
-  padding: 0 12px;
-  border: 1px solid #3a3c42;
-  border-radius: 6px;
-  color: #d8d9dc;
-  background: #1a1b1f;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.375rem;
+  color: var(--color-text);
+  background: var(--color-surface-1);
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
 }
 .settings-button.compact {
-  height: 27px;
-  padding-inline: 10px;
+  height: 1.75rem;
+  padding-inline: 0.625rem;
   font-size: 0.625rem;
 }
 .settings-button:hover:not(:disabled) {
-  border-color: #50535b;
-  background: #202126;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .settings-button.primary {
-  border-color: #48536f;
-  color: #eceef4;
-  background: #293149;
+  border-color: var(--color-accent-bg);
+  color: var(--color-text-strong);
+  background: var(--color-accent-bg);
 }
 .settings-button.danger {
-  color: #e78a91;
+  color: var(--color-status-error);
 }
 .settings-button:disabled {
   opacity: 0.45;

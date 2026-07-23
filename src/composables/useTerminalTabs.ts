@@ -14,7 +14,10 @@ import {
   TERMDECK_AGENT_OSC,
 } from "../utils/terminalAgentStatus";
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
+import { openPath } from "../services/externalEditor";
 import { installTerminalLinks } from "../terminal/terminalLinks";
+import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
+import { terminalTheme } from "../terminal/terminalThemes";
 import { useAppSettings } from "./useAppSettings";
 import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
 
@@ -57,6 +60,7 @@ export function useTerminalTabs() {
         createTerminal({
           fontFamily: settings.terminalFontFamily,
           fontSize: settings.terminalFontSize,
+          colorTheme: settings.colorTheme,
         }),
       ),
       fitAddon: markRaw(new FitAddon()),
@@ -72,7 +76,11 @@ export function useTerminalTabs() {
     if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
     tab.terminal.open(tab.container);
-    installTerminalLinks(tab, () => commandKeyPressed);
+    installTerminalLinks(
+      tab,
+      () => commandKeyPressed,
+      (path) => openPath(path, settings.externalEditor),
+    );
     installTerminalTitle(tab);
     installTerminalAgentStatus(tab);
     installTerminalInput(tab);
@@ -132,8 +140,23 @@ export function useTerminalTabs() {
   }
 
   function installTerminalInput(tab: TerminalTab): void {
-    // xterm.js 6.0 encodes Shift+Enter as Enter. Pi expects Kitty's CSI 13;2u.
     tab.terminal.attachCustomKeyEventHandler((event) => {
+      const isCommandArrow =
+        event.type === "keydown" &&
+        event.metaKey &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight");
+      if (isCommandArrow) {
+        event.preventDefault();
+        event.stopPropagation();
+        // Match native macOS terminals: Cmd+Left/Right navigate to the line start/end.
+        sendBytes(tab, new TextEncoder().encode(event.key === "ArrowLeft" ? "\x01" : "\x05"));
+        return false;
+      }
+
+      // xterm.js 6.0 encodes Shift+Enter as Enter. Pi expects Kitty's CSI 13;2u.
       const isShiftEnter =
         event.type === "keydown" &&
         event.key === "Enter" &&
@@ -360,6 +383,13 @@ export function useTerminalTabs() {
     },
   );
 
+  watch(
+    () => settings.colorTheme,
+    (theme) => {
+      for (const tab of tabs) tab.terminal.options.theme = terminalTheme(theme);
+    },
+  );
+
   function setCommandKeyPressed(pressed: boolean): void {
     if (commandKeyPressed === pressed) return;
     commandKeyPressed = pressed;
@@ -377,33 +407,24 @@ export function useTerminalTabs() {
 
   function handleKeyboard(event: KeyboardEvent): void {
     setCommandKeyPressed(event.metaKey);
-    const shortcut = event.metaKey || (event.ctrlKey && event.shiftKey);
-    if (!shortcut) return;
-    if (/^[1-9]$/.test(event.key)) {
-      const tab = tabs.find((item) => item.number === Number(event.key));
-      if (tab) {
-        event.preventDefault();
-        selectTab(tab.id);
-      }
-      return;
-    }
-    if (event.key === "=") {
+    const handled = handleTerminalShortcut(event, {
+      terminalFocused: isTerminalFocused(),
+      tabIdsByNumber: new Map(tabs.map((tab) => [tab.number, tab.id])),
+      orderedTabIds: tabs.map((tab) => tab.id),
+      activeTabId: activeTabId.value,
+      fontSize: settings.terminalFontSize,
+      selectTab,
+      setFontSize: (fontSize) => {
+        settings.terminalFontSize = fontSize;
+      },
+      createTab: () => void createTab(defaultProject.projectId, defaultProject.cwd),
+      closeActiveTab: () => {
+        if (activeTab.value) void closeTab(activeTab.value.id);
+      },
+    });
+    if (handled) {
       event.preventDefault();
-      settings.terminalFontSize = Math.min(72, settings.terminalFontSize + 1);
-      return;
-    }
-    if (event.key === "-") {
-      event.preventDefault();
-      settings.terminalFontSize = Math.max(8, settings.terminalFontSize - 1);
-      return;
-    }
-    if (event.key.toLowerCase() === "t") {
-      event.preventDefault();
-      void createTab(defaultProject.projectId, defaultProject.cwd);
-    }
-    if (event.key.toLowerCase() === "w" && activeTab.value) {
-      event.preventDefault();
-      void closeTab(activeTab.value.id);
+      event.stopImmediatePropagation();
     }
   }
   function handleKeyUp(event: KeyboardEvent): void {

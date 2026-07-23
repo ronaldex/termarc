@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ILink, IMarker } from "@xterm/xterm";
-import { openTerminalPath, resolveTerminalPath } from "../api/paths";
+import { resolveTerminalPath } from "../api/paths";
 import type { TerminalTab } from "../types/terminal";
 
 type PendingLink = {
@@ -14,7 +14,11 @@ type CapturedLink = PendingLink & {
   endX: number;
 };
 
-export function installTerminalLinks(tab: TerminalTab, commandKeyPressed: () => boolean): void {
+export function installTerminalLinks(
+  tab: TerminalTab,
+  commandKeyPressed: () => boolean,
+  openPath: (path: string) => Promise<void>,
+): void {
   const capturedLinks: CapturedLink[] = [];
   let pendingLink: PendingLink | undefined;
 
@@ -69,7 +73,7 @@ export function installTerminalLinks(tab: TerminalTab, commandKeyPressed: () => 
             },
           },
           activate: (event) => {
-            if (event.metaKey) openTerminalUri(tab.cwd, link.uri);
+            if (event.metaKey) openTerminalUri(tab.cwd, link.uri, openPath);
           },
         }));
       const line = tab.terminal.buffer.active.getLine(lineNumber - 1)?.translateToString(true);
@@ -88,7 +92,7 @@ export function installTerminalLinks(tab: TerminalTab, commandKeyPressed: () => 
             end: { x: match.index + text.length, y: lineNumber },
           },
           activate: (event) => {
-            if (event.metaKey) openTerminalUri(tab.cwd, text);
+            if (event.metaKey) openTerminalUri(tab.cwd, text, openPath);
           },
         };
       });
@@ -108,7 +112,7 @@ export function installTerminalLinks(tab: TerminalTab, commandKeyPressed: () => 
             },
             activate: (event) => {
               if (!event.metaKey) return;
-              void openTerminalPath(resolved.path).catch((error) =>
+              void openPath(resolved.path).catch((error) =>
                 console.error("Could not open terminal path", error),
               );
             },
@@ -124,23 +128,31 @@ export function installTerminalLinks(tab: TerminalTab, commandKeyPressed: () => 
   });
 }
 
-function openTerminalUri(cwd: string, uri: string): void {
+function openTerminalUri(
+  cwd: string,
+  uri: string,
+  openPath: (path: string) => Promise<void>,
+): void {
   try {
     const url = new URL(uri);
     if (url.protocol === "http:" || url.protocol === "https:") {
       void openUrl(url.href).catch((error) => console.error("Could not open terminal link", error));
     } else if (url.protocol === "file:") {
       // OSC 8 file links (including eza's) commonly include the local hostname.
-      void resolveAndOpenPath(cwd, decodeURIComponent(url.pathname));
+      void resolveAndOpenPath(cwd, decodeURIComponent(url.pathname), openPath);
     }
   } catch {
     // Ignore malformed or unsupported links emitted by terminal applications.
   }
 }
 
-async function resolveAndOpenPath(cwd: string, path: string): Promise<void> {
+async function resolveAndOpenPath(
+  cwd: string,
+  path: string,
+  openPath: (path: string) => Promise<void>,
+): Promise<void> {
   const resolved = await resolveTerminalPath(cwd, path);
-  if (resolved) await openTerminalPath(resolved.path);
+  if (resolved) await openPath(resolved.path);
 }
 
 function rangesOverlap(match: RegExpMatchArray, link: ILink): boolean {

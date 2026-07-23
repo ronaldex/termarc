@@ -5,11 +5,11 @@
 <style scoped>
 .settings-card {
   overflow: hidden;
-  border: 1px solid #33353a;
-  border-radius: 10px;
-  background: #121315;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background: var(--color-surface-0);
 }
 .settings-card :deep(> * + *) {
-  border-top: 1px solid #33353a;
+  border-top: 1px solid var(--color-border);
 }
 </style>

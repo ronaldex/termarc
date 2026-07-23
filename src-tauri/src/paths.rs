@@ -1,6 +1,5 @@
 use serde::Serialize;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,51 +42,6 @@ pub(crate) fn resolve_terminal_path(cwd: String, path: String) -> Option<Termina
         path: canonical.to_string_lossy().into_owned(),
         kind,
     })
-}
-
-#[tauri::command]
-pub(crate) fn open_terminal_path(path: String) -> Result<(), String> {
-    let canonical = Path::new(&path)
-        .canonicalize()
-        .map_err(|error| format!("Could not resolve path: {error}"))?;
-
-    let mut command = platform_open_command(&canonical)?;
-    command
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("Could not open path: {error}"))
-}
-
-#[cfg(target_os = "macos")]
-fn platform_open_command(path: &Path) -> Result<Command, String> {
-    let mut command = Command::new("open");
-    if path.is_file() {
-        command.args(["-a", "VSCodium"]);
-    }
-    command.arg(path);
-    Ok(command)
-}
-
-#[cfg(target_os = "windows")]
-fn platform_open_command(path: &Path) -> Result<Command, String> {
-    let mut command = if path.is_dir() {
-        Command::new("explorer")
-    } else {
-        Command::new("codium")
-    };
-    command.arg(path);
-    Ok(command)
-}
-
-#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-fn platform_open_command(path: &Path) -> Result<Command, String> {
-    let mut command = if path.is_dir() {
-        Command::new("xdg-open")
-    } else {
-        Command::new("codium")
-    };
-    command.arg(path);
-    Ok(command)
 }
 
 fn strip_location_suffix(path: &str) -> &str {

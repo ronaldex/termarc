@@ -73,13 +73,7 @@ describe("projectTreeNavigationActions", () => {
 
   it("moves to the next visible row", () => {
     expect(
-      projectTreeNavigationActions(
-        "ArrowDown",
-        nodes,
-        selection(project.id, "project"),
-        [project],
-        true,
-      ),
+      projectTreeNavigationActions("ArrowDown", nodes, selection(project.id, "project"), [project]),
     ).toEqual([{ type: "focus", selection: nodes[1] }]);
   });
 
@@ -91,7 +85,6 @@ describe("projectTreeNavigationActions", () => {
         flattenProjectTree([collapsed], [terminal]),
         selection(project.id, "project"),
         [collapsed],
-        true,
       ),
     ).toEqual([
       { type: "toggle-terminals", projectId: project.id },
@@ -101,20 +94,16 @@ describe("projectTreeNavigationActions", () => {
 
   it("activates a command with ArrowRight", () => {
     const command = nodes.find((node) => node.kind === "command")!;
-    expect(projectTreeNavigationActions("ArrowRight", nodes, command, [project], true)).toEqual([
+    expect(projectTreeNavigationActions("ArrowRight", nodes, command, [project])).toEqual([
       { type: "activate", selection: command },
     ]);
   });
 
-  it("returns terminal focus from xterm to the tree", () => {
-    expect(
-      projectTreeNavigationActions(
-        "ArrowLeft",
-        nodes,
-        selection(terminal.id, "terminal"),
-        [project],
-        false,
-      ),
-    ).toEqual([{ type: "focus", selection: nodes[2] }]);
+  it("activates the focused row with Enter", () => {
+    const terminalSelection = selection(terminal.id, "terminal");
+
+    expect(projectTreeNavigationActions("Enter", nodes, terminalSelection, [project])).toEqual([
+      { type: "activate", selection: terminalSelection },
+    ]);
   });
 });

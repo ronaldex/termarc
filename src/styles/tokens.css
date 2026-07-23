@@ -1,17 +1,4 @@
 :root {
-  --color-app-bg: #0b0d12;
-  --color-panel-bg: #10131a;
-  --color-sidebar-bg: #12151d;
-  --color-sidebar-bg-deep: #0e1117;
-  --color-border: #252a38;
-  --color-border-strong: #303645;
-  --color-text: #d8dee9;
-  --color-text-strong: #eef2fa;
-  --color-text-muted: #737c91;
-  --color-focus: #6284ff;
-  --color-status-running: #9ece6a;
-  --color-status-starting: #e0af68;
-  --color-status-error: #f7768e;
-  --panel-footer-height: 38px;
-  --sidebar-collapsed-width: 48px;
+  --panel-footer-height: 2.5rem;
+  --sidebar-collapsed-width: 3rem;
 }

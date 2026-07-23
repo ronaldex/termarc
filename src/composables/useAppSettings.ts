@@ -1,24 +1,24 @@
 import { reactive, watch } from "vue";
-
-export interface AppSettings {
-  terminalFontFamily: string;
-  terminalFontSize: number;
-  notifyWhenAgentReady: boolean;
-  playSoundWhenAgentReady: boolean;
-}
-
-const DEFAULT_FONT_FAMILY =
-  '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace';
+import {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  isExternalEditor,
+  isTerminalFont,
+  isTerminalFontSize,
+} from "../settings/options";
+import { THEME_CATALOG } from "../themes/themeCatalog";
+import type { AppSettings, ColorTheme } from "../types/settings";
 
 const DEFAULT_SETTINGS: AppSettings = {
-  terminalFontFamily: DEFAULT_FONT_FAMILY,
+  terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
   terminalFontSize: 13,
+  colorTheme: "termdeck",
+  externalEditor: "vscodium",
   notifyWhenAgentReady: false,
   playSoundWhenAgentReady: true,
 };
 
 const STORAGE_KEY = "termdeck-settings";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const LEGACY_FONT_FAMILIES = new Set([
   '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
   '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
@@ -30,6 +30,11 @@ interface PersistedSettings {
   settings: AppSettings;
 }
 
+type LoadedSettings = {
+  settings: AppSettings;
+  needsSaving: boolean;
+};
+
 const settings = reactive<AppSettings>({ ...DEFAULT_SETTINGS });
 let initialized = false;
 let persistenceStarted = false;
@@ -38,16 +43,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isColorTheme(value: unknown): value is ColorTheme {
+  return typeof value === "string" && Object.hasOwn(THEME_CATALOG, value);
+}
+
 function isValidSettings(value: unknown): value is AppSettings {
   return (
     isRecord(value) &&
-    typeof value.terminalFontFamily === "string" &&
-    value.terminalFontFamily.trim().length > 0 &&
-    !LEGACY_FONT_FAMILIES.has(value.terminalFontFamily) &&
-    typeof value.terminalFontSize === "number" &&
-    Number.isFinite(value.terminalFontSize) &&
-    value.terminalFontSize >= 8 &&
-    value.terminalFontSize <= 72 &&
+    isTerminalFont(value.terminalFontFamily) &&
+    isTerminalFontSize(value.terminalFontSize) &&
+    isColorTheme(value.colorTheme) &&
+    isExternalEditor(value.externalEditor) &&
     typeof value.notifyWhenAgentReady === "boolean" &&
     typeof value.playSoundWhenAgentReady === "boolean"
   );
@@ -56,23 +62,19 @@ function isValidSettings(value: unknown): value is AppSettings {
 function validatedSettings(value: unknown): AppSettings {
   if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
 
-  const terminalFontFamily =
-    typeof value.terminalFontFamily === "string" && value.terminalFontFamily.trim().length > 0
-      ? value.terminalFontFamily
-      : DEFAULT_SETTINGS.terminalFontFamily;
-  const terminalFontSize =
-    typeof value.terminalFontSize === "number" &&
-    Number.isFinite(value.terminalFontSize) &&
-    value.terminalFontSize >= 8 &&
-    value.terminalFontSize <= 72
-      ? value.terminalFontSize
-      : DEFAULT_SETTINGS.terminalFontSize;
-
   return {
-    terminalFontFamily: LEGACY_FONT_FAMILIES.has(terminalFontFamily)
-      ? DEFAULT_FONT_FAMILY
-      : terminalFontFamily,
-    terminalFontSize,
+    terminalFontFamily:
+      isTerminalFont(value.terminalFontFamily) &&
+      !LEGACY_FONT_FAMILIES.has(value.terminalFontFamily)
+        ? value.terminalFontFamily
+        : DEFAULT_SETTINGS.terminalFontFamily,
+    terminalFontSize: isTerminalFontSize(value.terminalFontSize)
+      ? value.terminalFontSize
+      : DEFAULT_SETTINGS.terminalFontSize,
+    colorTheme: isColorTheme(value.colorTheme) ? value.colorTheme : DEFAULT_SETTINGS.colorTheme,
+    externalEditor: isExternalEditor(value.externalEditor)
+      ? value.externalEditor
+      : DEFAULT_SETTINGS.externalEditor,
     notifyWhenAgentReady:
       typeof value.notifyWhenAgentReady === "boolean"
         ? value.notifyWhenAgentReady
@@ -82,6 +84,27 @@ function validatedSettings(value: unknown): AppSettings {
         ? value.playSoundWhenAgentReady
         : DEFAULT_SETTINGS.playSoundWhenAgentReady,
   };
+}
+
+export function migrateSettings(value: unknown): LoadedSettings {
+  if (!isRecord(value)) return { settings: { ...DEFAULT_SETTINGS }, needsSaving: true };
+
+  if (value.version === STORAGE_VERSION) {
+    return {
+      settings: validatedSettings(value.settings),
+      needsSaving: !isValidSettings(value.settings),
+    };
+  }
+
+  if (value.version === 1 && isRecord(value.settings)) {
+    return { settings: validatedSettings(value.settings), needsSaving: true };
+  }
+
+  if (!("version" in value)) {
+    return { settings: validatedSettings(value), needsSaving: true };
+  }
+
+  return { settings: { ...DEFAULT_SETTINGS }, needsSaving: true };
 }
 
 function persistedSettings(): PersistedSettings {
@@ -114,15 +137,9 @@ function load(): void {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      const parsed: unknown = JSON.parse(saved);
-
-      if (isRecord(parsed) && parsed.version === STORAGE_VERSION) {
-        Object.assign(settings, validatedSettings(parsed.settings));
-        settingsNeedSaving = !isValidSettings(parsed.settings);
-      } else if (isRecord(parsed) && !("version" in parsed)) {
-        Object.assign(settings, validatedSettings(parsed));
-        settingsNeedSaving = true;
-      }
+      const migrated = migrateSettings(JSON.parse(saved) as unknown);
+      Object.assign(settings, migrated.settings);
+      settingsNeedSaving = migrated.needsSaving;
     }
   } catch (error) {
     console.error("Could not load settings", error);

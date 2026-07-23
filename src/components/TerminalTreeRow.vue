@@ -104,18 +104,18 @@ button {
 .process-row {
   position: relative;
   display: flex;
-  min-height: 34px;
+  min-height: 2.25rem;
   align-items: center;
-  padding: 4px 0 4px var(--tree-item-icon-left, 21px);
-  border-radius: 3px;
+  padding: 0.25rem 0 0.25rem var(--tree-item-icon-left, 1.25rem);
+  border-radius: 0.25rem;
 }
 .process-row.tree-active::before {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: -13px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: -0.875rem;
+  width: 0.25rem;
+  border-radius: 0 0.125rem 0.125rem 0;
   background: var(--color-focus);
   content: "";
 }
@@ -124,7 +124,7 @@ button {
   min-width: 0;
   flex: 1;
   align-items: center;
-  gap: 7px;
+  gap: 0.5rem;
   padding: 0;
   text-align: left;
 }
@@ -133,7 +133,7 @@ button {
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   padding-right: 0.5rem;
 }
 .process-title,
@@ -143,11 +143,11 @@ button {
   white-space: nowrap;
 }
 .process-title {
-  color: #c7c8cc;
+  color: var(--color-text-strong);
   font-size: 0.75rem;
 }
 .process-labels small {
-  color: #696c73;
+  color: var(--color-text-subtle);
   font-size: 0.625rem;
   font-weight: 400;
 }
@@ -158,25 +158,25 @@ button {
 .process-name-input {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #555a64;
+  border-bottom: 1px solid var(--color-border-strong);
   outline: 0;
-  color: #d8d9dc;
+  color: var(--color-text);
   background: transparent;
   font: inherit;
   font-size: 0.75rem;
 }
 .shortcut {
-  width: 20px;
+  width: 1.25rem;
   margin-left: auto;
-  color: #575a61;
+  color: var(--color-text-faint);
   font-size: 0.625rem;
   text-align: center;
 }
 .close {
   position: absolute;
   right: 0;
-  width: 20px;
-  color: #6e7178;
+  width: 1.25rem;
+  color: var(--color-text-subtle);
   font-size: 0.9375rem;
   opacity: 0;
 }

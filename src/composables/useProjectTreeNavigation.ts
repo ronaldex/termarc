@@ -65,7 +65,6 @@ export function projectTreeNavigationActions(
   nodes: readonly SidebarSelection[],
   selection: SidebarSelection,
   projects: readonly ProjectTreeProject[],
-  sidebarHasFocus: boolean,
 ): ProjectTreeNavigationAction[] {
   if (!nodes.length) return [];
 
@@ -80,14 +79,13 @@ export function projectTreeNavigationActions(
     return next ? [{ type: "focus", selection: next }] : [];
   }
 
+  if (key === "Enter") return [{ type: "activate", selection: current }];
+
   if (!("projectId" in current)) return [];
   const project = projects.find((item) => item.id === current.projectId);
   if (!project) return [];
 
   if (key === "ArrowLeft") {
-    if (current.kind === "terminal" && !sidebarHasFocus) {
-      return [{ type: "focus", selection: current }];
-    }
     if (current.kind === "project") {
       return [
         ...(project.terminalOpen
@@ -143,12 +141,14 @@ export function useProjectTreeNavigation(options: {
   );
 
   function onKeydown(event: KeyboardEvent): void {
+    const sidebarHasFocus = options.sidebarElement.value === document.activeElement;
     if (
-      !event.metaKey ||
+      !sidebarHasFocus ||
+      event.metaKey ||
       event.altKey ||
       event.ctrlKey ||
       event.shiftKey ||
-      !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+      !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(event.key)
     ) {
       return;
     }
@@ -156,13 +156,11 @@ export function useProjectTreeNavigation(options: {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    const sidebarHasFocus = options.sidebarElement.value?.contains(document.activeElement) ?? false;
     for (const action of projectTreeNavigationActions(
       event.key,
       tree.value,
       options.selection.value,
       options.projects.value,
-      sidebarHasFocus,
     )) {
       options.onAction(action);
     }
