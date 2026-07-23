@@ -1,3 +1,4 @@
+mod external_editor;
 mod git;
 mod notifications;
 mod paths;
@@ -40,7 +41,7 @@ pub fn run() {
             notifications::notify_agent_ready,
             notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
-            paths::open_terminal_path,
+            external_editor::open_terminal_path,
             projects::load_projects,
             projects::save_projects,
             pty::write_to_pty,

@@ -124,10 +124,10 @@ form {
 }
 .command-row {
   display: flex;
-  min-height: 64px;
+  min-height: 4rem;
   align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
 }
 .command-details {
   display: flex;
@@ -135,7 +135,7 @@ form {
   height: auto;
   flex: 1;
   align-items: center;
-  gap: 11px;
+  gap: 0.75rem;
   padding: 0;
   border: 0;
   color: inherit;
@@ -152,35 +152,35 @@ form {
   display: block;
 }
 .command-details strong {
-  margin-bottom: 3px;
-  color: #e0e1e4;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-strong);
   font-size: 0.75rem;
   font-weight: 500;
 }
 .command-details code {
   overflow: hidden;
-  color: #858993;
+  color: var(--color-text-subtle);
   font-size: 0.625rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .command-icon {
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 1.75rem;
+  height: 1.75rem;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 5px;
-  color: #aeb8d1;
-  background: #272c38;
+  border-radius: 0.375rem;
+  color: var(--color-text);
+  background: var(--color-surface-3);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
 .command-mode {
-  padding: 4px 7px;
-  border-radius: 10px;
-  color: #9ca5ba;
-  background: #222630;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.625rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
   font-size: 0.5625rem;
 }
 .saved {

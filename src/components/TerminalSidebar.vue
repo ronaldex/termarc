@@ -34,6 +34,14 @@ const filter = ref("");
 const sidebarElement = ref<HTMLElement>();
 const { projects, tabs, selection } = toRefs(props);
 
+function focusTree(): void {
+  sidebarElement.value?.focus();
+}
+
+function hasTreeFocus(): boolean {
+  return sidebarElement.value === document.activeElement;
+}
+
 function choose(node: SidebarSelection): void {
   const terminalWasFocused = props.isTerminalFocused();
   emit("focus", node);
@@ -41,8 +49,10 @@ function choose(node: SidebarSelection): void {
     emit("activate", node);
     return;
   }
-  requestAnimationFrame(() => sidebarElement.value?.focus());
+  requestAnimationFrame(focusTree);
 }
+
+defineExpose({ focusTree, hasTreeFocus });
 
 useProjectTreeNavigation({
   projects,
@@ -106,12 +116,12 @@ useProjectTreeNavigation({
 .sidebar {
   --bg: var(--color-sidebar-bg);
   --line: var(--color-border);
-  --muted: #777a82;
+  --muted: var(--color-text-subtle);
   position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
-  color: #d5d6d9;
+  color: var(--color-text);
   background: linear-gradient(
     180deg,
     var(--color-sidebar-bg) 0%,
@@ -121,7 +131,7 @@ useProjectTreeNavigation({
   user-select: none;
 }
 .sidebar.collapsed {
-  width: 48px !important;
+  width: 3rem !important;
   align-items: stretch;
 }
 .sidebar:focus,
@@ -140,27 +150,27 @@ button {
 }
 .filter-row {
   display: flex;
-  height: 38px;
-  flex: 0 0 38px;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
   align-items: center;
-  gap: 10px;
-  padding: 0 13px 0 17px;
+  gap: 0.625rem;
+  padding: 0 0.875rem 0 1.125rem;
   border-bottom: 1px solid var(--line);
 }
 .search-icon {
   position: relative;
-  width: 13px;
-  height: 13px;
-  border: 1.5px solid #90939a;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid var(--color-text-muted);
   border-radius: 50%;
 }
 .search-icon::after {
   position: absolute;
-  right: -4px;
-  bottom: -2px;
-  width: 5px;
-  height: 1.5px;
-  background: #90939a;
+  right: -0.25rem;
+  bottom: -0.125rem;
+  width: 0.375rem;
+  height: 0.1rem;
+  background: var(--color-text-muted);
   content: "";
   transform: rotate(45deg);
 }
@@ -169,19 +179,19 @@ button {
   flex: 1;
   border: 0;
   outline: 0;
-  color: #bfc1c6;
+  color: var(--color-text);
   background: transparent;
   font-size: 0.75rem;
 }
 .filter-row input::placeholder {
-  color: #64676e;
+  color: var(--color-text-faint);
 }
 .filter-row input::-webkit-search-cancel-button {
   display: none;
 }
 .filter-row > button {
-  padding: 4px 7px;
-  color: #62656c;
+  padding: 0.25rem 0.5rem;
+  color: var(--color-text-faint);
   font-size: 0.875rem;
 }
 </style>

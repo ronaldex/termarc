@@ -42,7 +42,7 @@ onMounted(() => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 11px 6px 8px 12px;
+  padding: 0.75rem 0.375rem 0.5rem 0.75rem;
   background: var(--color-app-bg);
 }
 #terminal-host {
@@ -65,7 +65,7 @@ onMounted(() => {
   /* xterm's bundled stylesheet defaults the viewport to black. Keep it
      identical to the terminal surface so no black strip appears on resize. */
   background-color: var(--color-app-bg) !important;
-  scrollbar-color: #353b4b transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
   scrollbar-width: thin;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-track),
@@ -73,12 +73,12 @@ onMounted(() => {
   background: var(--color-app-bg);
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 8px;
+  width: 0.5rem;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
   border: 2px solid var(--color-app-bg);
-  border-radius: 8px;
-  background: #353b4b;
+  border-radius: 0.5rem;
+  background: var(--color-border-strong);
 }
 .empty-state {
   position: absolute;
@@ -86,7 +86,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #687287;
+  color: var(--color-text-subtle);
   text-align: center;
 }
 .empty-state:not([hidden]) {
@@ -94,23 +94,23 @@ onMounted(() => {
 }
 .empty-state-icon {
   display: grid;
-  width: 52px;
-  height: 52px;
-  margin-bottom: 16px;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 1rem;
   place-items: center;
-  border: 1px solid #2d3446;
-  border-radius: 13px;
-  color: #8be9fd;
-  background: #151a25;
+  border: 1px solid var(--color-border);
+  border-radius: 0.875rem;
+  color: var(--color-terminal-cyan);
+  background: var(--color-surface-1);
   font-family:
     "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 .empty-state strong {
-  color: #d1d7e3;
+  color: var(--color-text);
   font-size: 1rem;
 }
 .empty-state p {
-  margin: 6px 0 16px;
+  margin: 0.375rem 0 1rem;
   font-size: 0.6875rem;
 }
 </style>

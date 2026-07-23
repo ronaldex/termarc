@@ -26,38 +26,38 @@ withDefaults(
   min-height: 0;
   overflow: auto;
   color: var(--color-text);
-  background: #111214;
+  background: var(--color-surface-0);
 }
 .page-header {
   display: flex;
-  height: 38px;
+  height: 2.5rem;
   align-items: center;
-  gap: 12px;
-  padding: 0 22px;
+  gap: 0.75rem;
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--color-border);
-  background: #111214;
+  background: var(--color-surface-0);
 }
 .page-header strong {
   color: var(--color-text-strong);
   font-size: 0.75rem;
 }
 .edit-icon {
-  color: #8a8d95;
+  color: var(--color-text-muted);
   font-size: 1rem;
   transform: rotate(-30deg);
 }
 .page-kind {
-  padding-left: 14px;
-  border-left: 1px solid #303238;
+  padding-left: 0.875rem;
+  border-left: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 0.625rem;
 }
 .edit-icon + .page-kind {
-  margin-left: 2px;
+  margin-left: 0.125rem;
 }
 .page-content {
-  width: min(760px, calc(100% - 44px));
-  padding: 34px 0 48px;
+  width: min(48rem, calc(100% - 2.75rem));
+  padding: 2.25rem 0 3rem;
   margin: 0 auto;
 }
 </style>

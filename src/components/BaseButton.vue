@@ -10,11 +10,11 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
 
 <style scoped>
 .button {
-  padding: 6px 10px;
+  padding: 0.375rem 0.625rem;
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
-  color: #b8c0d2;
-  background: #1a1e28;
+  border-radius: 0.375rem;
+  color: var(--color-text);
+  background: var(--color-surface-1);
   font-size: 0.625rem;
   font-weight: 600;
   cursor: pointer;
@@ -22,9 +22,9 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
 }
 
 .button:hover:not(:disabled) {
-  border-color: #41495d;
-  color: #edf1f8;
-  background: #222733;
+  border-color: var(--color-border-strong);
+  color: var(--color-text-strong);
+  background: var(--color-surface-2);
 }
 
 .button:disabled {
@@ -33,14 +33,14 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
 }
 
 .button.danger {
-  border-color: #4c2e36;
-  color: #e3a0ad;
-  background: #24171c;
+  border-color: var(--color-danger-bg);
+  color: var(--color-status-error);
+  background: var(--color-danger-bg);
 }
 
 .button.danger:hover:not(:disabled) {
-  border-color: #6a3845;
-  color: #ffc0cb;
-  background: #311d23;
+  border-color: var(--color-status-error);
+  color: var(--color-status-error);
+  background: var(--color-danger-bg);
 }
 </style>

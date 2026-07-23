@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { Project } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
@@ -56,13 +56,25 @@ function createTerminal(): void {
   emit("create", props.selection.projectId, props.selectedProject?.directory ?? ".");
 }
 
+const mainPanel = ref<HTMLElement>();
+
+function focusContent(): void {
+  mainPanel.value?.focus({ preventScroll: true });
+}
+
+function hasContentFocus(): boolean {
+  return Boolean(mainPanel.value?.contains(document.activeElement));
+}
+
 function saveCommand(project: Project, commandId: string): void {
   emit("saveCommand", project, commandId);
 }
+
+defineExpose({ focusContent, hasContentFocus });
 </script>
 
 <template>
-  <main class="main-panel">
+  <main ref="mainPanel" class="main-panel" tabindex="-1" aria-label="Workspace content">
     <TerminalSurface
       v-show="selection.kind === 'terminal' || (selection.kind === 'command' && commandTab)"
       :tabs="tabs"
@@ -123,6 +135,7 @@ function saveCommand(project: Project, commandId: string): void {
 
 <style scoped>
 .main-panel {
+  position: relative;
   display: grid;
   grid-column: 3;
   grid-row: 2;
@@ -131,6 +144,32 @@ function saveCommand(project: Project, commandId: string): void {
   overflow: hidden;
   grid-template-rows: minmax(0, 1fr);
   background: var(--color-app-bg);
+}
+.main-panel:focus,
+.main-panel:focus-visible {
+  outline: none;
+}
+.main-panel::before,
+.main-panel::after {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  left: 0;
+  height: 0.125rem;
+  background: var(--color-focus);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+.main-panel::before {
+  top: 0;
+}
+.main-panel::after {
+  bottom: 0;
+}
+.main-panel:focus-within::before,
+.main-panel:focus-within::after {
+  opacity: 1;
 }
 .main-panel > .terminal-shell {
   min-height: 0;
@@ -142,24 +181,24 @@ function saveCommand(project: Project, commandId: string): void {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  padding: 40px;
-  color: #747e93;
+  padding: 2.5rem;
+  color: var(--color-text-subtle);
   text-align: center;
   background: var(--color-app-bg);
 }
 .stub-icon {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
-  margin-bottom: 14px;
-  border: 1px solid #2d3446;
-  border-radius: 10px;
-  color: #8b9cc8;
-  background: #141824;
+  margin-bottom: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface-1);
 }
 h2 {
-  margin: 0 0 7px;
+  margin: 0 0 0.5rem;
   color: var(--color-text);
   font-size: 1rem;
 }

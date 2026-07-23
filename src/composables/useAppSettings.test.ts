@@ -49,7 +49,7 @@ describe("useAppSettings persistence", () => {
     });
     expect(settings.terminalFontFamily).toContain("Termdeck JetBrainsMono Nerd Font");
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toEqual({
-      version: 1,
+      version: 2,
       settings: { ...settings },
     });
   });
@@ -83,6 +83,7 @@ describe("useAppSettings persistence", () => {
         settings: {
           terminalFontFamily: "Monaco",
           terminalFontSize: 73,
+          colorTheme: "unknown",
           notifyWhenAgentReady: 1,
           playSoundWhenAgentReady: null,
         },
@@ -96,22 +97,50 @@ describe("useAppSettings persistence", () => {
     expect(settings).toEqual({
       terminalFontFamily: "Monaco",
       terminalFontSize: 13,
+      colorTheme: "termdeck",
+      externalEditor: "vscodium",
       notifyWhenAgentReady: false,
       playSoundWhenAgentReady: true,
     });
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toEqual({
-      version: 1,
+      version: 2,
       settings: { ...settings },
     });
+  });
+
+  it("loads a supported external editor", async () => {
+    const storage = mockStorage(
+      JSON.stringify({
+        version: 2,
+        settings: {
+          terminalFontFamily: "Monaco",
+          terminalFontSize: 16,
+          colorTheme: "catppuccin-mocha",
+          externalEditor: "phpstorm",
+          notifyWhenAgentReady: false,
+          playSoundWhenAgentReady: true,
+        },
+      }),
+    );
+    const { useAppSettings } = await import("./useAppSettings");
+
+    const { settings, load } = useAppSettings();
+    load();
+
+    expect(settings.externalEditor).toBe("phpstorm");
+    expect(settings.colorTheme).toBe("catppuccin-mocha");
+    expect(storage.setItem).not.toHaveBeenCalled();
   });
 
   it("loads once and installs one watcher across multiple consumers", async () => {
     const storage = mockStorage(
       JSON.stringify({
-        version: 1,
+        version: 2,
         settings: {
           terminalFontFamily: "Monaco",
           terminalFontSize: 16,
+          colorTheme: "termdeck",
+          externalEditor: "vscodium",
           notifyWhenAgentReady: false,
           playSoundWhenAgentReady: true,
         },
@@ -125,7 +154,7 @@ describe("useAppSettings persistence", () => {
     first.load();
     storage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ version: 1, settings: { terminalFontSize: 30 } }),
+      JSON.stringify({ version: 2, settings: { terminalFontSize: 30 } }),
     );
     second.load();
     third.load();
@@ -137,7 +166,7 @@ describe("useAppSettings persistence", () => {
 
     expect(storage.setItem).toHaveBeenCalledTimes(1);
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toMatchObject({
-      version: 1,
+      version: 2,
       settings: { terminalFontSize: 17 },
     });
   });

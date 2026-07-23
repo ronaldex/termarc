@@ -18,27 +18,27 @@ defineEmits<{ toggle: []; add: [] }>();
 <style scoped>
 .sidebar-footer {
   display: flex;
-  height: 38px;
-  flex: 0 0 38px;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0 11px 0 17px;
+  padding: 0 0.75rem 0 1.125rem;
   border-top: 1px solid var(--line);
 }
 .add-project {
   padding: 0;
   border: 0;
-  color: #696c73;
+  color: var(--color-text-subtle);
   background: transparent;
   font-size: 0.6875rem;
   cursor: pointer;
 }
 .add-project:hover {
-  color: #c6c8cc;
+  color: var(--color-text);
 }
 .collapsed-footer {
   display: flex;
-  height: 38px;
+  height: 2.5rem;
   margin-top: auto;
   align-items: center;
   justify-content: center;

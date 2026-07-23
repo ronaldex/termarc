@@ -15,28 +15,28 @@ defineProps<{ title?: string; description: string }>();
 <style scoped>
 .action-row {
   display: flex;
-  min-height: 64px;
+  min-height: 4rem;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 12px 15px;
+  gap: 1.5rem;
+  padding: 0.75rem 1rem;
 }
 .copy strong,
 .copy small {
   display: block;
 }
 .copy strong {
-  margin-bottom: 3px;
-  color: #e0e1e4;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-strong);
   font-size: 0.75rem;
   font-weight: 500;
 }
 .copy small {
-  color: #9699a1;
+  color: var(--color-text-muted);
   font-size: 0.625rem;
   line-height: 1.35;
 }
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .action-row {
     align-items: flex-start;
     flex-direction: column;

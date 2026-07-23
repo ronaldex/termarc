@@ -16,7 +16,7 @@ export function useSidebarLayout() {
       const delta = moveEvent.clientX - initialX;
       const width = side === "left" ? initialWidth + delta : initialWidth - delta;
       if (side === "left") leftWidth.value = clamp(width, 180, 420);
-      else rightWidth.value = clamp(width, 320, 620);
+      else rightWidth.value = clamp(width, 320, 640);
     };
     const stop = () => {
       window.removeEventListener("pointermove", resize);

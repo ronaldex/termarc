@@ -21,22 +21,22 @@ defineEmits<{ click: [event: MouseEvent] }>();
 <style scoped>
 .sidebar-chevron {
   display: grid;
-  width: 18px;
-  height: 28px;
+  width: 1.125rem;
+  height: 1.75rem;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
   place-items: center;
-  color: #696c73;
+  color: var(--color-text-subtle);
   background: transparent;
   cursor: pointer;
 }
 .sidebar-chevron:hover {
-  color: #c6c8cc;
+  color: var(--color-text);
 }
 .sidebar-chevron svg {
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;

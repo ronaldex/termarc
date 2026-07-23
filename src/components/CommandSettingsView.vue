@@ -157,52 +157,52 @@ form {
 }
 .mode-options {
   display: grid;
-  gap: 7px;
+  gap: 0.5rem;
 }
 .mode-option {
   display: flex;
-  min-height: 48px;
+  min-height: 3rem;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border: 1px solid #35383f;
-  border-radius: 6px;
-  color: #d5d6da;
-  background: #17181b;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.375rem;
+  color: var(--color-text);
+  background: var(--color-surface-1);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .mode-option:hover {
-  border-color: #50535b;
-  background: #202126;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .mode-option.selected {
-  border-color: #596580;
-  background: #1c2130;
+  border-color: var(--color-text-faint);
+  background: var(--color-surface-1);
 }
 .mode-option strong,
 .mode-option small {
   display: block;
 }
 .mode-option strong {
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   font-size: 0.6875rem;
   font-weight: 500;
 }
 .mode-option small {
-  color: #858993;
+  color: var(--color-text-subtle);
   font-size: 0.5625rem;
 }
 .radio {
-  width: 12px;
-  height: 12px;
+  width: 0.75rem;
+  height: 0.75rem;
   flex: 0 0 auto;
-  border: 1px solid #626670;
+  border: 1px solid var(--color-border-strong);
   border-radius: 50%;
 }
 .selected .radio {
-  border: 3px solid #8998bd;
+  border: 3px solid var(--color-text-muted);
 }
 .saved {
   margin-right: auto;

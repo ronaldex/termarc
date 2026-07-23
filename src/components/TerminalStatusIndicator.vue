@@ -30,26 +30,26 @@ withDefaults(
 <style scoped>
 .terminal-status {
   display: grid;
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: 0 0 0.75rem;
   place-items: center;
 }
 .terminal-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 50%;
-  background: #666970;
+  background: var(--color-text-faint);
 }
 .terminal-status.variant-titlebar {
-  width: 7px;
-  height: 7px;
-  flex-basis: 7px;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-basis: 0.5rem;
 }
 .variant-titlebar .terminal-status-dot {
-  width: 7px;
-  height: 7px;
-  background: #687087;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--color-text-subtle);
 }
 .terminal-status-dot.active {
   background: var(--color-status-running);
@@ -61,7 +61,7 @@ withDefaults(
   animation: terminal-status-spin 1.5s linear infinite;
 }
 .terminal-status-dot.error {
-  background: #d76770;
+  background: var(--color-status-error);
 }
 .variant-titlebar .terminal-status-dot.error {
   background: var(--color-status-error);

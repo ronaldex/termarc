@@ -117,9 +117,9 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 1;
   top: 0;
-  right: 2px;
-  width: 4px;
-  border-radius: 2px;
+  right: 0.125rem;
+  width: 0.25rem;
+  border-radius: 0.125rem;
   background: rgba(144, 147, 154, 0.32);
   opacity: 0;
   pointer-events: none;

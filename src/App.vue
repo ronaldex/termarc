@@ -6,13 +6,15 @@ import GitDiffViewer from "./components/GitDiffViewer.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
 import WorkspaceMain from "./components/WorkspaceMain.vue";
 import { useProjects } from "./composables/useProjects";
+import { useSidebarActivation } from "./composables/useSidebarActivation";
 import { useSidebarLayout } from "./composables/useSidebarLayout";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
 import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
+import { useWorkspaceShortcuts } from "./composables/useWorkspaceShortcuts";
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
+import { applyAppTheme } from "./themes/themeCatalog";
 import type { Project } from "./types/project";
-import type { SidebarSelection } from "./types/sidebar";
 
 const { settings, load: loadAppSettings } = useAppSettings();
 
@@ -35,7 +37,10 @@ const {
   dispose,
 } = useTerminalTabs();
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
+const terminalSidebar = ref<InstanceType<typeof TerminalSidebar>>();
+const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
 const gitSidebarAvailable = ref(true);
+const lastProjectId = ref<string>();
 const {
   leftOpen: leftSidebarOpen,
   rightOpen: rightSidebarOpen,
@@ -63,26 +68,23 @@ const {
   selectTerminalSection,
   openSettings,
 } = useWorkspaceSelection(projects);
-function focusSidebar(selection: SidebarSelection): void {
-  setSidebarSelection(selection);
-  const project = projects.value.find((item) => item.id === selection.projectId);
-  if (project) setDefaultProject(project.id, project.directory);
-  if (selection.tabId) activeTabId.value = selection.tabId;
-  if (selection.kind === "command") {
-    const tab = commandRuns.find(selection.projectId, selection.commandId);
-    if (tab) activeTabId.value = tab.id;
-  }
-}
-function activateSidebar(selection: SidebarSelection): void {
-  focusSidebar(selection);
-  if (selection.kind === "terminal") selectTab(selection.tabId);
-  if (selection.kind === "command") void runCommand(selection.projectId, selection.commandId);
-  if (selection.kind === "add-terminal" && selectedProject.value)
-    void createProjectTerminal(selectedProject.value.id, selectedProject.value.directory);
-}
+const { focusSidebar, activateSidebar } = useSidebarActivation({
+  projects,
+  tabs,
+  activeTab,
+  activeTabId,
+  findCommandRun: commandRuns.find,
+  setSelection: setSidebarSelection,
+  setDefaultProject,
+  selectTerminal,
+  selectTab,
+  runCommand: (projectId, commandId) => void runCommand(projectId, commandId),
+  createProjectTerminal: (projectId, directory) => void createProjectTerminal(projectId, directory),
+});
 async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
   const tab = await createTab(projectId, cwd);
   selectTerminal(projectId, tab.id);
+  selectTab(tab.id);
 }
 async function closeTerminal(id: string): Promise<void> {
   if (sidebarSelection.value.tabId === id) selectTerminalSection(sidebarSelection.value.projectId);
@@ -126,6 +128,7 @@ async function runCommand(projectId: string, commandId: string): Promise<void> {
   const tab = await commandRuns.run(project, command);
   activeTabId.value = tab.id;
   selectCommand(projectId, commandId);
+  selectTab(tab.id);
 }
 async function reloadCommand(projectId: string, commandId: string): Promise<void> {
   await runCommand(projectId, commandId);
@@ -146,21 +149,31 @@ async function removeCommand(project: Project, commandId: string): Promise<void>
   showCommands(project.id);
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.metaKey && event.key === ",") {
-    event.preventDefault();
-    openSettings();
-  }
-  if (event.metaKey && event.key.toLowerCase() === "d" && gitSidebarAvailable.value) {
-    event.preventDefault();
-    rightSidebarOpen.value = !rightSidebarOpen.value;
-  }
-}
+useWorkspaceShortcuts({
+  sidebar: terminalSidebar,
+  workspace: workspaceMain,
+  leftSidebarOpen,
+  rightSidebarOpen,
+  gitSidebarAvailable,
+  selection: sidebarSelection,
+  projects,
+  lastProjectId,
+  isTerminalFocused,
+  selectProject,
+  openSettings,
+  shouldActivateSidebar(selection) {
+    return (
+      selection.kind === "terminal" ||
+      (selection.kind === "command" &&
+        Boolean(commandRuns.find(selection.projectId, selection.commandId)))
+    );
+  },
+  activateSidebar,
+});
 
 onMounted(async () => {
   void enableModernWindowStyle({ cornerRadius: 14, offsetX: -5, offsetY: -4 });
   loadAppSettings();
-  window.addEventListener("keydown", handleKeydown);
   try {
     await loadProjectConfiguration();
   } catch (error) {
@@ -177,10 +190,18 @@ watch(
   },
   { immediate: true },
 );
+watch(
+  () => settings.colorTheme,
+  (theme) => applyAppTheme(theme),
+  { immediate: true },
+);
 
 watch(selectedProject, (project) => {
   gitSidebarAvailable.value = true;
-  if (project) setDefaultProject(project.id, project.directory);
+  if (project) {
+    lastProjectId.value = project.id;
+    setDefaultProject(project.id, project.directory);
+  }
 });
 watch(activeTabId, (id) => {
   const tab = tabs.find((item) => item.id === id);
@@ -200,16 +221,14 @@ watch(
     }
   },
 );
-onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleKeydown);
-  dispose();
-});
+onBeforeUnmount(dispose);
 </script>
 
 <template>
   <div class="app-shell" :class="{ 'without-git-sidebar': !gitSidebarAvailable }">
     <AppTitlebar :active-tab="activeTab" />
     <TerminalSidebar
+      ref="terminalSidebar"
       :class="{ 'sidebar-hidden': !leftSidebarOpen }"
       :style="{ width: `${leftSidebarOpen ? leftSidebarWidth : 48}px` }"
       :collapsed="!leftSidebarOpen"
@@ -238,6 +257,7 @@ onBeforeUnmount(() => {
       @pointerdown="startResize('left', $event)"
     />
     <WorkspaceMain
+      ref="workspaceMain"
       :selection="sidebarSelection"
       :selected-project="selectedProject"
       :projects="projects"
@@ -320,8 +340,8 @@ button {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: auto 4px minmax(0, 1fr) 4px auto;
-  grid-template-rows: 42px minmax(0, 1fr);
+  grid-template-columns: auto 0.25rem minmax(0, 1fr) 0.25rem auto;
+  grid-template-rows: minmax(42px, auto) minmax(0, 1fr);
   background: var(--color-app-bg);
   overflow: hidden;
 }
@@ -338,13 +358,13 @@ button {
   user-select: none;
 }
 .app-shell.without-git-sidebar {
-  grid-template-columns: auto 4px minmax(0, 1fr) 0 0;
+  grid-template-columns: auto 0.25rem minmax(0, 1fr) 0 0;
 }
 .resize-handle {
   grid-row: 2;
   position: relative;
-  width: 4px;
-  flex: 0 0 4px;
+  width: 0.25rem;
+  flex: 0 0 0.25rem;
   cursor: col-resize;
   touch-action: none;
   z-index: 2;
@@ -366,15 +386,15 @@ button {
 .right-rail {
   grid-column: 5;
   grid-row: 2;
-  width: 48px;
+  width: 3rem;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid #20232d;
+  border-left: 1px solid var(--color-border-muted);
   background: var(--color-panel-bg);
 }
 .right-rail-footer {
   display: flex;
-  height: 38px;
+  height: 2.5rem;
   margin-top: auto;
   align-items: center;
   justify-content: center;
@@ -382,20 +402,20 @@ button {
 }
 .right-rail button {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   place-items: center;
   border: 0;
-  color: #696c73;
+  color: var(--color-text-subtle);
   background: transparent;
   cursor: pointer;
 }
 .right-rail button:hover {
-  color: #c6c8cc;
+  color: var(--color-text);
 }
 .right-rail svg {
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -405,21 +425,21 @@ button {
 
 .resize-handle::after {
   position: absolute;
-  inset: 0 1px;
-  background: #20232d;
+  inset: 0 0.0625rem;
+  background: var(--color-border-muted);
   content: "";
   transition: background 120ms ease;
 }
 .resize-handle:hover::after {
-  background: #7aa2f7;
+  background: var(--color-accent);
 }
-@media (max-width: 900px) {
+@media (max-width: 56rem) {
   .right-resize,
   .diff-sidebar {
     display: none;
   }
 }
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .left-resize {
     display: none;
   }

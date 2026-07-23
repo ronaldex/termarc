@@ -52,10 +52,10 @@ function initials(name: string): string {
 .project-row {
   display: flex;
   width: 100%;
-  min-height: 64px;
+  min-height: 4rem;
   align-items: center;
-  gap: 13px;
-  padding: 10px 15px;
+  gap: 0.875rem;
+  padding: 0.625rem 1rem;
   border: 0;
   color: var(--color-text);
   background: transparent;
@@ -63,20 +63,20 @@ function initials(name: string): string {
   cursor: pointer;
 }
 .project-row + .project-row {
-  border-top: 1px solid #33353a;
+  border-top: 1px solid var(--color-border);
 }
 .project-row:hover {
-  background: #17181b;
+  background: var(--color-surface-1);
 }
 .badge {
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 1.75rem;
+  height: 1.75rem;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 4px;
-  color: #c6c8cd;
-  background: #34373c;
+  border-radius: 0.25rem;
+  color: var(--color-text);
+  background: var(--color-surface-3);
   font-size: 0.5rem;
   font-weight: 700;
 }
@@ -91,14 +91,14 @@ function initials(name: string): string {
   display: block;
 }
 .details strong {
-  margin-bottom: 3px;
-  color: #e0e1e4;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-strong);
   font-size: 0.75rem;
   font-weight: 500;
 }
 .details small {
   overflow: hidden;
-  color: #9699a1;
+  color: var(--color-text-muted);
   font-family:
     "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 0.625rem;
@@ -106,25 +106,25 @@ function initials(name: string): string {
   white-space: nowrap;
 }
 .metadata {
-  min-width: 58px;
+  min-width: 3.75rem;
   text-align: right;
 }
 .metadata strong {
-  margin-bottom: 2px;
-  color: #d8d9dc;
+  margin-bottom: 0.125rem;
+  color: var(--color-text);
   font-size: 0.6875rem;
   font-weight: 500;
 }
 .metadata small {
-  color: #777a82;
+  color: var(--color-text-subtle);
   font-size: 0.5625rem;
 }
 .project-row svg {
-  width: 13px;
-  height: 13px;
-  margin-left: 8px;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-left: 0.5rem;
   fill: none;
-  stroke: #6e7178;
+  stroke: var(--color-text-subtle);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.5;
