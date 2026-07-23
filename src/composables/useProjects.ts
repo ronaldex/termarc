@@ -9,10 +9,15 @@ const DEFAULT_PROJECT: Project = {
   commands: [],
 };
 
+function createProjectTreeState(overrides: Partial<ProjectTreeState> = {}): ProjectTreeState {
+  return { projectOpen: true, terminalOpen: true, commandsOpen: true, ...overrides };
+}
+
 export function useProjects() {
   const projects = ref<Project[]>([{ ...DEFAULT_PROJECT }]);
+  // Tree expansion is session-only UI state. Legacy fields are imported once during load.
   const treeState = reactive<Record<string, ProjectTreeState>>({
-    [DEFAULT_PROJECT.id]: { terminalOpen: true, commandsOpen: true },
+    [DEFAULT_PROJECT.id]: createProjectTreeState(),
   });
   const treeProjects = computed<ProjectTreeProject[]>(() =>
     projects.value.map((project) => ({ ...project, ...stateFor(project.id) })),
@@ -26,10 +31,11 @@ export function useProjects() {
       projects.value = saved.map(normalizeProject);
       for (const project of saved) {
         const legacy = project as Project & Partial<ProjectTreeState>;
-        treeState[project.id] = {
+        treeState[project.id] = createProjectTreeState({
+          projectOpen: legacy.projectOpen ?? true,
           terminalOpen: legacy.terminalOpen ?? true,
           commandsOpen: legacy.commandsOpen ?? true,
-        };
+        });
       }
     }
     loaded.value = true;
@@ -43,7 +49,7 @@ export function useProjects() {
       commands: [],
     };
     projects.value.push(project);
-    treeState[project.id] = { terminalOpen: true, commandsOpen: true };
+    treeState[project.id] = createProjectTreeState();
     return project;
   }
 
@@ -61,9 +67,7 @@ export function useProjects() {
 
   function toggleProject(id: string): void {
     const state = stateFor(id);
-    const open = !(state.terminalOpen || state.commandsOpen);
-    state.terminalOpen = open;
-    state.commandsOpen = open;
+    state.projectOpen = !state.projectOpen;
   }
 
   function toggleTerminals(id: string): void {
@@ -77,7 +81,7 @@ export function useProjects() {
   }
 
   function stateFor(id: string): ProjectTreeState {
-    return (treeState[id] ??= { terminalOpen: true, commandsOpen: true });
+    return (treeState[id] ??= createProjectTreeState());
   }
 
   watch(

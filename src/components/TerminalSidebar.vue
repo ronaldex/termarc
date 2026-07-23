@@ -4,6 +4,7 @@ import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigatio
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
+import CollapsedProjectRail from "./CollapsedProjectRail.vue";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
 
@@ -32,14 +33,24 @@ const emit = defineEmits<{
 
 const filter = ref("");
 const sidebarElement = ref<HTMLElement>();
-const { projects, tabs, selection } = toRefs(props);
+const projectTree = ref<InstanceType<typeof ProjectTree>>();
+const projectRail = ref<InstanceType<typeof CollapsedProjectRail>>();
+const { projects, tabs, selection, collapsed } = toRefs(props);
 
 function focusTree(): void {
-  sidebarElement.value?.focus();
+  const focused = props.collapsed
+    ? projectRail.value?.focusActiveItem()
+    : projectTree.value?.focusActiveItem();
+  if (!focused) sidebarElement.value?.focus();
 }
 
 function hasTreeFocus(): boolean {
-  return sidebarElement.value === document.activeElement;
+  return sidebarElement.value?.contains(document.activeElement) ?? false;
+}
+
+function closeTerminal(id: string): void {
+  emit("close", id);
+  requestAnimationFrame(focusTree);
 }
 
 function choose(node: SidebarSelection): void {
@@ -58,11 +69,13 @@ useProjectTreeNavigation({
   projects,
   tabs,
   filter,
+  collapsed,
   selection,
   sidebarElement,
   onAction(action) {
     if (action.type === "focus") choose(action.selection);
     else if (action.type === "activate") emit("activate", action.selection);
+    else if (action.type === "toggle-project") emit("toggleProject", action.projectId);
     else if (action.type === "toggle-terminals") emit("toggleTerminals", action.projectId);
     else emit("toggleCommands", action.projectId);
   },
@@ -77,7 +90,17 @@ useProjectTreeNavigation({
     tabindex="-1"
     aria-label="Project tree"
   >
-    <SidebarFooter v-if="collapsed" collapsed @toggle="emit('toggle')" @add="emit('addProject')" />
+    <template v-if="collapsed">
+      <CollapsedProjectRail
+        ref="projectRail"
+        :projects="projects"
+        :tabs="tabs"
+        :selection="selection"
+        @focus="choose"
+        @activate="emit('activate', $event)"
+      />
+      <SidebarFooter collapsed @toggle="emit('toggle')" />
+    </template>
     <template v-else>
       <div class="filter-row">
         <span class="search-icon" aria-hidden="true"></span>
@@ -91,11 +114,12 @@ useProjectTreeNavigation({
       </div>
 
       <ProjectTree
+        ref="projectTree"
         :projects="projects"
         :tabs="tabs"
         :filter="filter"
         :selection="selection"
-        @close="emit('close', $event)"
+        @close="closeTerminal"
         @rename="(id, name) => emit('rename', id, name)"
         @toggle-project="emit('toggleProject', $event)"
         @toggle-terminals="emit('toggleTerminals', $event)"
@@ -122,17 +146,14 @@ useProjectTreeNavigation({
   min-width: 0;
   flex-direction: column;
   color: var(--color-text);
-  background: linear-gradient(
-    180deg,
-    var(--color-sidebar-bg) 0%,
-    var(--color-sidebar-bg-deep) 100%
-  );
+  background: var(--sidebar-background);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   user-select: none;
 }
 .sidebar.collapsed {
-  width: 3rem !important;
+  width: var(--sidebar-collapsed-width) !important;
   align-items: stretch;
+  border-right: 1px solid var(--color-border-muted);
 }
 .sidebar:focus,
 .sidebar:focus-visible {

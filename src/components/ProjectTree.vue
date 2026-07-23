@@ -6,6 +6,7 @@ import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { terminalMatchesFilter } from "../utils/terminalLabels";
 import OverlayScrollArea from "./OverlayScrollArea.vue";
+import ProjectBadge from "./ProjectBadge.vue";
 import SidebarChevron from "./SidebarChevron.vue";
 import TerminalTreeRow from "./TerminalTreeRow.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
@@ -73,16 +74,13 @@ function isTreeActive(id: string): boolean {
 function setActiveItem(element: Element | null, id: string): void {
   if (id === props.selection.id && element instanceof HTMLElement) activeItem.value = element;
 }
-
-function initials(name: string): string {
-  return name
-    .split(/[\s-_]+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+function focusActiveItem(): boolean {
+  if (!(activeItem.value instanceof HTMLButtonElement)) return false;
+  activeItem.value.focus();
+  return document.activeElement === activeItem.value;
 }
+
+defineExpose({ focusActiveItem });
 
 useScrollActiveItem(() => props.selection.id, activeItem, projectList);
 </script>
@@ -93,9 +91,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
       v-for="project in projects"
       :key="project.id"
       class="project"
-      :class="{
-        collapsed: !project.terminalOpen && !(project.commands?.length && project.commandsOpen),
-      }"
+      :class="{ collapsed: !project.projectOpen }"
     >
       <div
         :ref="(element) => setActiveItem(element, project.id)"
@@ -104,7 +100,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
       >
         <SidebarChevron
           class="project-chevron"
-          :open="project.terminalOpen || Boolean(project.commands?.length && project.commandsOpen)"
+          :open="project.projectOpen"
           title="Toggle project"
           @click="emit('toggleProject', project.id)"
         />
@@ -112,15 +108,12 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
           class="project-toggle"
           @click="emit('focus', { id: project.id, kind: 'project', projectId: project.id })"
         >
-          <span class="project-badge">{{ initials(project.name) }}</span>
+          <ProjectBadge :name="project.name" />
           <strong>{{ project.name }}</strong>
         </button>
       </div>
 
-      <div
-        v-if="project.terminalOpen || (project.commands?.length && project.commandsOpen)"
-        class="project-content"
-      >
+      <div v-if="project.projectOpen" class="project-content">
         <div class="group">
           <div
             :ref="(element) => setActiveItem(element, `${project.id}:terminals`)"
@@ -345,18 +338,6 @@ button {
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.project-badge {
-  display: grid;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex: 0 0 1.25rem;
-  place-items: center;
-  border-radius: 0.25rem;
-  color: var(--color-text);
-  background: var(--color-surface-3);
-  font-size: 0.5rem;
-  font-weight: 700;
 }
 .project-content {
   --tree-item-icon-left: 1.125rem;

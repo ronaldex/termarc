@@ -11,10 +11,12 @@ import { useSidebarLayout } from "./composables/useSidebarLayout";
 import { useTerminalTabs } from "./composables/useTerminalTabs";
 import { useWorkspaceSelection } from "./composables/useWorkspaceSelection";
 import { useWorkspaceShortcuts } from "./composables/useWorkspaceShortcuts";
+import { useWorkspaceTerminalNavigation } from "./composables/useWorkspaceTerminalNavigation";
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
 import { applyAppTheme } from "./themes/themeCatalog";
 import type { Project } from "./types/project";
+import type { SidebarSelection } from "./types/sidebar";
 
 const { settings, load: loadAppSettings } = useAppSettings();
 
@@ -46,6 +48,9 @@ const {
   rightOpen: rightSidebarOpen,
   leftWidth: leftSidebarWidth,
   rightWidth: rightSidebarWidth,
+  openLeftTemporarily,
+  restoreLeftPreference,
+  toggleLeft,
   startResize,
 } = useSidebarLayout();
 const {
@@ -65,10 +70,15 @@ const {
   focus: setSidebarSelection,
   selectProject,
   selectTerminal,
-  selectTerminalSection,
+  selectAddTerminal,
+  selectCommands,
+  selectCommand: selectCommandSelection,
+  selectAddCommand,
+  selectEditCommand,
+  selectProjectManagement,
   openSettings,
 } = useWorkspaceSelection(projects);
-const { focusSidebar, activateSidebar } = useSidebarActivation({
+const { focusSidebar, activateSidebar: activateSidebarSelection } = useSidebarActivation({
   projects,
   tabs,
   activeTab,
@@ -81,45 +91,39 @@ const { focusSidebar, activateSidebar } = useSidebarActivation({
   runCommand: (projectId, commandId) => void runCommand(projectId, commandId),
   createProjectTerminal: (projectId, directory) => void createProjectTerminal(projectId, directory),
 });
+function activateSidebar(selection: SidebarSelection): void {
+  activateSidebarSelection(selection);
+  restoreLeftPreference();
+}
+const { cycleTerminal: cycleSidebarTerminal, closeTerminal } = useWorkspaceTerminalNavigation({
+  tabs,
+  selection: sidebarSelection,
+  focusSidebar,
+  selectTerminal,
+  selectAddTerminal,
+  closeTab,
+  focusSidebarTree: () => terminalSidebar.value?.focusTree(),
+});
+
 async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
   const tab = await createTab(projectId, cwd);
   selectTerminal(projectId, tab.id);
   selectTab(tab.id);
 }
-async function closeTerminal(id: string): Promise<void> {
-  if (sidebarSelection.value.tabId === id) selectTerminalSection(sidebarSelection.value.projectId);
-  await closeTab(id);
-}
 function manageProjects(projectId?: string): void {
   const project = projects.value.find((item) => item.id === projectId);
   if (project) selectProject(project);
-  else {
-    const projectId = selectedProject.value?.id ?? projects.value[0].id;
-    setSidebarSelection({ id: "projects", kind: "projects", projectId });
-  }
+  else selectProjectManagement(selectedProject.value?.id ?? projects.value[0].id);
 }
 function addProject(): void {
   selectProject(addProjectState());
 }
 function selectCommand(projectId: string, commandId?: string): void {
-  setSidebarSelection(
-    commandId
-      ? {
-          id: `${projectId}:command:${commandId}`,
-          kind: "command",
-          projectId,
-          commandId,
-        }
-      : { id: `${projectId}:add-command`, kind: "add-command", projectId },
-  );
+  if (commandId) selectCommandSelection(projectId, commandId);
+  else selectAddCommand(projectId);
 }
 function editCommand(projectId: string, commandId: string): void {
-  setSidebarSelection({
-    id: `${projectId}:command:${commandId}:settings`,
-    kind: "edit-command",
-    projectId,
-    commandId,
-  });
+  selectEditCommand(projectId, commandId);
 }
 async function runCommand(projectId: string, commandId: string): Promise<void> {
   const project = projects.value.find((item) => item.id === projectId);
@@ -137,7 +141,7 @@ async function stopCommand(projectId: string, commandId: string): Promise<void> 
   await commandRuns.stop(projectId, commandId);
 }
 function showCommands(projectId: string): void {
-  setSidebarSelection({ id: `${projectId}:commands`, kind: "commands", projectId });
+  selectCommands(projectId);
 }
 function saveCommand(project: Project, commandId: string): void {
   updateProject(project);
@@ -152,7 +156,8 @@ async function removeCommand(project: Project, commandId: string): Promise<void>
 useWorkspaceShortcuts({
   sidebar: terminalSidebar,
   workspace: workspaceMain,
-  leftSidebarOpen,
+  openLeftSidebar: openLeftTemporarily,
+  restoreLeftSidebar: restoreLeftPreference,
   rightSidebarOpen,
   gitSidebarAvailable,
   selection: sidebarSelection,
@@ -161,6 +166,7 @@ useWorkspaceShortcuts({
   isTerminalFocused,
   selectProject,
   openSettings,
+  cycleTerminal: cycleSidebarTerminal,
   shouldActivateSidebar(selection) {
     return (
       selection.kind === "terminal" ||
@@ -212,15 +218,6 @@ watch(activeTabId, (id) => {
     else selectTerminal(project.id, tab.id);
   }
 });
-watch(
-  () => tabs.map((tab) => tab.id),
-  (ids) => {
-    const selected = sidebarSelection.value;
-    if (selected.kind === "terminal" && selected.tabId && !ids.includes(selected.tabId)) {
-      selectTerminalSection(selected.projectId);
-    }
-  },
-);
 onBeforeUnmount(dispose);
 </script>
 
@@ -230,7 +227,9 @@ onBeforeUnmount(dispose);
     <TerminalSidebar
       ref="terminalSidebar"
       :class="{ 'sidebar-hidden': !leftSidebarOpen }"
-      :style="{ width: `${leftSidebarOpen ? leftSidebarWidth : 48}px` }"
+      :style="{
+        width: leftSidebarOpen ? `${leftSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
+      }"
       :collapsed="!leftSidebarOpen"
       :tabs="tabs"
       :projects="treeProjects"
@@ -248,7 +247,7 @@ onBeforeUnmount(dispose);
       @stop-command="stopCommand"
       @close="closeTerminal"
       @rename="renameTab"
-      @toggle="leftSidebarOpen = !leftSidebarOpen"
+      @toggle="toggleLeft"
     />
     <div
       v-if="leftSidebarOpen"
@@ -286,22 +285,17 @@ onBeforeUnmount(dispose);
       title="Resize Git changes sidebar"
       @pointerdown="startResize('right', $event)"
     />
-    <aside v-if="!rightSidebarOpen && gitSidebarAvailable" class="right-rail">
-      <div class="right-rail-footer">
-        <button title="Show Git changes" @click="rightSidebarOpen = true">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5" /></svg>
-        </button>
-      </div>
-    </aside>
     <GitDiffViewer
       v-if="gitSidebarAvailable"
-      v-show="rightSidebarOpen"
-      :style="{ width: `${rightSidebarWidth}px` }"
+      :style="{
+        width: rightSidebarOpen ? `${rightSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
+      }"
       :directory="selectedProject?.directory"
       :active="rightSidebarOpen"
       :font-size="settings.terminalFontSize"
       @available="gitSidebarAvailable = $event"
       @collapse="rightSidebarOpen = false"
+      @expand="rightSidebarOpen = true"
     />
   </div>
 </template>
@@ -337,6 +331,7 @@ button {
   font: inherit;
 }
 .app-shell {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
@@ -383,65 +378,52 @@ button {
   grid-column: 5;
   grid-row: 2;
 }
-.right-rail {
-  grid-column: 5;
-  grid-row: 2;
-  width: 3rem;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--color-border-muted);
-  background: var(--color-panel-bg);
-}
-.right-rail-footer {
-  display: flex;
-  height: 2.5rem;
-  margin-top: auto;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid var(--color-border);
-}
-.right-rail button {
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
-  place-items: center;
-  border: 0;
-  color: var(--color-text-subtle);
-  background: transparent;
-  cursor: pointer;
-}
-.right-rail button:hover {
-  color: var(--color-text);
-}
-.right-rail svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-
 .resize-handle::after {
   position: absolute;
-  inset: 0 0.0625rem;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
   background: var(--color-border-muted);
   content: "";
+  transform: translateX(-50%);
   transition: background 120ms ease;
 }
 .resize-handle:hover::after {
   background: var(--color-accent);
 }
 @media (max-width: 56rem) {
-  .right-resize,
-  .diff-sidebar {
+  .right-resize {
     display: none;
+  }
+  .app-shell > .diff-sidebar:not(.collapsed) {
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: min(30rem, calc(100% - var(--sidebar-collapsed-width))) !important;
+    border-left: 1px solid var(--color-border-muted);
+    box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 28%);
   }
 }
 @media (max-width: 45rem) {
   .left-resize {
     display: none;
+  }
+  .app-shell > .sidebar:not(.collapsed) {
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: min(20rem, calc(100% - var(--sidebar-collapsed-width))) !important;
+    border-right: 1px solid var(--color-border-muted);
+    box-shadow: 0.75rem 0 2rem rgb(0 0 0 / 28%);
   }
 }
 </style>
