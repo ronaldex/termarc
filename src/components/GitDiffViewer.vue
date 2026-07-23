@@ -132,5 +132,7 @@ watch(state, (result) => {
 .diff-sidebar.collapsed {
   width: var(--sidebar-collapsed-width) !important;
   border-left: 1px solid var(--color-border-muted);
+  color: var(--color-text);
+  background: var(--sidebar-background);
 }
 </style>

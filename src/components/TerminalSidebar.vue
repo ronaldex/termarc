@@ -146,11 +146,7 @@ useProjectTreeNavigation({
   min-width: 0;
   flex-direction: column;
   color: var(--color-text);
-  background: linear-gradient(
-    180deg,
-    var(--color-sidebar-bg) 0%,
-    var(--color-sidebar-bg-deep) 100%
-  );
+  background: var(--sidebar-background);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   user-select: none;
 }

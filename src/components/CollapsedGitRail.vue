@@ -208,6 +208,7 @@ button:focus-visible {
   width: 100%;
   height: 2.5rem;
   flex: 0 0 2.5rem;
+  margin-top: auto;
   align-items: center;
   justify-content: center;
   gap: 0.125rem;
