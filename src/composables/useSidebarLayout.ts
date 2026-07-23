@@ -1,40 +1,73 @@
-import { onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 
 export function useSidebarLayout() {
-  const leftOpen = ref(true);
+  const leftPreferredOpen = ref(true);
+  const leftTemporarilyOpen = ref(false);
+  const leftOpen = computed({
+    get: () => leftPreferredOpen.value || leftTemporarilyOpen.value,
+    set: (open: boolean) => {
+      leftPreferredOpen.value = open;
+      leftTemporarilyOpen.value = false;
+    },
+  });
   const rightOpen = ref(false);
   const leftWidth = ref(240);
   const rightWidth = ref(480);
   let stopResize: (() => void) | undefined;
 
+  function openLeftTemporarily(): void {
+    if (leftOpen.value) return;
+    leftTemporarilyOpen.value = true;
+  }
+
+  function restoreLeftPreference(): void {
+    leftTemporarilyOpen.value = false;
+  }
+
+  function toggleLeft(): void {
+    const wasOpen = leftOpen.value;
+    leftTemporarilyOpen.value = false;
+    leftPreferredOpen.value = !wasOpen;
+  }
+
   function startResize(side: "left" | "right", event: PointerEvent): void {
     event.preventDefault();
     stopResize?.();
-    const initialX = event.clientX;
-    const initialWidth = side === "left" ? leftWidth.value : rightWidth.value;
-    const resize = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientX - initialX;
-      const width = side === "left" ? initialWidth + delta : initialWidth - delta;
-      if (side === "left") leftWidth.value = clamp(width, 180, 420);
-      else rightWidth.value = clamp(width, 320, 640);
+
+    const startX = event.clientX;
+    const startWidth = side === "left" ? leftWidth.value : rightWidth.value;
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+      if (side === "left") leftWidth.value = clamp(startWidth + delta, 190, 420);
+      else rightWidth.value = clamp(startWidth - delta, 300, 800);
     };
     const stop = () => {
-      window.removeEventListener("pointermove", resize);
+      window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-      if (stopResize === stop) stopResize = undefined;
+      stopResize = undefined;
     };
+
     stopResize = stop;
-    window.addEventListener("pointermove", resize);
-    window.addEventListener("pointerup", stop, { once: true });
-    window.addEventListener("pointercancel", stop, { once: true });
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
   }
 
   onBeforeUnmount(() => stopResize?.());
 
-  return { leftOpen, rightOpen, leftWidth, rightWidth, startResize };
+  return {
+    leftOpen,
+    leftPreferredOpen,
+    leftTemporarilyOpen,
+    rightOpen,
+    leftWidth,
+    rightWidth,
+    openLeftTemporarily,
+    restoreLeftPreference,
+    toggleLeft,
+    startResize,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+  return Math.min(max, Math.max(min, value));
 }

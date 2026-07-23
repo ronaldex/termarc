@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import "@git-diff-view/vue/styles/diff-view-pure.css";
-import { computed, defineAsyncComponent, toRef, watch } from "vue";
+import { computed, nextTick, ref, toRef, watch } from "vue";
 import { resolveTerminalPath } from "../api/paths";
 import { useAppSettings } from "../composables/useAppSettings";
 import { useDiffExpansion } from "../composables/useDiffExpansion";
@@ -9,135 +8,117 @@ import { openPath } from "../services/externalEditor";
 import { externalEditorLabel } from "../settings/options";
 import { themeDefinition } from "../themes/themeCatalog";
 import { splitGitDiff } from "../utils/gitDiff";
+import CollapsedGitRail from "./CollapsedGitRail.vue";
+import ExpandedGitDiff from "./ExpandedGitDiff.vue";
 
-const AsyncDiffView = defineAsyncComponent(() =>
-  import("@git-diff-view/vue").then(({ DiffView }) => DiffView),
-);
 const props = withDefaults(
   defineProps<{ directory?: string; active: boolean; fontSize?: number }>(),
-  {
-    fontSize: 13,
-  },
+  { fontSize: 13 },
 );
-const emit = defineEmits<{ collapse: []; available: [value: boolean] }>();
+const emit = defineEmits<{ collapse: []; expand: []; available: [value: boolean] }>();
 const { settings } = useAppSettings();
+const panelElement = ref<HTMLElement>();
 const { state, loading, refresh } = useGitDiff(toRef(props, "directory"), toRef(props, "active"));
 
-const files = computed(() => splitGitDiff(state.value?.diff ?? ""));
+const files = computed(() => {
+  const result = state.value;
+  if (!result) return [];
+  if ("files" in result) {
+    return result.files.map((file) => ({
+      ...file,
+      key: `summary:${file.path}`,
+      oldFile: { fileName: file.path },
+      newFile: { fileName: file.path },
+      hunks: [],
+    }));
+  }
+  return splitGitDiff(result.diff);
+});
 const repository = computed(() => state.value?.repository);
 const diffTheme = computed(() => themeDefinition(settings.colorTheme).colorScheme);
+const editorName = computed(() => externalEditorLabel(settings.externalEditor));
 const { expandedFiles, allFilesExpanded, toggleFile, toggleAllFiles } = useDiffExpansion(
   repository,
   files,
 );
 
-async function openFile(path: string) {
-  const repository = state.value?.repository;
-  if (!repository) return;
+async function openFile(path: string): Promise<void> {
+  const repositoryPath = state.value?.repository;
+  if (!repositoryPath) return;
 
   try {
-    const resolved = await resolveTerminalPath(repository, path);
+    const resolved = await resolveTerminalPath(repositoryPath, path);
     if (resolved?.kind === "file") await openPath(resolved.path, settings.externalEditor);
   } catch (error) {
     console.error("Could not open diff file", error);
   }
 }
 
-function editorName() {
-  return externalEditorLabel(settings.externalEditor);
+const pendingRevealPath = ref<string>();
+
+async function revealPendingFile(): Promise<void> {
+  const path = pendingRevealPath.value;
+  if (!path || !props.active) return;
+  const file = files.value.find((item) => item.path === path && item.hunks.length);
+  if (!file) {
+    if (state.value && "diff" in state.value) pendingRevealPath.value = undefined;
+    return;
+  }
+
+  pendingRevealPath.value = undefined;
+  if (!expandedFiles.value.has(file.key)) toggleFile(file.key);
+  await nextTick();
+  requestAnimationFrame(() => {
+    panelElement.value
+      ?.querySelector<HTMLElement>(`[data-diff-file-key="${CSS.escape(file.key)}"]`)
+      ?.scrollIntoView({ block: "start" });
+  });
 }
 
-function baseName(path: string) {
-  return path.split("/").pop() ?? path;
-}
-
-function parentPath(path: string) {
-  const separator = path.lastIndexOf("/");
-  return separator < 0 ? "" : path.slice(0, separator + 1);
+function revealFile(path: string): void {
+  pendingRevealPath.value = path;
+  emit("expand");
+  void nextTick(revealPendingFile);
 }
 
 watch(state, (result) => {
-  if (result) emit("available", Boolean(result.repository));
+  if (result) emit("available", Boolean(result.repository || result.error));
+  void revealPendingFile();
 });
 </script>
 
 <template>
-  <aside class="diff-sidebar">
-    <div v-if="state?.error" class="diff-message error">{{ state.error }}</div>
-    <div v-else-if="!state?.repository" class="diff-message">
-      No Git repository in this terminal directory.
-    </div>
-    <div v-else-if="!files.length" class="diff-message">Working tree is clean.</div>
-    <template v-else>
-      <div class="files-toolbar">
-        <span>{{ files.length }} changed {{ files.length === 1 ? "file" : "files" }}</span>
-        <button type="button" @click="toggleAllFiles">
-          {{ allFilesExpanded ? "Collapse all" : "Expand all" }}
-        </button>
-      </div>
-      <div class="diff-content">
-        <section v-for="file in files" :key="file.key" class="file-change">
-          <div class="file-header">
-            <button
-              class="file-toggle"
-              type="button"
-              :aria-expanded="expandedFiles.has(file.key)"
-              :title="file.path"
-              @click="toggleFile(file.key)"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-              <span class="file-status" :class="file.status" :title="file.status">
-                {{ file.status.charAt(0).toUpperCase() }}
-              </span>
-              <span class="file-name">
-                <span class="file-parent">{{ parentPath(file.path) }}</span
-                >{{ baseName(file.path) }}
-              </span>
-              <span class="line-counts" aria-label="Line changes">
-                <span class="additions">+{{ file.additions }}</span>
-                <span class="deletions">−{{ file.deletions }}</span>
-              </span>
-            </button>
-            <button
-              v-if="file.status !== 'deleted'"
-              class="file-open"
-              type="button"
-              :title="`Open ${file.path} in ${editorName()}`"
-              :aria-label="`Open ${file.path} in ${editorName()}`"
-              @click="openFile(file.path)"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M9 3h4v4M13 3 7.5 8.5M12 9v3H4V4h3" />
-              </svg>
-            </button>
-          </div>
-          <div v-if="expandedFiles.has(file.key)" class="file-diff">
-            <AsyncDiffView
-              :data="file"
-              :diff-view-mode="4"
-              :diff-view-theme="diffTheme"
-              :diff-view-highlight="true"
-              :diff-view-wrap="true"
-              :diff-view-font-size="props.fontSize * (10 / 13)"
-            />
-          </div>
-        </section>
-      </div>
-    </template>
-    <footer class="diff-footer">
-      <button type="button" title="Hide Git changes" @click="emit('collapse')">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-      </button>
-      <button
-        class="refresh-button"
-        type="button"
-        title="Refresh diff"
-        :class="{ loading }"
-        @click="refresh"
-      >
-        ↻
-      </button>
-    </footer>
+  <aside
+    ref="panelElement"
+    class="diff-sidebar"
+    :class="{ collapsed: !active }"
+    :aria-label="active ? 'Git changes' : 'Git changes summary'"
+  >
+    <CollapsedGitRail
+      v-if="!active"
+      :files="files"
+      :loading="loading"
+      :error="state?.error"
+      @expand="emit('expand')"
+      @reveal="revealFile"
+    />
+    <ExpandedGitDiff
+      v-else
+      :files="files"
+      :error="state?.error"
+      :repository="state?.repository"
+      :loading="loading"
+      :font-size="props.fontSize"
+      :diff-theme="diffTheme"
+      :expanded-files="expandedFiles"
+      :all-files-expanded="allFilesExpanded"
+      :editor-name="editorName"
+      @collapse="emit('collapse')"
+      @refresh="refresh"
+      @toggle-file="toggleFile"
+      @toggle-all="toggleAllFiles"
+      @open-file="openFile"
+    />
   </aside>
 </template>
 
@@ -148,234 +129,8 @@ watch(state, (result) => {
   flex-direction: column;
   background: var(--color-panel-bg);
 }
-.diff-message {
-  padding: 1.125rem 0.875rem;
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  line-height: 1.5;
-}
-.diff-message.error {
-  color: var(--color-status-error);
-}
-.files-toolbar {
-  display: flex;
-  height: 2rem;
-  flex: 0 0 2rem;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0.875rem;
-  border-bottom: 1px solid var(--color-border-muted);
-  color: var(--color-text-subtle);
-  font-size: 0.625rem;
-}
-.files-toolbar button {
-  padding: 0.25rem 0;
-  border: 0;
-  color: var(--color-text-muted);
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-.files-toolbar button:hover {
-  color: var(--color-text-strong);
-}
-.diff-content {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-}
-.file-change {
-  border-bottom: 1px solid var(--color-border-muted);
-}
-.file-header {
-  position: sticky;
-  z-index: 20;
-  top: 0;
-  display: flex;
-  height: 2.25rem;
-  background: var(--color-surface-1);
-}
-.file-header:hover {
-  background: var(--color-surface-hover);
-}
-.file-toggle {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.25rem 0 0.625rem;
-  border: 0;
-  color: var(--color-text);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.file-toggle > svg {
-  width: 0.75rem;
-  height: 0.75rem;
-  flex: 0 0 0.75rem;
-  fill: none;
-  stroke: var(--color-text-subtle);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-  transition: transform 120ms ease;
-}
-.file-toggle[aria-expanded="true"] > svg {
-  transform: rotate(90deg);
-}
-.file-status {
-  display: grid;
-  width: 1.125rem;
-  height: 1.125rem;
-  flex: 0 0 1.125rem;
-  place-items: center;
-  border-radius: 0.25rem;
-  color: var(--color-text-muted);
-  background: var(--color-surface-3);
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
-  font-size: 0.5625rem;
-  font-weight: 700;
-}
-.file-status.added {
-  color: var(--color-status-running);
-  background: var(--color-success-bg);
-}
-.file-status.deleted {
-  color: var(--color-status-error);
-  background: var(--color-danger-bg);
-}
-.file-status.renamed {
-  color: var(--color-accent-hover);
-  background: var(--color-accent-bg);
-}
-.file-name {
-  overflow: hidden;
-  min-width: 0;
-  flex: 1;
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
-  font-size: 0.625rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-parent {
-  color: var(--color-text-subtle);
-}
-.line-counts {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.375rem;
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
-  font-size: 0.5625rem;
-}
-.additions {
-  color: var(--color-status-running);
-}
-.deletions {
-  color: var(--color-status-error);
-}
-.file-open {
-  display: grid;
-  width: 2rem;
-  flex: 0 0 2rem;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  color: var(--color-text-subtle);
-  background: transparent;
-  cursor: pointer;
-}
-.file-open:hover {
-  color: var(--color-text-strong);
-}
-.file-open svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.4;
-}
-.file-diff {
-  overflow: hidden;
-  border-top: 1px solid var(--color-border-muted);
-}
-.file-diff :deep(.git-diff-view) {
-  border: 0;
-  border-radius: 0;
-}
-.file-diff :deep(.diff-style-root) {
-  --diff-border--: var(--color-border);
-  --diff-add-content--: color-mix(in srgb, var(--color-status-running) 14%, var(--color-app-bg));
-  --diff-del-content--: color-mix(in srgb, var(--color-status-error) 14%, var(--color-app-bg));
-  --diff-add-lineNumber--: color-mix(in srgb, var(--color-status-running) 24%, var(--color-app-bg));
-  --diff-del-lineNumber--: color-mix(in srgb, var(--color-status-error) 24%, var(--color-app-bg));
-  --diff-plain-content--: var(--color-app-bg);
-  --diff-expand-content--: var(--color-surface-1);
-  --diff-plain-lineNumber--: var(--color-surface-1);
-  --diff-expand-lineNumber--: var(--color-surface-1);
-  --diff-plain-lineNumber-color--: var(--color-text-subtle);
-  --diff-expand-lineNumber-color--: var(--color-text-subtle);
-  --diff-hunk-content--: color-mix(in srgb, var(--color-accent) 12%, var(--color-app-bg));
-  --diff-hunk-lineNumber--: color-mix(in srgb, var(--color-accent) 22%, var(--color-app-bg));
-  --diff-hunk-lineNumber-hover--: var(--color-accent);
-  --diff-add-content-highlight--: color-mix(
-    in srgb,
-    var(--color-status-running) 32%,
-    var(--color-app-bg)
-  );
-  --diff-del-content-highlight--: color-mix(
-    in srgb,
-    var(--color-status-error) 32%,
-    var(--color-app-bg)
-  );
-  --diff-add-widget--: var(--color-accent);
-  --diff-add-widget-color--: var(--color-app-bg);
-  --diff-empty-content--: var(--color-surface-1);
-  --diff-hunk-content-color--: var(--color-text-muted);
-}
-.diff-footer {
-  display: flex;
-  height: 2.5rem;
-  flex: 0 0 2.5rem;
-  align-items: center;
-  margin-top: auto;
-  padding: 0 0.75rem;
-  border-top: 1px solid var(--color-border);
-}
-.diff-footer button {
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
-  place-items: center;
-  border: 0;
-  color: var(--color-text-subtle);
-  background: transparent;
-  cursor: pointer;
-}
-.diff-footer button:hover {
-  color: var(--color-text);
-}
-.refresh-button {
-  margin-left: auto;
-}
-.diff-footer button.loading {
-  animation: spin 0.8s linear infinite;
-}
-.diff-footer svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.diff-sidebar.collapsed {
+  width: var(--sidebar-collapsed-width) !important;
+  border-left: 1px solid var(--color-border-muted);
 }
 </style>

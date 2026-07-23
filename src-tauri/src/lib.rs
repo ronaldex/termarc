@@ -49,6 +49,7 @@ pub fn run() {
             pty::get_pty_status,
             pty::get_pty_statuses,
             git::get_git_diff_directory,
+            git::get_git_diff_summary,
             pty::stop_pty,
             mac_rounded_corners::enable_rounded_corners,
             mac_rounded_corners::enable_modern_window_style,

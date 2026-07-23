@@ -31,6 +31,35 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     focus({ id: `${projectId}:terminals`, kind: "terminals", projectId });
   }
 
+  function selectAddTerminal(projectId: string): void {
+    focus({ id: `${projectId}:add-terminal`, kind: "add-terminal", projectId });
+  }
+
+  function selectCommands(projectId: string): void {
+    focus({ id: `${projectId}:commands`, kind: "commands", projectId });
+  }
+
+  function selectCommand(projectId: string, commandId: string): void {
+    focus({ id: `${projectId}:command:${commandId}`, kind: "command", projectId, commandId });
+  }
+
+  function selectAddCommand(projectId: string): void {
+    focus({ id: `${projectId}:add-command`, kind: "add-command", projectId });
+  }
+
+  function selectEditCommand(projectId: string, commandId: string): void {
+    focus({
+      id: `${projectId}:command:${commandId}:settings`,
+      kind: "edit-command",
+      projectId,
+      commandId,
+    });
+  }
+
+  function selectProjectManagement(projectId?: string): void {
+    focus({ id: "projects", kind: "projects", projectId });
+  }
+
   function openSettings(): void {
     focus({ id: "app-settings", kind: "app-settings" });
   }
@@ -53,6 +82,12 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     selectProject,
     selectTerminal,
     selectTerminalSection,
+    selectAddTerminal,
+    selectCommands,
+    selectCommand,
+    selectAddCommand,
+    selectEditCommand,
+    selectProjectManagement,
     openSettings,
   };
 }

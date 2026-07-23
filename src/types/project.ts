@@ -16,6 +16,7 @@ export type Project = {
 };
 
 export type ProjectTreeState = {
+  projectOpen: boolean;
   terminalOpen: boolean;
   commandsOpen: boolean;
 };

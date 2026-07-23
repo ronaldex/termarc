@@ -2,11 +2,14 @@ import { computed, onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
+import { isEditableTarget } from "../utils/dom";
+import { projectRailSelections } from "../utils/sidebarSummary";
 import { terminalMatchesFilter } from "../utils/terminalLabels";
 
 export type ProjectTreeNavigationAction =
   | { type: "focus"; selection: SidebarSelection }
   | { type: "activate"; selection: SidebarSelection }
+  | { type: "toggle-project"; projectId: string }
   | { type: "toggle-terminals"; projectId: string }
   | { type: "toggle-commands"; projectId: string };
 
@@ -17,7 +20,7 @@ export function flattenProjectTree(
 ): SidebarSelection[] {
   return projects.flatMap((project) => {
     const nodes: SidebarSelection[] = [projectSelection(project.id)];
-    if (!(project.terminalOpen || project.commandsOpen)) return nodes;
+    if (!project.projectOpen) return nodes;
 
     nodes.push({ id: `${project.id}:terminals`, kind: "terminals", projectId: project.id });
     if (project.terminalOpen) {
@@ -87,14 +90,7 @@ export function projectTreeNavigationActions(
 
   if (key === "ArrowLeft") {
     if (current.kind === "project") {
-      return [
-        ...(project.terminalOpen
-          ? [{ type: "toggle-terminals" as const, projectId: project.id }]
-          : []),
-        ...(project.commands?.length && project.commandsOpen
-          ? [{ type: "toggle-commands" as const, projectId: project.id }]
-          : []),
-      ];
+      return project.projectOpen ? [{ type: "toggle-project", projectId: project.id }] : [];
     }
     if (current.kind === "terminals" && project.terminalOpen) {
       return [{ type: "toggle-terminals", projectId: project.id }];
@@ -107,14 +103,7 @@ export function projectTreeNavigationActions(
 
   if (key === "ArrowRight") {
     if (current.kind === "project") {
-      return [
-        ...(!project.terminalOpen
-          ? [{ type: "toggle-terminals" as const, projectId: project.id }]
-          : []),
-        ...(project.commands?.length && !project.commandsOpen
-          ? [{ type: "toggle-commands" as const, projectId: project.id }]
-          : []),
-      ];
+      return !project.projectOpen ? [{ type: "toggle-project", projectId: project.id }] : [];
     }
     if (current.kind === "terminals" && !project.terminalOpen) {
       return [{ type: "toggle-terminals", projectId: project.id }];
@@ -132,18 +121,22 @@ export function useProjectTreeNavigation(options: {
   projects: Ref<ProjectTreeProject[]>;
   tabs: Ref<TerminalTabState[]>;
   filter: Ref<string>;
+  collapsed: Ref<boolean | undefined>;
   selection: Ref<SidebarSelection>;
   sidebarElement: Ref<HTMLElement | undefined>;
   onAction: (action: ProjectTreeNavigationAction) => void;
 }) {
   const tree = computed(() =>
-    flattenProjectTree(options.projects.value, options.tabs.value, options.filter.value),
+    options.collapsed.value
+      ? projectRailSelections(options.projects.value, options.tabs.value)
+      : flattenProjectTree(options.projects.value, options.tabs.value, options.filter.value),
   );
 
   function onKeydown(event: KeyboardEvent): void {
-    const sidebarHasFocus = options.sidebarElement.value === document.activeElement;
+    const sidebarHasFocus = options.sidebarElement.value?.contains(document.activeElement) ?? false;
     if (
       !sidebarHasFocus ||
+      isEditableTarget(event.target) ||
       event.metaKey ||
       event.altKey ||
       event.ctrlKey ||
@@ -156,12 +149,15 @@ export function useProjectTreeNavigation(options: {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    for (const action of projectTreeNavigationActions(
-      event.key,
-      tree.value,
-      options.selection.value,
-      options.projects.value,
-    )) {
+    const actions = options.collapsed.value
+      ? railNavigationActions(event.key, tree.value, options.selection.value)
+      : projectTreeNavigationActions(
+          event.key,
+          tree.value,
+          options.selection.value,
+          options.projects.value,
+        );
+    for (const action of actions) {
       options.onAction(action);
     }
   }
@@ -170,6 +166,30 @@ export function useProjectTreeNavigation(options: {
   onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown, { capture: true }));
 
   return { tree, onKeydown };
+}
+
+export function railNavigationActions(
+  key: string,
+  nodes: readonly SidebarSelection[],
+  selection: SidebarSelection,
+): ProjectTreeNavigationAction[] {
+  if (!nodes.length) return [];
+  const foundIndex = nodes.findIndex((node) => node.id === selection.id);
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    if (foundIndex < 0) {
+      const boundary = key === "ArrowDown" ? nodes[0] : nodes.at(-1);
+      return boundary ? [{ type: "focus", selection: boundary }] : [];
+    }
+    const offset = key === "ArrowDown" ? 1 : -1;
+    const next = nodes[(foundIndex + offset + nodes.length) % nodes.length];
+    return next ? [{ type: "focus", selection: next }] : [];
+  }
+
+  const current = nodes[foundIndex < 0 ? 0 : foundIndex];
+  if ((key === "Enter" || key === "ArrowRight") && current) {
+    return [{ type: "activate", selection: current }];
+  }
+  return [];
 }
 
 function projectSelection(projectId: string): SidebarSelection {

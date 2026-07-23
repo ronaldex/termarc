@@ -1,13 +1,21 @@
-import { onBeforeUnmount, ref, watch, type Ref } from "vue";
-import { getProjectGitDiff, type GitDiff } from "../api/git";
+import { onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
+import {
+  getProjectGitDiff,
+  getProjectGitDiffSummary,
+  type GitDiff,
+  type GitDiffSummaryResult,
+} from "../api/git";
 
-const POLL_INTERVAL = 2_000;
+export type GitDiffState = GitDiff | GitDiffSummaryResult;
+
+const EXPANDED_POLL_INTERVAL = 2_000;
+const COLLAPSED_POLL_INTERVAL = 10_000;
 
 export function useGitDiff(
   directory: Readonly<Ref<string | undefined>>,
   active: Readonly<Ref<boolean>>,
 ) {
-  const state = ref<GitDiff>();
+  const state = ref<GitDiffState>();
   const loading = ref(false);
   let directoryGeneration = 0;
   let inFlight = false;
@@ -21,6 +29,7 @@ export function useGitDiff(
 
   async function requestRefresh(queueIfBusy: boolean): Promise<void> {
     const requestedDirectory = directory.value;
+    const requestedActive = active.value;
     if (!requestedDirectory) {
       directoryGeneration += 1;
       refreshQueued = false;
@@ -37,11 +46,14 @@ export function useGitDiff(
     inFlight = true;
     loading.value = true;
     try {
-      const result = await getProjectGitDiff(requestedDirectory);
+      const result = requestedActive
+        ? await getProjectGitDiff(requestedDirectory)
+        : await getProjectGitDiffSummary(requestedDirectory);
       if (
         !disposed &&
         generation === directoryGeneration &&
-        requestedDirectory === directory.value
+        requestedDirectory === directory.value &&
+        requestedActive === active.value
       ) {
         state.value = result;
       }
@@ -49,9 +61,12 @@ export function useGitDiff(
       if (
         !disposed &&
         generation === directoryGeneration &&
-        requestedDirectory === directory.value
+        requestedDirectory === directory.value &&
+        requestedActive === active.value
       ) {
-        state.value = { directory: "", diff: "", error: String(error) };
+        state.value = requestedActive
+          ? { directory: requestedDirectory, diff: "", error: String(error) }
+          : { directory: requestedDirectory, files: [], error: String(error) };
       }
     } finally {
       inFlight = false;
@@ -63,11 +78,26 @@ export function useGitDiff(
     }
   }
 
+  function restartPolling(expanded: boolean): void {
+    if (timer !== undefined) {
+      window.clearInterval(timer);
+      timer = undefined;
+    }
+    if (!directory.value || document.hidden) return;
+
+    timer = window.setInterval(
+      () => void requestRefresh(false),
+      expanded ? EXPANDED_POLL_INTERVAL : COLLAPSED_POLL_INTERVAL,
+    );
+  }
+
   watch(
     directory,
     () => {
       directoryGeneration += 1;
+      state.value = undefined;
       void refresh();
+      restartPolling(active.value);
     },
     { immediate: true },
   );
@@ -75,19 +105,24 @@ export function useGitDiff(
   watch(
     active,
     (isActive, wasActive) => {
-      if (timer !== undefined) {
-        window.clearInterval(timer);
-        timer = undefined;
+      restartPolling(isActive);
+      if (wasActive !== undefined && isActive !== wasActive) {
+        directoryGeneration += 1;
+        state.value = undefined;
+        void refresh();
       }
-      if (!isActive) return;
-
-      if (wasActive === false) void refresh();
-      timer = window.setInterval(() => void requestRefresh(false), POLL_INTERVAL);
     },
     { immediate: true },
   );
 
+  function handleVisibilityChange(): void {
+    restartPolling(active.value);
+    if (!document.hidden) void refresh();
+  }
+
+  onMounted(() => document.addEventListener("visibilitychange", handleVisibilityChange));
   onBeforeUnmount(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     disposed = true;
     directoryGeneration += 1;
     if (timer !== undefined) window.clearInterval(timer);

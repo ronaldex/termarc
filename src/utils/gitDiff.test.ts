@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitGitDiff } from "./gitDiff";
+import { splitGitDiff, summarizeGitDiff } from "./gitDiff";
 
 describe("splitGitDiff", () => {
   it("splits multiple files and preserves hunks", () => {
@@ -50,5 +50,21 @@ describe("splitGitDiff", () => {
 
   it("returns no files for an empty diff", () => {
     expect(splitGitDiff("")).toEqual([]);
+  });
+
+  it("summarizes file and line changes", () => {
+    const files = splitGitDiff(
+      [
+        "diff --git a/one.txt b/one.txt\n--- a/one.txt\n+++ b/one.txt\n@@ -1 +1,2 @@\n-old\n+new\n+line\n",
+        "diff --git a/two.txt b/two.txt\n--- /dev/null\n+++ b/two.txt\n@@ -0,0 +1 @@\n+two\n",
+      ].join(""),
+    );
+
+    expect(summarizeGitDiff(files)).toEqual({
+      files: 2,
+      additions: 3,
+      deletions: 1,
+      statuses: { added: 1, deleted: 0, modified: 1, renamed: 0 },
+    });
   });
 });

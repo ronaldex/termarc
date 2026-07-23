@@ -1,4 +1,5 @@
 import { TERMINAL_FONT_SIZE_OPTIONS } from "../settings/options";
+import { adjacentTabId } from "../utils/terminalTabs";
 
 export type TerminalShortcutDependencies = {
   terminalFocused: boolean;
@@ -22,18 +23,17 @@ export function handleTerminalShortcut(
   if (
     dependencies.terminalFocused &&
     event.metaKey &&
-    event.shiftKey &&
+    !event.shiftKey &&
     !event.altKey &&
     !event.ctrlKey &&
     (event.key === "ArrowUp" || event.key === "ArrowDown") &&
     dependencies.orderedTabIds.length > 1
   ) {
-    const currentIndex = dependencies.orderedTabIds.indexOf(dependencies.activeTabId ?? "");
-    const offset = event.key === "ArrowDown" ? 1 : -1;
-    const startIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
-    const nextIndex =
-      (startIndex + offset + dependencies.orderedTabIds.length) % dependencies.orderedTabIds.length;
-    const nextId = dependencies.orderedTabIds[nextIndex];
+    const nextId = adjacentTabId(
+      dependencies.orderedTabIds,
+      dependencies.activeTabId,
+      event.key === "ArrowDown" ? 1 : -1,
+    );
     if (nextId) dependencies.selectTab(nextId);
     return true;
   }

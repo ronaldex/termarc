@@ -8,6 +8,7 @@ import {
 } from "../services/agentNotifications";
 import { createTerminalActivityMonitor } from "../services/terminalActivityMonitor";
 import { applyAgentMarker } from "../utils/terminalActivity";
+import { nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
 import {
   parseTerminalAgentMarker,
   parseTerminalShellMarker,
@@ -345,7 +346,9 @@ export function useTerminalTabs() {
     const index = tabs.findIndex((tab) => tab.id === id);
     const tab = tabs[index];
     if (!tab) return;
-    const nextId = tabs[index + 1]?.id ?? tabs[index - 1]?.id;
+    const adjacentId = tabs[index + 1]?.id ?? tabs[index - 1]?.id;
+    const nextId =
+      tab.launch.kind === "shell" ? (nextProjectTerminalId(tabs, id) ?? adjacentId) : adjacentId;
     const wasActive = activeTabId.value === id;
     const session = tab.session;
     tab.disposed = true;
@@ -410,7 +413,7 @@ export function useTerminalTabs() {
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
       tabIdsByNumber: new Map(tabs.map((tab) => [tab.number, tab.id])),
-      orderedTabIds: tabs.map((tab) => tab.id),
+      orderedTabIds: projectTerminalIds(tabs, activeTab.value?.projectId),
       activeTabId: activeTabId.value,
       fontSize: settings.terminalFontSize,
       selectTab,
