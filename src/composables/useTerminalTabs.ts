@@ -232,6 +232,26 @@ export function useTerminalTabs() {
     });
   }
 
+  function fitActiveTerminal(): void {
+    if (activeTab.value) fitTab(activeTab.value);
+  }
+
+  async function fitActiveTerminalAfterLayout(): Promise<void> {
+    // Explicit layout transitions can otherwise leave xterm one paint behind.
+    await nextTick();
+    fitActiveTerminal();
+  }
+
+  function fitHostResize(): void {
+    // ResizeObserver runs after layout and before paint. Fit synchronously so
+    // xterm's renderer cannot paint at the terminal host's previous width.
+    if (resizeFrame !== undefined) {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = undefined;
+    }
+    fitActiveTerminal();
+  }
+
   function sendBytes(tab: TerminalTab, bytes: Uint8Array): void {
     const session = tab.session;
     if (!session || !bytes.length || tab.disposed) return;
@@ -443,7 +463,8 @@ export function useTerminalTabs() {
     terminalHost?.removeEventListener("pointermove", handlePointerMove);
     terminalHost = host;
     terminalHost.addEventListener("pointermove", handlePointerMove);
-    resizeObserver = new ResizeObserver(scheduleFit);
+    resizeObserver?.disconnect();
+    resizeObserver = new ResizeObserver(fitHostResize);
     resizeObserver.observe(host);
   }
   function setDefaultProject(projectId: string, cwd: string): void {
@@ -498,6 +519,7 @@ export function useTerminalTabs() {
     clearActiveTab,
     setTerminalContainer,
     attachHost,
+    fitActiveTerminalAfterLayout,
     setDefaultProject,
     isTerminalFocused,
     start,

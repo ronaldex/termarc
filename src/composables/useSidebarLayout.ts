@@ -1,34 +1,14 @@
-import { computed, onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, ref } from "vue";
+import { useMediaQuery } from "./useMediaQuery";
+import { useResponsiveSidebarVisibility } from "./useSidebarVisibility";
 
 export function useSidebarLayout() {
-  const leftPreferredOpen = ref(true);
-  const leftTemporarilyOpen = ref(false);
-  const leftOpen = computed({
-    get: () => leftPreferredOpen.value || leftTemporarilyOpen.value,
-    set: (open: boolean) => {
-      leftPreferredOpen.value = open;
-      leftTemporarilyOpen.value = false;
-    },
-  });
-  const rightOpen = ref(false);
+  const compactSidebarMode = useMediaQuery("(max-width: 56rem)");
+  const left = useResponsiveSidebarVisibility(true, compactSidebarMode);
+  const right = useResponsiveSidebarVisibility(false, compactSidebarMode);
   const leftWidth = ref(240);
   const rightWidth = ref(480);
   let stopResize: (() => void) | undefined;
-
-  function openLeftTemporarily(): void {
-    if (leftOpen.value) return;
-    leftTemporarilyOpen.value = true;
-  }
-
-  function restoreLeftPreference(): void {
-    leftTemporarilyOpen.value = false;
-  }
-
-  function toggleLeft(): void {
-    const wasOpen = leftOpen.value;
-    leftTemporarilyOpen.value = false;
-    leftPreferredOpen.value = !wasOpen;
-  }
 
   function startResize(side: "left" | "right", event: PointerEvent): void {
     event.preventDefault();
@@ -52,18 +32,29 @@ export function useSidebarLayout() {
     window.addEventListener("pointerup", stop);
   }
 
+  function expandRight(): void {
+    right.open.value = true;
+  }
+
   onBeforeUnmount(() => stopResize?.());
 
   return {
-    leftOpen,
-    leftPreferredOpen,
-    leftTemporarilyOpen,
-    rightOpen,
+    leftOpen: left.open,
+    leftPreferredOpen: left.preferredOpen,
+    leftTemporarilyOpen: left.temporarilyOpen,
+    rightOpen: right.open,
+    rightPreferredOpen: right.preferredOpen,
+    rightTemporarilyOpen: right.temporarilyOpen,
     leftWidth,
     rightWidth,
-    openLeftTemporarily,
-    restoreLeftPreference,
-    toggleLeft,
+    openLeftTemporarily: left.openTemporarily,
+    restoreLeftPreference: left.restorePreference,
+    toggleLeft: left.toggle,
+    expandRight,
+    openRightTemporarily: right.openTemporarily,
+    restoreRightPreference: right.restorePreference,
+    toggleRight: right.toggle,
+    closeRight: right.close,
     startResize,
   };
 }

@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { Project } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import { isEditableTarget } from "../utils/dom";
+import { workspaceShortcutAction, type WorkspaceFocusRegion } from "../utils/workspaceShortcut";
 
 export type SidebarFocusController = {
   focusTree: () => void;
@@ -13,12 +14,21 @@ export type WorkspaceFocusController = {
   hasContentFocus: () => boolean;
 };
 
+export type GitSidebarFocusController = {
+  focusPanel: () => void;
+  hasPanelFocus: () => boolean;
+};
+
 export function useWorkspaceShortcuts(options: {
   sidebar: Ref<SidebarFocusController | undefined>;
   workspace: Ref<WorkspaceFocusController | undefined>;
+  gitSidebar: Ref<GitSidebarFocusController | undefined>;
   openLeftSidebar: () => void;
   restoreLeftSidebar: () => void;
-  rightSidebarOpen: Ref<boolean>;
+  openRightSidebar: () => void;
+  restoreRightSidebar: () => void;
+  toggleRightSidebar: () => void;
+  closeRightSidebar: () => void;
   gitSidebarAvailable: Ref<boolean>;
   selection: Ref<SidebarSelection>;
   projects: Ref<Project[]>;
@@ -30,73 +40,84 @@ export function useWorkspaceShortcuts(options: {
   shouldActivateSidebar: (selection: SidebarSelection) => boolean;
   activateSidebar: (selection: SidebarSelection) => void;
 }): void {
+  function currentFocusRegion(): WorkspaceFocusRegion {
+    if (options.sidebar.value?.hasTreeFocus()) return "left-sidebar";
+    if (options.gitSidebar.value?.hasPanelFocus()) return "right-sidebar";
+    if (options.workspace.value?.hasContentFocus()) return "workspace";
+    return "other";
+  }
+
   function handleKeydown(event: KeyboardEvent): void {
-    const editableTarget = isEditableTarget(event.target) && !options.isTerminalFocused();
-    const commandArrow = event.metaKey && !event.shiftKey && !event.altKey && !event.ctrlKey;
+    const focusRegion = currentFocusRegion();
+    const action = workspaceShortcutAction({
+      key: event.key,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      editableTarget: isEditableTarget(event.target) && !options.isTerminalFocused(),
+      focusRegion,
+      terminalSelected: options.selection.value.kind === "terminal",
+      gitSidebarAvailable: options.gitSidebarAvailable.value,
+    });
+    if (!action) return;
 
     if (
-      !editableTarget &&
-      commandArrow &&
-      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
-      options.sidebar.value?.hasTreeFocus() &&
-      options.selection.value.kind === "terminal"
+      action.type === "cycle-terminal" ||
+      action.type === "focus-left-sidebar" ||
+      action.type === "focus-workspace-from-left" ||
+      action.type === "focus-right-sidebar" ||
+      action.type === "focus-workspace-from-right"
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      options.cycleTerminal(event.key === "ArrowDown" ? 1 : -1);
-      return;
     }
 
-    if (
-      !editableTarget &&
-      commandArrow &&
-      (event.key === "ArrowLeft" || event.key === "ArrowRight")
-    ) {
-      if (event.key === "ArrowLeft" && options.workspace.value?.hasContentFocus()) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        options.openLeftSidebar();
-        if (options.selection.value.kind === "app-settings") {
-          const project =
-            options.projects.value.find((item) => item.id === options.lastProjectId.value) ??
-            options.projects.value[0];
-          if (project) options.selectProject(project);
-        }
-        requestAnimationFrame(() => options.sidebar.value?.focusTree());
-      } else if (event.key === "ArrowRight" && options.sidebar.value?.hasTreeFocus()) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (options.shouldActivateSidebar(options.selection.value)) {
-          options.activateSidebar(options.selection.value);
-        }
-        options.restoreLeftSidebar();
-        requestAnimationFrame(() => {
-          if (!options.isTerminalFocused()) options.workspace.value?.focusContent();
-        });
+    if (action.type === "cycle-terminal") {
+      options.cycleTerminal(action.direction);
+    } else if (action.type === "focus-left-sidebar") {
+      options.openLeftSidebar();
+      if (options.selection.value.kind === "app-settings") {
+        const project =
+          options.projects.value.find((item) => item.id === options.lastProjectId.value) ??
+          options.projects.value[0];
+        if (project) options.selectProject(project);
       }
-      return;
-    }
-
-    if (event.key === "Escape") {
+      requestAnimationFrame(() => options.sidebar.value?.focusTree());
+    } else if (action.type === "focus-workspace-from-left") {
+      if (options.shouldActivateSidebar(options.selection.value)) {
+        options.activateSidebar(options.selection.value);
+      }
       options.restoreLeftSidebar();
-      if (options.rightSidebarOpen.value) options.rightSidebarOpen.value = false;
-      return;
-    }
-
-    if (event.metaKey && event.key === ",") {
+      requestAnimationFrame(() => {
+        if (!options.isTerminalFocused()) options.workspace.value?.focusContent();
+      });
+    } else if (action.type === "focus-right-sidebar") {
+      options.openRightSidebar();
+      requestAnimationFrame(() => options.gitSidebar.value?.focusPanel());
+    } else if (action.type === "focus-workspace-from-right") {
+      options.restoreRightSidebar();
+      requestAnimationFrame(() => options.workspace.value?.focusContent());
+    } else if (action.type === "escape") {
+      options.restoreLeftSidebar();
+      options.closeRightSidebar();
+      if (focusRegion === "right-sidebar") {
+        requestAnimationFrame(() => options.workspace.value?.focusContent());
+      }
+    } else if (action.type === "open-settings") {
       event.preventDefault();
       options.openSettings();
       options.restoreLeftSidebar();
       requestAnimationFrame(() => options.workspace.value?.focusContent());
-    }
-    if (event.metaKey && event.key.toLowerCase() === "d" && options.gitSidebarAvailable.value) {
+    } else {
       event.preventDefault();
-      options.rightSidebarOpen.value = !options.rightSidebarOpen.value;
+      options.toggleRightSidebar();
     }
   }
 
   function handleFocusIn(): void {
     if (!options.sidebar.value?.hasTreeFocus()) options.restoreLeftSidebar();
+    if (!options.gitSidebar.value?.hasPanelFocus()) options.restoreRightSidebar();
   }
 
   onMounted(() => {

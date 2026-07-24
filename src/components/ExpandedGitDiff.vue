@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import "@git-diff-view/vue/styles/diff-view-pure.css";
 import { defineAsyncComponent } from "vue";
+import { useGitDiffKeyboardNavigation } from "../composables/useGitDiffKeyboardNavigation";
 import type { DiffData } from "../utils/gitDiff";
 
 const AsyncDiffView = defineAsyncComponent(() =>
   import("@git-diff-view/vue").then(({ DiffView }) => DiffView),
 );
 
-defineProps<{
+const props = defineProps<{
   files: DiffData[];
   error?: string;
   repository?: string;
@@ -35,98 +36,143 @@ function parentPath(path: string): string {
   const separator = path.lastIndexOf("/");
   return separator < 0 ? "" : path.slice(0, separator + 1);
 }
+
+const {
+  rootElement,
+  diffContentElement,
+  activeFileKey,
+  focusedDiffKey,
+  setFileButton,
+  setFileDiff,
+  focusActiveFile,
+  handleKeydown,
+} = useGitDiffKeyboardNavigation({
+  fileKeys: () => props.files.map((file) => file.key),
+  expandedKeys: () => props.expandedFiles,
+  fontSize: () => props.fontSize,
+  toggleFile: (key) => emit("toggleFile", key),
+});
+
+defineExpose({ focusActiveFile });
 </script>
 
 <template>
-  <div v-if="error" class="diff-message error">{{ error }}</div>
-  <div v-else-if="!repository" class="diff-message">
-    No Git repository in this terminal directory.
-  </div>
-  <div v-else-if="!files.length" class="diff-message">Working tree is clean.</div>
-  <template v-else>
-    <div class="files-toolbar">
-      <span>{{ files.length }} changed {{ files.length === 1 ? "file" : "files" }}</span>
-      <button type="button" @click="emit('toggleAll')">
-        {{ allFilesExpanded ? "Collapse all" : "Expand all" }}
+  <div ref="rootElement" class="expanded-git-diff" tabindex="-1" @keydown="handleKeydown">
+    <div v-if="error" class="diff-message error">{{ error }}</div>
+    <div v-else-if="!repository" class="diff-message">
+      No Git repository in this terminal directory.
+    </div>
+    <div v-else-if="!files.length" class="diff-message">Working tree is clean.</div>
+    <template v-else>
+      <div class="files-toolbar">
+        <span>{{ files.length }} changed {{ files.length === 1 ? "file" : "files" }}</span>
+        <button type="button" @click="emit('toggleAll')">
+          {{ allFilesExpanded ? "Collapse all" : "Expand all" }}
+        </button>
+      </div>
+      <div ref="diffContentElement" class="diff-content">
+        <section
+          v-for="file in files"
+          :key="file.key"
+          class="file-change"
+          :class="{
+            'keyboard-active': activeFileKey === file.key,
+            'diff-content-focused': focusedDiffKey === file.key,
+          }"
+          :data-diff-file-key="file.key"
+          @focusin="activeFileKey = file.key"
+        >
+          <div class="file-header">
+            <button
+              :ref="(element) => setFileButton(element, file.key)"
+              class="file-toggle"
+              type="button"
+              :aria-expanded="expandedFiles.has(file.key)"
+              :title="file.path"
+              @click="emit('toggleFile', file.key)"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+              <span class="file-status" :class="file.status" :title="file.status">
+                {{ file.status.charAt(0).toUpperCase() }}
+              </span>
+              <span class="file-name">
+                <span class="file-parent">{{ parentPath(file.path) }}</span
+                >{{ baseName(file.path) }}
+              </span>
+              <span class="line-counts" aria-label="Line changes">
+                <span class="additions">+{{ file.additions }}</span>
+                <span class="deletions">−{{ file.deletions }}</span>
+              </span>
+            </button>
+            <button
+              v-if="file.status !== 'deleted'"
+              class="file-open"
+              type="button"
+              :title="`Open ${file.path} in ${editorName}`"
+              :aria-label="`Open ${file.path} in ${editorName}`"
+              @click="emit('openFile', file.path)"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M9 3h4v4M13 3 7.5 8.5M12 9v3H4V4h3" />
+              </svg>
+            </button>
+          </div>
+          <div
+            v-if="expandedFiles.has(file.key)"
+            :ref="(element) => setFileDiff(element, file.key)"
+            class="file-diff"
+            tabindex="0"
+            :aria-label="`Changes in ${file.path}`"
+            @focus="focusedDiffKey = file.key"
+            @blur="focusedDiffKey = undefined"
+          >
+            <AsyncDiffView
+              :data="file"
+              :diff-view-mode="4"
+              :diff-view-theme="diffTheme"
+              :diff-view-highlight="true"
+              :diff-view-wrap="true"
+              :diff-view-font-size="fontSize * (10 / 13)"
+            />
+          </div>
+        </section>
+      </div>
+    </template>
+    <footer class="diff-footer">
+      <button type="button" title="Hide Git changes" @click="emit('collapse')">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
       </button>
-    </div>
-    <div class="diff-content">
-      <section
-        v-for="file in files"
-        :key="file.key"
-        class="file-change"
-        :data-diff-file-key="file.key"
+      <button
+        class="refresh-button"
+        type="button"
+        title="Refresh diff"
+        aria-label="Refresh Git changes"
+        :class="{ loading }"
+        @click="emit('refresh')"
       >
-        <div class="file-header">
-          <button
-            class="file-toggle"
-            type="button"
-            :aria-expanded="expandedFiles.has(file.key)"
-            :title="file.path"
-            @click="emit('toggleFile', file.key)"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-            <span class="file-status" :class="file.status" :title="file.status">
-              {{ file.status.charAt(0).toUpperCase() }}
-            </span>
-            <span class="file-name">
-              <span class="file-parent">{{ parentPath(file.path) }}</span
-              >{{ baseName(file.path) }}
-            </span>
-            <span class="line-counts" aria-label="Line changes">
-              <span class="additions">+{{ file.additions }}</span>
-              <span class="deletions">−{{ file.deletions }}</span>
-            </span>
-          </button>
-          <button
-            v-if="file.status !== 'deleted'"
-            class="file-open"
-            type="button"
-            :title="`Open ${file.path} in ${editorName}`"
-            :aria-label="`Open ${file.path} in ${editorName}`"
-            @click="emit('openFile', file.path)"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M9 3h4v4M13 3 7.5 8.5M12 9v3H4V4h3" />
-            </svg>
-          </button>
-        </div>
-        <div v-if="expandedFiles.has(file.key)" class="file-diff">
-          <AsyncDiffView
-            :data="file"
-            :diff-view-mode="4"
-            :diff-view-theme="diffTheme"
-            :diff-view-highlight="true"
-            :diff-view-wrap="true"
-            :diff-view-font-size="fontSize * (10 / 13)"
-          />
-        </div>
-      </section>
-    </div>
-  </template>
-  <footer class="diff-footer">
-    <button type="button" title="Hide Git changes" @click="emit('collapse')">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-    </button>
-    <button
-      class="refresh-button"
-      type="button"
-      title="Refresh diff"
-      aria-label="Refresh Git changes"
-      :class="{ loading }"
-      @click="emit('refresh')"
-    >
-      ↻
-    </button>
-  </footer>
+        ↻
+      </button>
+    </footer>
+  </div>
 </template>
 
 <style scoped>
+.expanded-git-diff {
+  --diff-line-number-gutter: 90px;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  outline: none;
+}
 .diff-message {
   padding: 1.125rem 0.875rem;
   color: var(--color-text-muted);
   font-size: 0.6875rem;
   line-height: 1.5;
+}
+.expanded-git-diff:focus-visible > .diff-message {
+  box-shadow: inset 0.25rem 0 var(--color-focus);
 }
 .diff-message.error {
   color: var(--color-status-error);
@@ -172,6 +218,28 @@ function parentPath(path: string): string {
 .file-header:hover {
   background: var(--color-surface-hover);
 }
+.file-change.diff-content-focused .file-header::after {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: var(--diff-line-number-gutter);
+  height: 0.125rem;
+  background: var(--color-focus);
+  content: "";
+  pointer-events: none;
+}
+.expanded-git-diff:focus-within .file-change.keyboard-active .file-header::before {
+  position: absolute;
+  z-index: 1;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0;
+  width: 0.25rem;
+  border-radius: 0 0.125rem 0.125rem 0;
+  background: var(--color-focus);
+  content: "";
+}
 .file-toggle {
   display: flex;
   min-width: 0;
@@ -195,6 +263,10 @@ function parentPath(path: string): string {
   stroke-linejoin: round;
   stroke-width: 1.5;
   transition: transform 120ms ease;
+}
+.file-toggle:focus,
+.file-toggle:focus-visible {
+  outline: none;
 }
 .file-toggle[aria-expanded="true"] > svg {
   transform: rotate(90deg);
@@ -273,8 +345,21 @@ function parentPath(path: string): string {
   stroke-width: 1.4;
 }
 .file-diff {
+  position: relative;
   overflow: hidden;
   border-top: 1px solid var(--color-border-muted);
+  outline: none;
+}
+.file-change.diff-content-focused .file-diff::after {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  bottom: 0;
+  left: var(--diff-line-number-gutter);
+  height: 0.125rem;
+  background: var(--color-focus);
+  content: "";
+  pointer-events: none;
 }
 .file-diff :deep(.git-diff-view) {
   border: 0;
