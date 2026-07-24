@@ -33,6 +33,7 @@ const {
   stopTab,
   setTerminalContainer,
   attachHost,
+  fitActiveTerminalAfterLayout,
   setDefaultProject,
   isTerminalFocused,
   start,
@@ -41,6 +42,7 @@ const {
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const terminalSidebar = ref<InstanceType<typeof TerminalSidebar>>();
 const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
+const gitSidebar = ref<InstanceType<typeof GitDiffViewer>>();
 const gitSidebarAvailable = ref(true);
 const lastProjectId = ref<string>();
 const {
@@ -51,6 +53,11 @@ const {
   openLeftTemporarily,
   restoreLeftPreference,
   toggleLeft,
+  expandRight,
+  openRightTemporarily,
+  restoreRightPreference,
+  toggleRight,
+  closeRight,
   startResize,
 } = useSidebarLayout();
 const {
@@ -156,9 +163,13 @@ async function removeCommand(project: Project, commandId: string): Promise<void>
 useWorkspaceShortcuts({
   sidebar: terminalSidebar,
   workspace: workspaceMain,
+  gitSidebar,
   openLeftSidebar: openLeftTemporarily,
   restoreLeftSidebar: restoreLeftPreference,
-  rightSidebarOpen,
+  openRightSidebar: openRightTemporarily,
+  restoreRightSidebar: restoreRightPreference,
+  toggleRightSidebar: toggleRight,
+  closeRightSidebar: closeRight,
   gitSidebarAvailable,
   selection: sidebarSelection,
   projects,
@@ -218,6 +229,7 @@ watch(activeTabId, (id) => {
     else selectTerminal(project.id, tab.id);
   }
 });
+watch([leftSidebarOpen, rightSidebarOpen], fitActiveTerminalAfterLayout, { flush: "post" });
 onBeforeUnmount(dispose);
 </script>
 
@@ -287,6 +299,7 @@ onBeforeUnmount(dispose);
     />
     <GitDiffViewer
       v-if="gitSidebarAvailable"
+      ref="gitSidebar"
       :style="{
         width: rightSidebarOpen ? `${rightSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
       }"
@@ -294,8 +307,8 @@ onBeforeUnmount(dispose);
       :active="rightSidebarOpen"
       :font-size="settings.terminalFontSize"
       @available="gitSidebarAvailable = $event"
-      @collapse="rightSidebarOpen = false"
-      @expand="rightSidebarOpen = true"
+      @collapse="closeRight"
+      @expand="expandRight"
     />
   </div>
 </template>
@@ -355,6 +368,28 @@ button {
 .app-shell.without-git-sidebar {
   grid-template-columns: auto 0.25rem minmax(0, 1fr) 0 0;
 }
+.app-shell::before,
+.app-shell::after {
+  z-index: 3;
+  height: 0.125rem;
+  grid-column: 3;
+  grid-row: 2;
+  margin-right: -0.125rem;
+  background: var(--color-focus);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+.app-shell::before {
+  align-self: start;
+}
+.app-shell::after {
+  align-self: end;
+}
+.app-shell:has(> .main-panel:focus-within)::before,
+.app-shell:has(> .main-panel:focus-within)::after {
+  opacity: 1;
+}
 .resize-handle {
   grid-row: 2;
   position: relative;
@@ -393,37 +428,37 @@ button {
   background: var(--color-accent);
 }
 @media (max-width: 56rem) {
+  .app-shell,
+  .app-shell.without-git-sidebar {
+    grid-template-columns: auto 0 minmax(0, 1fr) 0 auto;
+  }
+  .left-resize,
   .right-resize {
     display: none;
   }
+  .app-shell > .sidebar:not(.collapsed),
   .app-shell > .diff-sidebar:not(.collapsed) {
     position: absolute;
     z-index: 30;
     top: 0;
-    right: 0;
     bottom: 0;
     grid-column: 1 / -1;
     grid-row: 2;
-    width: min(30rem, calc(100% - var(--sidebar-collapsed-width))) !important;
-    border-left: 1px solid var(--color-border-muted);
-    box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 28%);
-  }
-}
-@media (max-width: 45rem) {
-  .left-resize {
-    display: none;
   }
   .app-shell > .sidebar:not(.collapsed) {
-    position: absolute;
-    z-index: 30;
-    top: 0;
-    bottom: 0;
     left: 0;
-    grid-column: 1 / -1;
-    grid-row: 2;
     width: min(20rem, calc(100% - var(--sidebar-collapsed-width))) !important;
     border-right: 1px solid var(--color-border-muted);
     box-shadow: 0.75rem 0 2rem rgb(0 0 0 / 28%);
+  }
+  .app-shell.without-git-sidebar > .sidebar:not(.collapsed) {
+    width: min(20rem, 100%) !important;
+  }
+  .app-shell > .diff-sidebar:not(.collapsed) {
+    right: 0;
+    width: min(30rem, calc(100% - var(--sidebar-collapsed-width))) !important;
+    border-left: 1px solid var(--color-border-muted);
+    box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 28%);
   }
 }
 </style>

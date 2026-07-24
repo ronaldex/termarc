@@ -149,28 +149,6 @@ defineExpose({ focusContent, hasContentFocus });
 .main-panel:focus-visible {
   outline: none;
 }
-.main-panel::before,
-.main-panel::after {
-  position: absolute;
-  z-index: 3;
-  right: 0;
-  left: 0;
-  height: 0.125rem;
-  background: var(--color-focus);
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-}
-.main-panel::before {
-  top: 0;
-}
-.main-panel::after {
-  bottom: 0;
-}
-.main-panel:focus-within::before,
-.main-panel:focus-within::after {
-  opacity: 1;
-}
 .main-panel > .terminal-shell {
   min-height: 0;
   height: 100%;

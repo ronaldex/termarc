@@ -18,6 +18,7 @@ const props = withDefaults(
 const emit = defineEmits<{ collapse: []; expand: []; available: [value: boolean] }>();
 const { settings } = useAppSettings();
 const panelElement = ref<HTMLElement>();
+const expandedView = ref<InstanceType<typeof ExpandedGitDiff>>();
 const { state, loading, refresh } = useGitDiff(toRef(props, "directory"), toRef(props, "active"));
 
 const files = computed(() => {
@@ -81,6 +82,18 @@ function revealFile(path: string): void {
   void nextTick(revealPendingFile);
 }
 
+async function focusPanel(): Promise<void> {
+  await nextTick();
+  if (props.active) expandedView.value?.focusActiveFile();
+  else panelElement.value?.focus({ preventScroll: true });
+}
+
+function hasPanelFocus(): boolean {
+  return panelElement.value?.contains(document.activeElement) ?? false;
+}
+
+defineExpose({ focusPanel, hasPanelFocus });
+
 watch(state, (result) => {
   if (result) emit("available", Boolean(result.repository || result.error));
   void revealPendingFile();
@@ -93,6 +106,7 @@ watch(state, (result) => {
     class="diff-sidebar"
     :class="{ collapsed: !active }"
     :aria-label="active ? 'Git changes' : 'Git changes summary'"
+    tabindex="-1"
   >
     <CollapsedGitRail
       v-if="!active"
@@ -104,6 +118,7 @@ watch(state, (result) => {
     />
     <ExpandedGitDiff
       v-else
+      ref="expandedView"
       :files="files"
       :error="state?.error"
       :repository="state?.repository"
@@ -128,6 +143,7 @@ watch(state, (result) => {
   min-width: 0;
   flex-direction: column;
   background: var(--color-panel-bg);
+  outline: none;
 }
 .diff-sidebar.collapsed {
   width: var(--sidebar-collapsed-width) !important;

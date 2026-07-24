@@ -511,6 +511,10 @@ button {
 .add-row:hover {
   color: var(--color-text);
 }
+.add-row:focus,
+.add-row:focus-visible {
+  outline: none;
+}
 .add-row span {
   display: inline-grid;
   width: 0.75rem;
