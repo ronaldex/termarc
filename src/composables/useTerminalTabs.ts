@@ -15,6 +15,7 @@ import {
   TERMDECK_AGENT_OSC,
 } from "../utils/terminalAgentStatus";
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
+import { fitTerminalToContainer } from "../terminal/fitTerminal";
 import { openPath } from "../services/externalEditor";
 import { installTerminalLinks } from "../terminal/terminalLinks";
 import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
@@ -241,8 +242,8 @@ export function useTerminalTabs() {
 
   function fitTab(tab: TerminalTab): void {
     if (tab.disposed || tab.id !== activeTabId.value) return;
-    tab.fitAddon.fit();
-    if (tab.session)
+    const fitted = fitTerminalToContainer(tab.container, tab.terminal, () => tab.fitAddon.fit());
+    if (fitted && tab.session)
       void resizeTerminal(tab.session.id, tab.terminal.rows, tab.terminal.cols).catch(
         console.error,
       );
@@ -433,6 +434,8 @@ export function useTerminalTabs() {
     activeTab.value?.terminal.clear();
     activeTab.value?.terminal.focus();
   }
+
+  watch(activeTabId, scheduleFit, { flush: "post" });
 
   watch(
     () => settings.terminalFontFamily,

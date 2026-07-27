@@ -42,7 +42,7 @@ onMounted(() => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 0.75rem 0.375rem 0.5rem 0.75rem;
+  padding: 0.375rem;
   background: var(--color-app-bg);
 }
 #terminal-host {
@@ -65,7 +65,7 @@ onMounted(() => {
   /* xterm's bundled stylesheet defaults the viewport to black. Keep it
      identical to the terminal surface so no black strip appears on resize. */
   background-color: var(--color-app-bg) !important;
-  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-color: rgba(144, 147, 154, 0.32) transparent;
   scrollbar-width: thin;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-track),
@@ -73,12 +73,29 @@ onMounted(() => {
   background: var(--color-app-bg);
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 0.5rem;
+  width: 0.375rem;
 }
 .terminal-instance :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  border: 2px solid var(--color-app-bg);
-  border-radius: 0.5rem;
-  background: var(--color-border-strong);
+  border: 0;
+  border-right: 0.125rem solid transparent;
+  border-radius: 0.125rem;
+  background: rgba(144, 147, 154, 0.32);
+  background-clip: padding-box;
+}
+.terminal-instance :deep(.xterm .xterm-scrollable-element > .scrollbar.vertical) {
+  transform: translateX(0.375rem);
+}
+.terminal-instance :deep(.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider) {
+  left: 0 !important;
+  width: 0.25rem !important;
+  border-radius: 0.125rem;
+  transition: background 120ms ease;
+}
+.terminal-instance :deep(.xterm .xterm-scrollable-element > .visible) {
+  transition: opacity 200ms ease;
+}
+.terminal-instance :deep(.xterm .xterm-scrollable-element > .invisible.fade) {
+  transition: opacity 200ms ease;
 }
 .empty-state {
   position: absolute;

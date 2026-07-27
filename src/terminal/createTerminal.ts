@@ -31,6 +31,7 @@ export function createTerminal(appearance: TerminalAppearance): Terminal {
     fontWeight: "400",
     fontWeightBold: "600",
     lineHeight: 1.18,
+    overviewRuler: { width: 6 },
     rescaleOverlappingGlyphs: true,
     scrollback: 10_000,
     smoothScrollDuration: 100,
