@@ -361,6 +361,10 @@ onBeforeUnmount(() => {
 * {
   box-sizing: border-box;
 }
+*:focus,
+*:focus-visible {
+  outline: none !important;
+}
 html,
 body,
 #app {

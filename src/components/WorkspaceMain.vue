@@ -145,10 +145,6 @@ defineExpose({ focusContent, hasContentFocus });
   grid-template-rows: minmax(0, 1fr);
   background: var(--color-app-bg);
 }
-.main-panel:focus,
-.main-panel:focus-visible {
-  outline: none;
-}
 .main-panel > .terminal-shell {
   min-height: 0;
   height: 100%;

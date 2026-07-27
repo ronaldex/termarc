@@ -189,7 +189,6 @@ button {
   width: 100%;
   border: 0;
   border-bottom: 1px solid var(--color-border-strong);
-  outline: 0;
   color: var(--color-text);
   background: transparent;
   font: inherit;

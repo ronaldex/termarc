@@ -105,10 +105,6 @@ button:hover {
   color: var(--color-text-strong);
   background: var(--color-surface-hover);
 }
-button:focus-visible {
-  outline: 1px solid var(--color-focus);
-  outline-offset: 1px;
-}
 .git-summary {
   position: relative;
   width: 2rem;
