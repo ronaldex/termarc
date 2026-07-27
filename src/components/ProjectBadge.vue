@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { projectInitials } from "../utils/sidebarSummary";
+import { projectInitials } from "../utils/projectInitials";
 
 const props = defineProps<{ name: string }>();
 const initials = computed(() => projectInitials(props.name));

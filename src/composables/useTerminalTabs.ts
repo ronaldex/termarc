@@ -49,6 +49,7 @@ export function useTerminalTabs() {
     const tab = reactive({
       id: `terminal-${number}`,
       number,
+      shortcutNumber: number,
       title: `Terminal ${number}`,
       name: options.name,
       currentCwd: cwd,
@@ -89,6 +90,18 @@ export function useTerminalTabs() {
     fitTab(tab);
     void startTab(tab);
     return tab;
+  }
+
+  function setTabShortcutOrder(orderedTabIds: readonly string[]): void {
+    const rank = new Map(orderedTabIds.map((id, index) => [id, index]));
+    const orderedTabs = [...tabs].sort((left, right) => {
+      const leftRank = rank.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = rank.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+      return leftRank - rightRank;
+    });
+    orderedTabs.forEach((tab, index) => {
+      tab.shortcutNumber = index + 1;
+    });
   }
 
   function setTerminalContainer(tab: TerminalTab, element: Element | null): void {
@@ -432,17 +445,18 @@ export function useTerminalTabs() {
     setCommandKeyPressed(event.metaKey);
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
-      tabIdsByNumber: new Map(tabs.map((tab) => [tab.number, tab.id])),
+      tabIdsByNumber: new Map(
+        tabs.flatMap((tab) => {
+          const shortcutNumber = tab.shortcutNumber ?? tab.number;
+          return shortcutNumber <= 9 ? [[shortcutNumber, tab.id]] : [];
+        }),
+      ),
       orderedTabIds: projectTerminalIds(tabs, activeTab.value?.projectId),
       activeTabId: activeTabId.value,
       fontSize: settings.terminalFontSize,
       selectTab,
       setFontSize: (fontSize) => {
         settings.terminalFontSize = fontSize;
-      },
-      createTab: () => void createTab(defaultProject.projectId, defaultProject.cwd),
-      closeActiveTab: () => {
-        if (activeTab.value) void closeTab(activeTab.value.id);
       },
     });
     if (handled) {
@@ -473,6 +487,9 @@ export function useTerminalTabs() {
 
   function isTerminalFocused(): boolean {
     return terminalHost?.contains(document.activeElement) ?? false;
+  }
+  function focusActiveTerminal(): void {
+    activeTab.value?.terminal.focus();
   }
   function start(projectId: string, cwd: string): void {
     setDefaultProject(projectId, cwd);
@@ -514,6 +531,7 @@ export function useTerminalTabs() {
     selectTab,
     closeTab,
     renameTab,
+    setTabShortcutOrder,
     restartTab,
     stopTab,
     clearActiveTab,
@@ -522,6 +540,7 @@ export function useTerminalTabs() {
     fitActiveTerminalAfterLayout,
     setDefaultProject,
     isTerminalFocused,
+    focusActiveTerminal,
     start,
     dispose,
   };

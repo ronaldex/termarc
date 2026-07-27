@@ -7,11 +7,11 @@ defineEmits<{ toggle: []; add: [] }>();
 
 <template>
   <div v-if="collapsed" class="collapsed-footer">
-    <SidebarChevron title="Show sidebar" @click="$emit('toggle')" />
+    <SidebarChevron title="Show sidebar (⌘P)" @click="$emit('toggle')" />
   </div>
   <div v-else class="sidebar-footer">
     <button class="add-project" @click="$emit('add')">＋ Add project</button>
-    <SidebarChevron direction="left" title="Hide sidebar" @click="$emit('toggle')" />
+    <SidebarChevron direction="left" title="Hide sidebar (⌘P)" @click="$emit('toggle')" />
   </div>
 </template>
 

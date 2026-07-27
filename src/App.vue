@@ -15,6 +15,7 @@ import { useWorkspaceTerminalNavigation } from "./composables/useWorkspaceTermin
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
 import { applyAppTheme } from "./themes/themeCatalog";
+import { terminalShortcutOrder } from "./utils/terminalTabs";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
@@ -29,6 +30,7 @@ const {
   selectTab,
   closeTab,
   renameTab,
+  setTabShortcutOrder,
   restartTab,
   stopTab,
   setTerminalContainer,
@@ -36,6 +38,7 @@ const {
   fitActiveTerminalAfterLayout,
   setDefaultProject,
   isTerminalFocused,
+  focusActiveTerminal,
   start,
   dispose,
 } = useTerminalTabs();
@@ -71,6 +74,13 @@ const {
   toggleTerminals,
   toggleCommands,
 } = useProjects();
+
+watch(
+  () => terminalShortcutOrder(tabs, treeProjects.value),
+  (orderedIds) => setTabShortcutOrder(orderedIds),
+  { immediate: true },
+);
+
 const {
   selection: sidebarSelection,
   selectedProject,
@@ -166,6 +176,7 @@ useWorkspaceShortcuts({
   gitSidebar,
   openLeftSidebar: openLeftTemporarily,
   restoreLeftSidebar: restoreLeftPreference,
+  toggleLeftSidebar: toggleLeft,
   openRightSidebar: openRightTemporarily,
   restoreRightSidebar: restoreRightPreference,
   toggleRightSidebar: toggleRight,
@@ -175,9 +186,21 @@ useWorkspaceShortcuts({
   projects,
   lastProjectId,
   isTerminalFocused,
+  focusActiveTerminal,
   selectProject,
   openSettings,
   cycleTerminal: cycleSidebarTerminal,
+  activeTerminalAvailable: () => Boolean(activeTab.value),
+  createTerminal: () => {
+    const project =
+      selectedProject.value ??
+      projects.value.find((item) => item.id === lastProjectId.value) ??
+      projects.value[0];
+    if (project) void createProjectTerminal(project.id, project.directory);
+  },
+  closeActiveTerminal: () => {
+    if (activeTab.value) void closeTab(activeTab.value.id);
+  },
   shouldActivateSidebar(selection) {
     return (
       selection.kind === "terminal" ||

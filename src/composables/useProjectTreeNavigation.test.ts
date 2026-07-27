@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
-import {
-  flattenProjectTree,
-  projectTreeNavigationActions,
-  railNavigationActions,
-} from "./useProjectTreeNavigation";
+import { flattenProjectTree, projectTreeNavigationActions } from "./useProjectTreeNavigation";
 
 const project: ProjectTreeProject = {
   id: "project-1",
@@ -45,7 +41,6 @@ describe("flattenProjectTree", () => {
       "project",
       "terminals",
       "terminal",
-      "add-terminal",
       "commands",
       "command",
     ]);
@@ -72,40 +67,13 @@ describe("flattenProjectTree", () => {
     ).toEqual(["project"]);
   });
 
-  it("filters terminal rows without removing section actions", () => {
-    const nodes = flattenProjectTree([project], [terminal], "missing");
-    expect(nodes.some((node) => node.kind === "terminal")).toBe(false);
-    expect(nodes.some((node) => node.kind === "add-terminal")).toBe(true);
-  });
-});
+  it("only includes the add-terminal action when the project has no terminals", () => {
+    const filteredNodes = flattenProjectTree([project], [terminal], "missing");
+    expect(filteredNodes.some((node) => node.kind === "terminal")).toBe(false);
+    expect(filteredNodes.some((node) => node.kind === "add-terminal")).toBe(false);
 
-describe("railNavigationActions", () => {
-  const nodes = [selection(project.id, "project"), selection(terminal.id, "terminal")];
-
-  it("moves only through visible rail entries", () => {
-    expect(railNavigationActions("ArrowDown", nodes, nodes[0]!)).toEqual([
-      { type: "focus", selection: nodes[1] },
-    ]);
-    expect(railNavigationActions("ArrowDown", nodes, nodes[1]!)).toEqual([
-      { type: "focus", selection: nodes[0] },
-    ]);
-  });
-
-  it("enters the rail at its nearest boundary when selection is hidden", () => {
-    const hidden: SidebarSelection = { id: "app-settings", kind: "app-settings" };
-
-    expect(railNavigationActions("ArrowDown", nodes, hidden)).toEqual([
-      { type: "focus", selection: nodes[0] },
-    ]);
-    expect(railNavigationActions("ArrowUp", nodes, hidden)).toEqual([
-      { type: "focus", selection: nodes[1] },
-    ]);
-  });
-
-  it("activates the focused rail entry", () => {
-    expect(railNavigationActions("Enter", nodes, nodes[1]!)).toEqual([
-      { type: "activate", selection: nodes[1] },
-    ]);
+    const emptyNodes = flattenProjectTree([project], []);
+    expect(emptyNodes.some((node) => node.kind === "add-terminal")).toBe(true);
   });
 });
 

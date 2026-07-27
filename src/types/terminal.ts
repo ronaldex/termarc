@@ -47,6 +47,7 @@ export type TerminalActivity = {
 export type TerminalTabState = TerminalActivity & {
   id: string;
   number: number;
+  shortcutNumber?: number;
   title: string;
   name?: string;
   terminalTitle?: string;

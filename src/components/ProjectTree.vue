@@ -1,34 +1,26 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useScrollActiveItem } from "../composables/useScrollActiveItem";
-import type { ProjectCommand, ProjectTreeProject } from "../types/project";
+import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import { terminalMatchesFilter } from "../utils/terminalLabels";
+import { projectTreeModel } from "../utils/projectTreeModel";
+import CommandTreeRow from "./CommandTreeRow.vue";
 import OverlayScrollArea from "./OverlayScrollArea.vue";
 import ProjectBadge from "./ProjectBadge.vue";
 import SidebarChevron from "./SidebarChevron.vue";
 import TerminalTreeRow from "./TerminalTreeRow.vue";
-import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
 
 const props = defineProps<{
   projects: ProjectTreeProject[];
   tabs: TerminalTabState[];
   filter: string;
   selection: SidebarSelection;
+  collapsed?: boolean;
 }>();
 const projectList = ref<InstanceType<typeof OverlayScrollArea>>();
 const activeItem = ref<HTMLElement>();
-const filteredTabsByProject = computed(() => {
-  const tabsByProject = new Map<string, TerminalTabState[]>();
-  for (const tab of props.tabs) {
-    if (tab.launch.kind === "command" || !terminalMatchesFilter(tab, props.filter)) continue;
-    const tabs = tabsByProject.get(tab.projectId) ?? [];
-    tabs.push(tab);
-    tabsByProject.set(tab.projectId, tabs);
-  }
-  return tabsByProject;
-});
+const displayProjects = computed(() => projectTreeModel(props.projects, props.tabs, props.filter));
 
 const emit = defineEmits<{
   close: [id: string];
@@ -43,41 +35,33 @@ const emit = defineEmits<{
   activate: [selection: SidebarSelection];
 }>();
 
-function projectTabs(project: ProjectTreeProject): TerminalTabState[] {
-  return filteredTabsByProject.value.get(project.id) ?? [];
-}
-function commandTab(projectId: string, commandId: string): TerminalTabState | undefined {
-  return props.tabs.find(
-    (tab) =>
-      tab.projectId === projectId &&
-      tab.launch.kind === "command" &&
-      tab.launch.commandId === commandId,
-  );
-}
-function commandIsActive(projectId: string, commandId: string): boolean {
-  const status = commandTab(projectId, commandId)?.status;
-  return status === "starting" || status === "running";
-}
-function commandPrimaryLabel(projectId: string, command: ProjectCommand): string {
-  return commandIsActive(projectId, command.id) ? "Restart" : "Start";
-}
-function runOrRestartCommand(projectId: string, command: ProjectCommand): void {
-  emit(
-    commandIsActive(projectId, command.id) ? "reloadCommand" : "runCommand",
-    projectId,
-    command.id,
-  );
-}
 function isTreeActive(id: string): boolean {
   return props.selection.id === id;
 }
+function focusProject(projectId: string): void {
+  emit("focus", { id: projectId, kind: "project", projectId });
+  if (props.collapsed) emit("toggleProject", projectId);
+}
+function focusGroup(projectId: string, kind: "terminals" | "commands"): void {
+  emit("focus", { id: `${projectId}:${kind}`, kind, projectId });
+  if (!props.collapsed) return;
+  if (kind === "terminals") emit("toggleTerminals", projectId);
+  else emit("toggleCommands", projectId);
+}
 function setActiveItem(element: Element | null, id: string): void {
-  if (id === props.selection.id && element instanceof HTMLElement) activeItem.value = element;
+  if (id !== props.selection.id) return;
+  activeItem.value = element instanceof HTMLElement ? element : undefined;
 }
 function focusActiveItem(): boolean {
-  if (!(activeItem.value instanceof HTMLButtonElement)) return false;
-  activeItem.value.focus();
-  return document.activeElement === activeItem.value;
+  const activeElement = activeItem.value;
+  const button =
+    activeElement instanceof HTMLButtonElement
+      ? activeElement
+      : activeElement?.querySelector<HTMLButtonElement>(
+          ".project-toggle, .group-select, .process-select, .command-select, .add-row",
+        );
+  button?.focus();
+  return document.activeElement === button;
 }
 
 defineExpose({ focusActiveItem });
@@ -86,9 +70,9 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
 </script>
 
 <template>
-  <OverlayScrollArea ref="projectList" class="project-list">
+  <OverlayScrollArea ref="projectList" class="project-list" :class="{ compact: collapsed }">
     <section
-      v-for="project in projects"
+      v-for="project in displayProjects"
       :key="project.id"
       class="project"
       :class="{ collapsed: !project.projectOpen }"
@@ -99,6 +83,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
         :class="{ 'tree-active': isTreeActive(project.id) }"
       >
         <SidebarChevron
+          v-if="!collapsed"
           class="project-chevron"
           :open="project.projectOpen"
           title="Toggle project"
@@ -106,10 +91,12 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
         />
         <button
           class="project-toggle"
-          @click="emit('focus', { id: project.id, kind: 'project', projectId: project.id })"
+          :title="collapsed ? project.name : undefined"
+          :aria-label="collapsed ? project.name : undefined"
+          @click="focusProject(project.id)"
         >
           <ProjectBadge :name="project.name" />
-          <strong>{{ project.name }}</strong>
+          <strong v-if="!collapsed">{{ project.name }}</strong>
         </button>
       </div>
 
@@ -121,6 +108,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             :class="{ 'tree-active': isTreeActive(`${project.id}:terminals`) }"
           >
             <SidebarChevron
+              v-if="!collapsed"
               class="group-chevron"
               :open="project.terminalOpen"
               title="Toggle terminals"
@@ -128,35 +116,35 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             />
             <button
               class="group-select"
-              @click="
-                emit('focus', {
-                  id: `${project.id}:terminals`,
-                  kind: 'terminals',
-                  projectId: project.id,
-                })
-              "
+              :title="collapsed ? `Terminals (${project.terminalTabs.length})` : undefined"
+              :aria-label="collapsed ? `Terminals (${project.terminalTabs.length})` : undefined"
+              @click="focusGroup(project.id, 'terminals')"
             >
-              <span class="group-icon terminal-icon">▣</span><span>TERMINALS</span><i></i
-              ><small>{{ projectTabs(project).length }}</small>
+              <span class="group-icon terminal-icon">▣</span>
+              <span v-if="!collapsed">TERMINALS</span><i></i>
+              <small v-if="!collapsed">{{ project.terminalTabs.length }}</small>
             </button>
           </div>
           <template v-if="project.terminalOpen">
             <div
-              v-for="tab in projectTabs(project)"
+              v-for="tab in project.terminalTabs"
               :key="tab.id"
               :ref="(element) => setActiveItem(element, tab.id)"
             >
               <TerminalTreeRow
                 :tab="tab"
                 :active="isTreeActive(tab.id)"
-                @focus="emit('focus', $event)"
+                :collapsed="collapsed"
+                @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"
                 @rename="(id, name) => emit('rename', id, name)"
                 @close="emit('close', $event)"
               />
             </div>
             <button
+              v-if="!project.hasTerminals"
               :ref="(element) => setActiveItem(element, `${project.id}:add-terminal`)"
               class="add-row"
+              aria-label="Add terminal"
               :class="{ 'tree-active': isTreeActive(`${project.id}:add-terminal`) }"
               @click="
                 emit('activate', {
@@ -166,18 +154,24 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
                 })
               "
             >
-              <span class="add-terminal-icon">＋</span> Add terminal
+              <span class="add-terminal-icon" aria-hidden="true">
+                <svg viewBox="0 0 12 12">
+                  <path d="M6 2v8M2 6h8" />
+                </svg>
+              </span>
+              <span v-if="!collapsed">Add terminal</span>
             </button>
           </template>
         </div>
 
-        <div v-if="project.commands?.length" class="group">
+        <div v-if="project.commandItems.length" class="group">
           <div
             :ref="(element) => setActiveItem(element, `${project.id}:commands`)"
             class="group-heading"
             :class="{ 'tree-active': isTreeActive(`${project.id}:commands`) }"
           >
             <SidebarChevron
+              v-if="!collapsed"
               class="group-chevron"
               :open="project.commandsOpen"
               title="Toggle commands"
@@ -185,78 +179,33 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             />
             <button
               class="group-select"
-              @click="
-                emit('focus', {
-                  id: `${project.id}:commands`,
-                  kind: 'commands',
-                  projectId: project.id,
-                })
-              "
+              :title="collapsed ? `Commands (${project.commandItems.length})` : undefined"
+              :aria-label="collapsed ? `Commands (${project.commandItems.length})` : undefined"
+              @click="focusGroup(project.id, 'commands')"
             >
-              <span class="group-icon">▱</span><span>COMMANDS</span><i></i
-              ><small>{{ project.commands?.length ?? 0 }}</small>
+              <span class="group-icon">▱</span>
+              <span v-if="!collapsed">COMMANDS</span><i></i>
+              <small v-if="!collapsed">{{ project.commandItems.length }}</small>
             </button>
           </div>
           <template v-if="project.commandsOpen">
             <div
-              v-for="command in project.commands ?? []"
-              :key="`${project.id}:${command.id}`"
-              :ref="(element) => setActiveItem(element, `${project.id}:command:${command.id}`)"
-              class="command-row"
-              :class="{ 'tree-active': isTreeActive(`${project.id}:command:${command.id}`) }"
+              v-for="item in project.commandItems"
+              :key="`${project.id}:${item.command.id}`"
+              :ref="(element) => setActiveItem(element, `${project.id}:command:${item.command.id}`)"
             >
-              <button
-                class="command-select"
-                @click="
-                  emit('focus', {
-                    id: `${project.id}:command:${command.id}`,
-                    kind: 'command',
-                    projectId: project.id,
-                    commandId: command.id,
-                  })
-                "
-              >
-                <TerminalStatusIndicator
-                  v-if="commandTab(project.id, command.id)"
-                  :status="commandTab(project.id, command.id)!.status"
-                  :running="commandTab(project.id, command.id)!.status === 'running'"
-                />
-                <span v-else class="command-icon">›_</span>
-                <span class="command-labels">
-                  <strong>{{ command.name }}</strong>
-                  <small :title="command.command">{{ command.command }}</small>
-                </span>
-              </button>
-              <span class="command-actions">
-                <button
-                  :title="`${commandPrimaryLabel(project.id, command)} command`"
-                  :aria-label="`${commandPrimaryLabel(project.id, command)} command`"
-                  @click="runOrRestartCommand(project.id, command)"
-                >
-                  <svg
-                    v-if="commandIsActive(project.id, command.id)"
-                    viewBox="0 0 16 16"
-                    aria-hidden="true"
-                  >
-                    <path class="stroke-icon" d="M13 5V2.5L11.2 4.3A5 5 0 1 0 13 8" />
-                    <path class="stroke-icon" d="M10.5 2.5H13V5" />
-                  </svg>
-                  <svg v-else viewBox="0 0 16 16" aria-hidden="true">
-                    <path class="fill-icon" d="M5 3.5v9l7-4.5z" />
-                  </svg>
-                </button>
-                <button
-                  v-if="commandIsActive(project.id, command.id)"
-                  class="stop-command"
-                  title="Stop command"
-                  aria-label="Stop command"
-                  @click="emit('stopCommand', project.id, command.id)"
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <rect class="fill-icon" x="4" y="4" width="8" height="8" rx="1" />
-                  </svg>
-                </button>
-              </span>
+              <CommandTreeRow
+                :project-id="project.id"
+                :command="item.command"
+                :tab="item.tab"
+                :active="isTreeActive(`${project.id}:command:${item.command.id}`)"
+                :collapsed="collapsed"
+                @focus="emit('focus', $event)"
+                @activate="emit('activate', $event)"
+                @run="(projectId, commandId) => emit('runCommand', projectId, commandId)"
+                @reload="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
+                @stop="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
+              />
             </div>
           </template>
         </div>
@@ -331,6 +280,12 @@ button {
   padding: 0;
   text-align: left;
 }
+.project-toggle:focus,
+.project-toggle:focus-visible,
+.group-select:focus,
+.group-select:focus-visible {
+  outline: none;
+}
 .project-toggle strong {
   overflow: hidden;
   color: var(--color-text-strong);
@@ -395,7 +350,6 @@ button {
   font-weight: 400;
   letter-spacing: 0;
 }
-.command-row,
 .add-row {
   position: relative;
   display: flex;
@@ -409,94 +363,12 @@ button {
 }
 .add-terminal-icon {
   display: grid;
-  width: 0.75rem;
-  height: 0.75rem;
-  flex: 0 0 0.75rem;
+  width: var(--compact-tree-icon-width, 0.75rem);
+  height: var(--compact-tree-icon-width, 0.75rem);
+  flex: 0 0 var(--compact-tree-icon-width, 0.75rem);
   place-items: center;
   line-height: 1;
 }
-.command-row {
-  width: calc(100% - var(--tree-item-icon-left));
-  min-height: 2.25rem;
-}
-.command-select {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0;
-  text-align: left;
-}
-.command-icon {
-  width: 0.75rem;
-  color: var(--color-text-subtle);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.5rem;
-}
-.command-labels {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-.command-labels strong,
-.command-labels small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.command-labels strong {
-  color: var(--color-text);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-.command-labels small {
-  color: var(--color-text-subtle);
-  font-size: 0.625rem;
-  font-weight: 400;
-}
-.command-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.25rem;
-}
-.command-actions button {
-  display: grid;
-  width: 1.25rem;
-  height: 1.25rem;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 0.375rem;
-  color: var(--color-text);
-  background: var(--color-surface-3);
-  font-size: 0.5625rem;
-}
-.command-actions button:hover {
-  border-color: var(--color-border-strong);
-  color: var(--color-text-strong);
-  background: var(--color-surface-hover);
-}
-.command-actions svg {
-  width: 0.75rem;
-  height: 0.75rem;
-}
-.command-actions .stroke-icon {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-.command-actions .fill-icon {
-  fill: currentColor;
-}
-.command-actions .stop-command {
-  color: var(--color-status-error);
-}
-.command-row.tree-active::before,
 .add-row.tree-active::before {
   position: absolute;
   top: 0.25rem;
@@ -507,7 +379,6 @@ button {
   background: var(--color-focus);
   content: "";
 }
-.command-row:hover,
 .add-row:hover {
   color: var(--color-text);
 }
@@ -517,9 +388,64 @@ button {
 }
 .add-row span {
   display: inline-grid;
-  width: 0.75rem;
   place-items: center;
-  font-size: 1rem;
   line-height: 1;
+}
+.add-terminal-icon svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+.project-list.compact {
+  --compact-tree-icon-width: 0.75rem;
+  --compact-tree-inline-padding: 0.75rem;
+  --compact-tree-suffix-gap: 0.125rem;
+}
+.project-list.compact .project-row {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+.project-list.compact .project-toggle,
+.project-list.compact .group-select {
+  flex: 0 0 100%;
+}
+.project-list.compact .project-toggle,
+.project-list.compact .group-select {
+  justify-content: center;
+}
+.project-list.compact .group-select {
+  box-sizing: border-box;
+  gap: 0.25rem;
+  padding: 0 var(--compact-tree-inline-padding);
+}
+.project-list.compact .group-select i {
+  min-width: 0;
+  margin-left: 0;
+}
+.project-list.compact .project-content {
+  padding-right: 0;
+  padding-left: 0;
+}
+.project-list.compact .group-heading {
+  justify-content: center;
+  gap: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+.project-list.compact .add-row {
+  box-sizing: border-box;
+  width: 100%;
+  justify-content: flex-start;
+  margin-left: 0;
+  padding-right: var(--compact-tree-inline-padding);
+  padding-left: var(--compact-tree-inline-padding);
+}
+.project-list.compact .group-heading.tree-active::before,
+.project-list.compact .add-row.tree-active::before {
+  left: 0;
 }
 </style>
