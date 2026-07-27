@@ -22,6 +22,9 @@ import { terminalTheme } from "../terminal/terminalThemes";
 import { useAppSettings } from "./useAppSettings";
 import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
 
+const MAX_PENDING_WRITE_BYTES = 4 * 1024 * 1024;
+const MAX_PENDING_WRITE_COUNT = 256;
+
 export function useTerminalTabs() {
   const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
@@ -32,6 +35,8 @@ export function useTerminalTabs() {
   let resizeObserver: ResizeObserver | undefined;
   let resizeFrame: number | undefined;
   let unlistenNotificationClick: (() => void) | undefined;
+  let started = false;
+  let disposed = false;
   let nextTabNumber = 1;
   let commandKeyPressed = false;
   let lastPointerPosition: { x: number; y: number } | undefined;
@@ -42,8 +47,10 @@ export function useTerminalTabs() {
     projectId: string,
     cwd: string,
     options: { launch?: TerminalLaunch; name?: string } = {},
-  ): Promise<TerminalTab> {
+  ): Promise<TerminalTab | undefined> {
+    if (disposed) return undefined;
     await prepareTerminalFonts();
+    if (disposed) return undefined;
 
     const number = nextTabNumber++;
     const tab = reactive({
@@ -70,6 +77,8 @@ export function useTerminalTabs() {
       startGeneration: 0,
       stopRequested: false,
       writeQueue: Promise.resolve(),
+      pendingWriteBytes: 0,
+      pendingWriteCount: 0,
       disposed: false,
     }) as TerminalTab;
     tabs.push(tab);
@@ -78,10 +87,12 @@ export function useTerminalTabs() {
     if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
     tab.terminal.open(tab.container);
-    installTerminalLinks(
-      tab,
-      () => commandKeyPressed,
-      (path) => openPath(path, settings.externalEditor),
+    tab.linkDisposable = markRaw(
+      installTerminalLinks(
+        tab,
+        () => commandKeyPressed,
+        (path) => openPath(path, settings.externalEditor),
+      ),
     );
     installTerminalTitle(tab);
     installTerminalAgentStatus(tab);
@@ -268,11 +279,29 @@ export function useTerminalTabs() {
   function sendBytes(tab: TerminalTab, bytes: Uint8Array): void {
     const session = tab.session;
     if (!session || !bytes.length || tab.disposed) return;
+    if (
+      tab.pendingWriteCount >= MAX_PENDING_WRITE_COUNT ||
+      tab.pendingWriteBytes + bytes.byteLength > MAX_PENDING_WRITE_BYTES
+    ) {
+      setTabStatus(tab, "error", "Terminal input buffer is full");
+      return;
+    }
+
+    tab.pendingWriteCount += 1;
+    tab.pendingWriteBytes += bytes.byteLength;
     tab.writeQueue = tab.writeQueue
-      .then(() => writeTerminal(session.id, bytes))
+      .then(() => {
+        if (!tab.disposed && tab.session?.id === session.id) {
+          return writeTerminal(session.id, bytes);
+        }
+      })
       .catch((error) => {
         console.error("PTY write failed", error);
         setTabStatus(tab, "error", String(error));
+      })
+      .finally(() => {
+        tab.pendingWriteCount -= 1;
+        tab.pendingWriteBytes -= bytes.byteLength;
       });
   }
 
@@ -387,6 +416,8 @@ export function useTerminalTabs() {
     tab.disposed = true;
     tab.startGeneration++;
     tab.session = undefined;
+    tab.linkDisposable?.dispose();
+    tab.linkDisposable = undefined;
     tab.terminal.dispose();
     tabs.splice(index, 1);
     if (session) void stopTerminal(session.id).catch(console.error);
@@ -492,6 +523,8 @@ export function useTerminalTabs() {
     activeTab.value?.terminal.focus();
   }
   function start(projectId: string, cwd: string): void {
+    if (disposed || started) return;
+    started = true;
     setDefaultProject(projectId, cwd);
     window.addEventListener("keydown", handleKeyboard, { capture: true });
     window.addEventListener("keyup", handleKeyUp, { capture: true });
@@ -500,13 +533,18 @@ export function useTerminalTabs() {
       if (tabs.some((tab) => tab.id === tabId)) selectTab(tabId);
     })
       .then((unlisten) => {
-        unlistenNotificationClick = unlisten;
+        if (disposed) unlisten();
+        else unlistenNotificationClick = unlisten;
       })
       .catch((error) => console.error("Could not listen for notification clicks", error));
     activityMonitor.start();
-    void createTab(projectId, cwd);
+    void createTab(projectId, cwd).catch((error) => {
+      if (!disposed) console.error("Could not create initial terminal", error);
+    });
   }
   function dispose(): void {
+    if (disposed) return;
+    disposed = true;
     resizeObserver?.disconnect();
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
     activityMonitor.dispose();
@@ -515,8 +553,11 @@ export function useTerminalTabs() {
     window.removeEventListener("keyup", handleKeyUp, { capture: true });
     window.removeEventListener("blur", handleWindowBlur);
     unlistenNotificationClick?.();
+    unlistenNotificationClick = undefined;
     for (const tab of tabs) {
       tab.disposed = true;
+      tab.linkDisposable?.dispose();
+      tab.linkDisposable = undefined;
       tab.terminal.dispose();
       if (tab.session) void stopTerminal(tab.session.id);
     }

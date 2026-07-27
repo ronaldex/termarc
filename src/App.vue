@@ -48,6 +48,7 @@ const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
 const gitSidebar = ref<InstanceType<typeof GitDiffViewer>>();
 const gitSidebarAvailable = ref(true);
 const lastProjectId = ref<string>();
+let appDisposed = false;
 const {
   leftOpen: leftSidebarOpen,
   rightOpen: rightSidebarOpen,
@@ -124,6 +125,7 @@ const { cycleTerminal: cycleSidebarTerminal, closeTerminal } = useWorkspaceTermi
 
 async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
   const tab = await createTab(projectId, cwd);
+  if (!tab) return;
   selectTerminal(projectId, tab.id);
   selectTab(tab.id);
 }
@@ -147,6 +149,7 @@ async function runCommand(projectId: string, commandId: string): Promise<void> {
   const command = project?.commands?.find((item) => item.id === commandId);
   if (!project || !command) return;
   const tab = await commandRuns.run(project, command);
+  if (!tab) return;
   activeTabId.value = tab.id;
   selectCommand(projectId, commandId);
   selectTab(tab.id);
@@ -219,6 +222,7 @@ onMounted(async () => {
   } catch (error) {
     console.error("Could not load projects", error);
   }
+  if (appDisposed) return;
   const initialProject = projects.value[0];
   selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
@@ -253,7 +257,10 @@ watch(activeTabId, (id) => {
   }
 });
 watch([leftSidebarOpen, rightSidebarOpen], fitActiveTerminalAfterLayout, { flush: "post" });
-onBeforeUnmount(dispose);
+onBeforeUnmount(() => {
+  appDisposed = true;
+  dispose();
+});
 </script>
 
 <template>

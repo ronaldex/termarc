@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { ILink, IMarker } from "@xterm/xterm";
-import { resolveTerminalPath } from "../api/paths";
+import type { IDisposable, ILink, IMarker } from "@xterm/xterm";
+import { resolveTerminalPath, type TerminalPath } from "../api/paths";
 import type { TerminalTab } from "../types/terminal";
 
 type PendingLink = {
@@ -14,43 +14,76 @@ type CapturedLink = PendingLink & {
   endX: number;
 };
 
+const MAX_PENDING_PATH_RESOLUTIONS = 128;
+const MAX_PENDING_PROVIDER_REQUESTS = 32;
+
 export function installTerminalLinks(
   tab: TerminalTab,
   commandKeyPressed: () => boolean,
   openPath: (path: string) => Promise<void>,
-): void {
+): IDisposable {
   const capturedLinks: CapturedLink[] = [];
+  const pendingPathResolutions = new Map<string, Promise<TerminalPath | null>>();
   let pendingLink: PendingLink | undefined;
+  let pendingProviderRequests = 0;
+  let disposed = false;
+
+  function resolvePath(path: string): Promise<TerminalPath | null> {
+    const key = `${tab.cwd}\0${path}`;
+    const existing = pendingPathResolutions.get(key);
+    if (existing) return existing;
+    if (pendingPathResolutions.size >= MAX_PENDING_PATH_RESOLUTIONS) {
+      return Promise.resolve(null);
+    }
+
+    const request = resolveTerminalPath(tab.cwd, path).catch(() => null);
+    pendingPathResolutions.set(key, request);
+    void request.then(() => {
+      if (pendingPathResolutions.get(key) === request) pendingPathResolutions.delete(key);
+    });
+    return request;
+  }
 
   // Handle OSC 8 ourselves. xterm renders OSC 8 links with a dotted underline
   // unconditionally, while Termdeck only reveals links while Command is held.
-  tab.terminal.parser.registerOscHandler(8, (data) => {
+  const oscHandler = tab.terminal.parser.registerOscHandler(8, (data) => {
     const separator = data.indexOf(";");
     const uri = separator >= 0 ? data.slice(separator + 1) : "";
     if (uri) {
       pendingLink?.marker.dispose();
+      const marker = tab.terminal.registerMarker(0);
       pendingLink = {
-        marker: tab.terminal.registerMarker(0),
+        marker,
         startX: tab.terminal.buffer.active.cursorX + 1,
         uri,
       };
+      marker.onDispose(() => {
+        if (pendingLink?.marker === marker) pendingLink = undefined;
+      });
     } else if (pendingLink) {
       const endLine = tab.terminal.buffer.active.baseY + tab.terminal.buffer.active.cursorY;
-      capturedLinks.push({
+      const capturedLink = {
         marker: pendingLink.marker,
         startX: pendingLink.startX,
         endLineOffset: endLine - pendingLink.marker.line,
         endX: Math.max(1, tab.terminal.buffer.active.cursorX),
         uri: pendingLink.uri,
-      });
+      };
       pendingLink = undefined;
+      if (!capturedLink.marker.isDisposed) {
+        capturedLinks.push(capturedLink);
+        capturedLink.marker.onDispose(() => {
+          const index = capturedLinks.indexOf(capturedLink);
+          if (index >= 0) capturedLinks.splice(index, 1);
+        });
+      }
     }
     return true;
   });
 
   const urlPattern = /https?:\/\/[^\s"'<>]+/gi;
   const pathPattern = /(?:~|\/|\.\.?\/)[^\s"'<>]+|(?:[\w@.+-]+\/)+(?:[\w@.+:-]+)?/g;
-  tab.terminal.registerLinkProvider({
+  const linkProvider = tab.terminal.registerLinkProvider({
     provideLinks(lineNumber, callback) {
       if (!commandKeyPressed()) {
         callback(undefined);
@@ -99,10 +132,16 @@ export function installTerminalLinks(
       const pathMatches = [...line.matchAll(pathPattern)].filter(
         (match) => !webLinks.some((link) => link && rangesOverlap(match, link)),
       );
+      if (pendingProviderRequests >= MAX_PENDING_PROVIDER_REQUESTS) {
+        callback([...oscLinks, ...webLinks].filter((link): link is ILink => link !== undefined));
+        return;
+      }
+
+      pendingProviderRequests += 1;
       void Promise.all(
         pathMatches.map(async (match): Promise<ILink | undefined> => {
           const text = match[0].replace(/[),.;]+$/, "");
-          const resolved = await resolveTerminalPath(tab.cwd, text).catch(() => null);
+          const resolved = await resolvePath(text);
           if (!resolved || match.index === undefined) return undefined;
           return {
             text,
@@ -118,14 +157,33 @@ export function installTerminalLinks(
             },
           };
         }),
-      ).then((pathLinks) => {
-        const links = [...oscLinks, ...webLinks, ...pathLinks].filter(
-          (link): link is ILink => link !== undefined,
-        );
-        callback(links.length ? links : undefined);
-      });
+      )
+        .then((pathLinks) => {
+          if (disposed) return;
+          const links = [...oscLinks, ...webLinks, ...pathLinks].filter(
+            (link): link is ILink => link !== undefined,
+          );
+          callback(links.length ? links : undefined);
+        })
+        .finally(() => {
+          pendingProviderRequests -= 1;
+        });
     },
   });
+
+  return {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      oscHandler.dispose();
+      linkProvider.dispose();
+      pendingLink?.marker.dispose();
+      pendingLink = undefined;
+      for (const link of [...capturedLinks]) link.marker.dispose();
+      capturedLinks.length = 0;
+      pendingPathResolutions.clear();
+    },
+  };
 }
 
 function openTerminalUri(

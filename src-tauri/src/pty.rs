@@ -6,6 +6,7 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
+        mpsc::{SyncSender, sync_channel},
     },
     thread,
 };
@@ -18,9 +19,11 @@ use crate::paths::expand_user_path;
 
 mod process_status;
 
+const PTY_INPUT_QUEUE_CAPACITY: usize = 64;
+
 struct PtySession {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    input: SyncSender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
 }
@@ -153,31 +156,45 @@ pub(crate) fn start_pty(
         .spawn_command(process)
         .map_err(|error| format!("could not start {shell}: {error}"))?;
     let pid = child.process_id();
-    let killer = child.clone_killer();
+    let mut killer = child.clone_killer();
     drop(pair.slave);
 
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|error| format!("could not open PTY reader: {error}"))?;
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|error| format!("could not open PTY writer: {error}"))?;
+    let mut reader = match pair.master.try_clone_reader() {
+        Ok(reader) => reader,
+        Err(error) => {
+            let _ = killer.kill();
+            let _ = child.wait();
+            return Err(format!("could not open PTY reader: {error}"));
+        }
+    };
+    let mut writer = match pair.master.take_writer() {
+        Ok(writer) => writer,
+        Err(error) => {
+            let _ = killer.kill();
+            let _ = child.wait();
+            return Err(format!("could not open PTY writer: {error}"));
+        }
+    };
+    let (input, input_receiver) = sync_channel::<Vec<u8>>(PTY_INPUT_QUEUE_CAPACITY);
 
-    state
-        .sessions
-        .lock()
-        .map_err(|_| "PTY session state is poisoned".to_string())?
-        .insert(
-            id.clone(),
-            PtySession {
-                master: pair.master,
-                writer,
-                killer,
-                pid,
-            },
-        );
+    let mut sessions = match state.sessions.lock() {
+        Ok(sessions) => sessions,
+        Err(_) => {
+            let _ = killer.kill();
+            let _ = child.wait();
+            return Err("PTY session state is poisoned".to_string());
+        }
+    };
+    sessions.insert(
+        id.clone(),
+        PtySession {
+            master: pair.master,
+            input,
+            killer,
+            pid,
+        },
+    );
+    drop(sessions);
 
     thread::spawn(move || {
         let mut buffer = vec![0_u8; 16 * 1024];
@@ -195,6 +212,18 @@ pub(crate) fn start_pty(
                 // Unix PTYs commonly report EIO when the slave closes. The child
                 // waiter below sends the authoritative exit event.
                 Err(_) => break,
+            }
+        }
+    });
+
+    thread::spawn(move || {
+        while let Ok(data) = input_receiver.recv() {
+            if writer
+                .write_all(&data)
+                .and_then(|_| writer.flush())
+                .is_err()
+            {
+                break;
             }
         }
     });
@@ -218,7 +247,7 @@ pub(crate) fn start_pty(
 }
 
 #[tauri::command]
-pub(crate) fn write_to_pty(
+pub(crate) async fn write_to_pty(
     id: String,
     data: Vec<u8>,
     state: State<'_, AppState>,
@@ -228,19 +257,21 @@ pub(crate) fn write_to_pty(
         return Err(format!("PTY input exceeds {MAX_INPUT_BYTES} bytes"));
     }
 
-    let mut sessions = state
-        .sessions
-        .lock()
-        .map_err(|_| "PTY session state is poisoned".to_string())?;
-    let session = sessions
-        .get_mut(&id)
-        .ok_or_else(|| format!("unknown PTY session: {id}"))?;
+    let input = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "PTY session state is poisoned".to_string())?;
+        sessions
+            .get(&id)
+            .map(|session| session.input.clone())
+            .ok_or_else(|| format!("unknown PTY session: {id}"))?
+    };
 
-    session
-        .writer
-        .write_all(&data)
-        .and_then(|_| session.writer.flush())
-        .map_err(|error| format!("could not write to PTY: {error}"))
+    tauri::async_runtime::spawn_blocking(move || input.send(data))
+        .await
+        .map_err(|error| format!("could not queue PTY input: {error}"))?
+        .map_err(|_| "PTY input channel is closed".to_string())
 }
 
 #[tauri::command]

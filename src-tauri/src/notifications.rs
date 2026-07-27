@@ -1,6 +1,36 @@
 use tauri::{Emitter, Manager, Window};
 
 #[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(target_os = "macos")]
+const MAX_PENDING_NOTIFICATION_THREADS: usize = 8;
+#[cfg(target_os = "macos")]
+static PENDING_NOTIFICATION_THREADS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_os = "macos")]
+struct PendingNotificationGuard;
+
+#[cfg(target_os = "macos")]
+impl PendingNotificationGuard {
+    fn reserve() -> Option<Self> {
+        PENDING_NOTIFICATION_THREADS
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                (count < MAX_PENDING_NOTIFICATION_THREADS).then_some(count + 1)
+            })
+            .ok()
+            .map(|_| Self)
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for PendingNotificationGuard {
+    fn drop(&mut self) {
+        PENDING_NOTIFICATION_THREADS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn configure_notification_application() -> bool {
     use mac_notification_sys::{get_bundle_identifier, set_application};
     use std::sync::OnceLock;
@@ -39,14 +69,26 @@ fn show_fallback_notification(window: &Window, body: &str, sound: bool) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn spawn_and_reap(mut command: std::process::Command) -> bool {
+    match command.spawn() {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 #[tauri::command]
 pub fn play_agent_ready_sound() -> bool {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("afplay")
-            .arg("/System/Library/Sounds/Ping.aiff")
-            .spawn()
-            .is_ok()
+        let mut command = std::process::Command::new("afplay");
+        command.arg("/System/Library/Sounds/Ping.aiff");
+        spawn_and_reap(command)
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -69,7 +111,16 @@ pub fn notify_agent_ready(window: Window, tab_id: String, body: String, sound: b
             return false;
         }
 
+        let Some(pending_guard) = PendingNotificationGuard::reserve() else {
+            // Keep ignored notifications from accumulating an unbounded number
+            // of click-waiting threads. The fallback remains visible but cannot
+            // route a click to a particular terminal.
+            show_fallback_notification(&window, &body, sound);
+            return true;
+        };
+
         std::thread::spawn(move || {
+            let _pending_guard = pending_guard;
             let mut notification = Notification::new();
             notification
                 .title("Pi is ready")
