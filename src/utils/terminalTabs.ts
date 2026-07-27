@@ -1,4 +1,28 @@
+import type { ProjectTreeProject } from "../types/project";
 import type { TerminalTabState } from "../types/terminal";
+
+export function terminalShortcutOrder(
+  tabs: readonly TerminalTabState[],
+  projects: readonly ProjectTreeProject[],
+): string[] {
+  const orderedIds = projects.flatMap((project) => [
+    ...tabs
+      .filter((tab) => tab.projectId === project.id && tab.launch.kind === "shell")
+      .map((tab) => tab.id),
+    ...(project.commands ?? []).flatMap((command) =>
+      tabs
+        .filter(
+          (tab) =>
+            tab.projectId === project.id &&
+            tab.launch.kind === "command" &&
+            tab.launch.commandId === command.id,
+        )
+        .map((tab) => tab.id),
+    ),
+  ]);
+  const includedIds = new Set(orderedIds);
+  return [...orderedIds, ...tabs.filter((tab) => !includedIds.has(tab.id)).map((tab) => tab.id)];
+}
 
 export function projectTerminalIds(
   tabs: readonly TerminalTabState[],

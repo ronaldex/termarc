@@ -25,8 +25,6 @@ function dependencies() {
     fontSize: 13,
     selectTab: vi.fn(),
     setFontSize: vi.fn(),
-    createTab: vi.fn(),
-    closeActiveTab: vi.fn(),
   };
 }
 
@@ -50,6 +48,13 @@ describe("handleTerminalShortcut", () => {
       ),
     ).toBe(false);
     expect(deps.selectTab).not.toHaveBeenCalled();
+  });
+
+  it("leaves global terminal lifecycle shortcuts to the workspace handler", () => {
+    const deps = dependencies();
+
+    expect(handleTerminalShortcut(keyboardEvent({ key: "t", metaKey: true }), deps)).toBe(false);
+    expect(handleTerminalShortcut(keyboardEvent({ key: "w", metaKey: true }), deps)).toBe(false);
   });
 
   it("steps through supported font sizes", () => {

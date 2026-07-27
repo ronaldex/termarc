@@ -9,8 +9,6 @@ export type TerminalShortcutDependencies = {
   fontSize: number;
   selectTab: (id: string) => void;
   setFontSize: (size: number) => void;
-  createTab: () => void;
-  closeActiveTab: () => void;
 };
 
 export function handleTerminalShortcut(
@@ -57,16 +55,6 @@ export function handleTerminalShortcut(
       [...TERMINAL_FONT_SIZE_OPTIONS].reverse().find((size) => size < dependencies.fontSize) ??
         TERMINAL_FONT_SIZE_OPTIONS[0],
     );
-    return true;
-  }
-
-  if (event.key.toLowerCase() === "t") {
-    dependencies.createTab();
-    return true;
-  }
-
-  if (event.key.toLowerCase() === "w" && dependencies.activeTabId) {
-    dependencies.closeActiveTab();
     return true;
   }
 

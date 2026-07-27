@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, toRefs } from "vue";
+import { computed, nextTick, ref, toRefs } from "vue";
 import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigation";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import CollapsedProjectRail from "./CollapsedProjectRail.vue";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
 
@@ -34,14 +33,19 @@ const emit = defineEmits<{
 const filter = ref("");
 const sidebarElement = ref<HTMLElement>();
 const projectTree = ref<InstanceType<typeof ProjectTree>>();
-const projectRail = ref<InstanceType<typeof CollapsedProjectRail>>();
+const searchInput = ref<HTMLInputElement>();
 const { projects, tabs, selection, collapsed } = toRefs(props);
+const treeFilter = computed(() => (collapsed.value ? "" : filter.value));
 
 function focusTree(): void {
-  const focused = props.collapsed
-    ? projectRail.value?.focusActiveItem()
-    : projectTree.value?.focusActiveItem();
+  const focused = projectTree.value?.focusActiveItem();
   if (!focused) sidebarElement.value?.focus();
+}
+
+async function focusSearch(): Promise<void> {
+  if (props.collapsed) emit("toggle");
+  await nextTick();
+  searchInput.value?.focus();
 }
 
 function hasTreeFocus(): boolean {
@@ -68,8 +72,7 @@ defineExpose({ focusTree, hasTreeFocus });
 useProjectTreeNavigation({
   projects,
   tabs,
-  filter,
-  collapsed,
+  filter: treeFilter,
   selection,
   sidebarElement,
   onAction(action) {
@@ -90,49 +93,47 @@ useProjectTreeNavigation({
     tabindex="-1"
     aria-label="Project tree"
   >
-    <template v-if="collapsed">
-      <CollapsedProjectRail
-        ref="projectRail"
-        :projects="projects"
-        :tabs="tabs"
-        :selection="selection"
-        @focus="choose"
-        @activate="emit('activate', $event)"
-      />
-      <SidebarFooter collapsed @toggle="emit('toggle')" />
-    </template>
-    <template v-else>
-      <div class="filter-row">
+    <div class="filter-row" :class="{ compact: collapsed }">
+      <button
+        class="search-button"
+        type="button"
+        :title="collapsed ? 'Search processes' : 'Focus process filter'"
+        aria-label="Search processes"
+        @click="focusSearch"
+      >
         <span class="search-icon" aria-hidden="true"></span>
-        <input
-          v-model="filter"
-          type="search"
-          placeholder="Filter processes..."
-          aria-label="Filter processes"
-        />
-        <button title="Manage projects" @click="emit('manage')">⋮</button>
-      </div>
-
-      <ProjectTree
-        ref="projectTree"
-        :projects="projects"
-        :tabs="tabs"
-        :filter="filter"
-        :selection="selection"
-        @close="closeTerminal"
-        @rename="(id, name) => emit('rename', id, name)"
-        @toggle-project="emit('toggleProject', $event)"
-        @toggle-terminals="emit('toggleTerminals', $event)"
-        @toggle-commands="emit('toggleCommands', $event)"
-        @run-command="(projectId, commandId) => emit('runCommand', projectId, commandId)"
-        @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
-        @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
-        @focus="choose"
-        @activate="emit('activate', $event)"
+      </button>
+      <input
+        v-if="!collapsed"
+        ref="searchInput"
+        v-model="filter"
+        type="search"
+        placeholder="Filter processes..."
+        aria-label="Filter processes"
       />
+      <button v-if="!collapsed" title="Manage projects" @click="emit('manage')">⋮</button>
+    </div>
 
-      <SidebarFooter @toggle="emit('toggle')" @add="emit('addProject')" />
-    </template>
+    <ProjectTree
+      ref="projectTree"
+      :projects="projects"
+      :tabs="tabs"
+      :filter="treeFilter"
+      :selection="selection"
+      :collapsed="collapsed"
+      @close="closeTerminal"
+      @rename="(id, name) => emit('rename', id, name)"
+      @toggle-project="emit('toggleProject', $event)"
+      @toggle-terminals="emit('toggleTerminals', $event)"
+      @toggle-commands="emit('toggleCommands', $event)"
+      @run-command="(projectId, commandId) => emit('runCommand', projectId, commandId)"
+      @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
+      @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
+      @focus="choose"
+      @activate="emit('activate', $event)"
+    />
+
+    <SidebarFooter :collapsed="collapsed" @toggle="emit('toggle')" @add="emit('addProject')" />
   </aside>
 </template>
 
@@ -178,10 +179,24 @@ button {
   padding: 0 0.875rem 0 1.125rem;
   border-bottom: 1px solid var(--line);
 }
+.search-button {
+  display: grid;
+  width: 1rem;
+  height: 1.75rem;
+  flex: 0 0 1rem;
+  padding: 0;
+  place-items: center;
+}
+.filter-row.compact {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
 .search-icon {
   position: relative;
   width: 0.875rem;
   height: 0.875rem;
+  flex: 0 0 0.875rem;
   border: 1.5px solid var(--color-text-muted);
   border-radius: 50%;
 }
@@ -210,9 +225,15 @@ button {
 .filter-row input::-webkit-search-cancel-button {
   display: none;
 }
-.filter-row > button {
+.filter-row > button:not(.search-button) {
   padding: 0.25rem 0.5rem;
   color: var(--color-text-faint);
   font-size: 0.875rem;
+}
+.search-button:hover .search-icon {
+  border-color: var(--color-text);
+}
+.search-button:hover .search-icon::after {
+  background: var(--color-text);
 }
 </style>

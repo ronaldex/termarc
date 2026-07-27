@@ -2,7 +2,11 @@ import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { Project } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import { isEditableTarget } from "../utils/dom";
-import { workspaceShortcutAction, type WorkspaceFocusRegion } from "../utils/workspaceShortcut";
+import {
+  workspaceContentFocusTarget,
+  workspaceShortcutAction,
+  type WorkspaceFocusRegion,
+} from "../utils/workspaceShortcut";
 
 export type SidebarFocusController = {
   focusTree: () => void;
@@ -25,6 +29,7 @@ export function useWorkspaceShortcuts(options: {
   gitSidebar: Ref<GitSidebarFocusController | undefined>;
   openLeftSidebar: () => void;
   restoreLeftSidebar: () => void;
+  toggleLeftSidebar: () => void;
   openRightSidebar: () => void;
   restoreRightSidebar: () => void;
   toggleRightSidebar: () => void;
@@ -34,9 +39,13 @@ export function useWorkspaceShortcuts(options: {
   projects: Ref<Project[]>;
   lastProjectId: Ref<string | undefined>;
   isTerminalFocused: () => boolean;
+  focusActiveTerminal: () => void;
   selectProject: (project: Project) => void;
   openSettings: () => void;
   cycleTerminal: (direction: -1 | 1) => void;
+  activeTerminalAvailable: () => boolean;
+  createTerminal: () => void;
+  closeActiveTerminal: () => void;
   shouldActivateSidebar: (selection: SidebarSelection) => boolean;
   activateSidebar: (selection: SidebarSelection) => void;
 }): void {
@@ -51,6 +60,7 @@ export function useWorkspaceShortcuts(options: {
     const focusRegion = currentFocusRegion();
     const action = workspaceShortcutAction({
       key: event.key,
+      code: event.code,
       metaKey: event.metaKey,
       shiftKey: event.shiftKey,
       altKey: event.altKey,
@@ -58,6 +68,7 @@ export function useWorkspaceShortcuts(options: {
       editableTarget: isEditableTarget(event.target) && !options.isTerminalFocused(),
       focusRegion,
       terminalSelected: options.selection.value.kind === "terminal",
+      activeTerminalAvailable: options.activeTerminalAvailable(),
       gitSidebarAvailable: options.gitSidebarAvailable.value,
     });
     if (!action) return;
@@ -67,7 +78,9 @@ export function useWorkspaceShortcuts(options: {
       action.type === "focus-left-sidebar" ||
       action.type === "focus-workspace-from-left" ||
       action.type === "focus-right-sidebar" ||
-      action.type === "focus-workspace-from-right"
+      action.type === "focus-workspace-from-right" ||
+      action.type === "create-terminal" ||
+      action.type === "close-terminal"
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -75,6 +88,10 @@ export function useWorkspaceShortcuts(options: {
 
     if (action.type === "cycle-terminal") {
       options.cycleTerminal(action.direction);
+    } else if (action.type === "create-terminal") {
+      options.createTerminal();
+    } else if (action.type === "close-terminal") {
+      options.closeActiveTerminal();
     } else if (action.type === "focus-left-sidebar") {
       options.openLeftSidebar();
       if (options.selection.value.kind === "app-settings") {
@@ -97,7 +114,14 @@ export function useWorkspaceShortcuts(options: {
       requestAnimationFrame(() => options.gitSidebar.value?.focusPanel());
     } else if (action.type === "focus-workspace-from-right") {
       options.restoreRightSidebar();
-      requestAnimationFrame(() => options.workspace.value?.focusContent());
+      requestAnimationFrame(() => {
+        const focusTarget = workspaceContentFocusTarget(
+          options.activeTerminalAvailable(),
+          options.shouldActivateSidebar(options.selection.value),
+        );
+        if (focusTarget === "terminal") options.focusActiveTerminal();
+        else options.workspace.value?.focusContent();
+      });
     } else if (action.type === "escape") {
       options.restoreLeftSidebar();
       options.closeRightSidebar();
@@ -109,6 +133,9 @@ export function useWorkspaceShortcuts(options: {
       options.openSettings();
       options.restoreLeftSidebar();
       requestAnimationFrame(() => options.workspace.value?.focusContent());
+    } else if (action.type === "toggle-left-sidebar") {
+      event.preventDefault();
+      options.toggleLeftSidebar();
     } else {
       event.preventDefault();
       options.toggleRightSidebar();

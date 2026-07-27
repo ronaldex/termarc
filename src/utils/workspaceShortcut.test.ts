@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { workspaceShortcutAction, type WorkspaceShortcutInput } from "./workspaceShortcut";
+import {
+  workspaceContentFocusTarget,
+  workspaceShortcutAction,
+  type WorkspaceShortcutInput,
+} from "./workspaceShortcut";
 
 function shortcut(overrides: Partial<WorkspaceShortcutInput>): WorkspaceShortcutInput {
   return {
     key: "",
+    code: "",
     metaKey: false,
     shiftKey: false,
     altKey: false,
@@ -11,12 +16,30 @@ function shortcut(overrides: Partial<WorkspaceShortcutInput>): WorkspaceShortcut
     editableTarget: false,
     focusRegion: "other",
     terminalSelected: false,
+    activeTerminalAvailable: false,
     gitSidebarAvailable: true,
     ...overrides,
   };
 }
 
+describe("workspaceContentFocusTarget", () => {
+  it("focuses an active selected terminal instead of the workspace container", () => {
+    expect(workspaceContentFocusTarget(true, true)).toBe("terminal");
+    expect(workspaceContentFocusTarget(false, true)).toBe("workspace");
+    expect(workspaceContentFocusTarget(true, false)).toBe("workspace");
+  });
+});
+
 describe("workspaceShortcutAction", () => {
+  it("creates and closes terminals with command shortcuts", () => {
+    expect(workspaceShortcutAction(shortcut({ key: "t", metaKey: true }))).toEqual({
+      type: "create-terminal",
+    });
+    expect(
+      workspaceShortcutAction(shortcut({ key: "w", metaKey: true, activeTerminalAvailable: true })),
+    ).toEqual({ type: "close-terminal" });
+  });
+
   it("moves focus across the three workspace regions", () => {
     expect(
       workspaceShortcutAction(
@@ -87,6 +110,12 @@ describe("workspaceShortcutAction", () => {
     expect(workspaceShortcutAction(shortcut({ key: ",", metaKey: true }))).toEqual({
       type: "open-settings",
     });
+    expect(workspaceShortcutAction(shortcut({ key: "p", code: "KeyP", metaKey: true }))).toEqual({
+      type: "toggle-left-sidebar",
+    });
+    expect(
+      workspaceShortcutAction(shortcut({ key: "P", code: "KeyP", metaKey: true, shiftKey: true })),
+    ).toBeUndefined();
     expect(workspaceShortcutAction(shortcut({ key: "D", metaKey: true }))).toEqual({
       type: "toggle-right-sidebar",
     });

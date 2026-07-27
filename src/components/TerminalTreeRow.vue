@@ -3,11 +3,13 @@ import { computed, nextTick, ref } from "vue";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { terminalDisplayModel } from "../utils/terminalLabels";
+import CompactTreeItemIndicator from "./CompactTreeItemIndicator.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
 
 const props = defineProps<{
   tab: TerminalTabState;
   active: boolean;
+  collapsed?: boolean;
 }>();
 const emit = defineEmits<{
   close: [id: string];
@@ -19,6 +21,8 @@ const editing = ref(false);
 const editedName = ref("");
 const renameInput = ref<HTMLInputElement>();
 const display = computed(() => terminalDisplayModel(props.tab));
+const shortcutNumber = computed(() => props.tab.shortcutNumber ?? props.tab.number);
+const showsShortcut = computed(() => shortcutNumber.value <= 9);
 
 function focus(): void {
   emit("focus", {
@@ -29,6 +33,7 @@ function focus(): void {
   });
 }
 function beginRename(): void {
+  if (props.collapsed) return;
   editing.value = true;
   editedName.value = props.tab.name ?? "";
   void nextTick(() => renameInput.value?.select());
@@ -44,20 +49,37 @@ function cancelRename(): void {
 </script>
 
 <template>
-  <div class="process-row" :class="{ 'tree-active': active }">
+  <div class="process-row" :class="{ 'tree-active': active, compact: collapsed }">
     <button
       class="process-select"
-      title="Double-click to name terminal"
+      :title="collapsed ? display.tooltip : 'Double-click to name terminal'"
+      :aria-label="
+        collapsed
+          ? `${showsShortcut ? `Terminal ${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
+          : undefined
+      "
       @click="focus"
       @dblclick.stop="beginRename"
     >
+      <CompactTreeItemIndicator
+        v-if="collapsed"
+        :shortcut-number="showsShortcut ? shortcutNumber : undefined"
+      >
+        <TerminalStatusIndicator
+          :status="tab.status"
+          :busy="display.busy"
+          :running="display.running"
+          :title="display.tooltip"
+        />
+      </CompactTreeItemIndicator>
       <TerminalStatusIndicator
+        v-else
         :status="tab.status"
         :busy="display.busy"
         :running="display.running"
         :title="display.tooltip"
       />
-      <span v-if="editing" class="process-labels">
+      <span v-if="editing && !collapsed" class="process-labels">
         <input
           ref="renameInput"
           v-model="editedName"
@@ -71,7 +93,7 @@ function cancelRename(): void {
           @blur="finishRename"
         />
       </span>
-      <span v-else class="process-labels">
+      <span v-else-if="!collapsed" class="process-labels">
         <span
           class="process-title"
           :class="{ 'path-label': display.primaryIsPath }"
@@ -87,9 +109,16 @@ function cancelRename(): void {
           {{ display.secondaryLabel }}
         </small>
       </span>
+      <span v-if="showsShortcut && !collapsed" class="shortcut">⌘{{ shortcutNumber }}</span>
     </button>
-    <span class="shortcut">⌘{{ tab.number }}</span>
-    <button class="close" title="Close terminal" @click="emit('close', tab.id)">×</button>
+    <button
+      v-if="!collapsed"
+      class="close"
+      title="Close terminal"
+      @click.stop="emit('close', tab.id)"
+    >
+      ×
+    </button>
   </div>
 </template>
 
@@ -104,7 +133,8 @@ button {
 .process-row {
   position: relative;
   display: flex;
-  min-height: 2.25rem;
+  height: 2.3125rem;
+  min-height: 2.3125rem;
   align-items: center;
   padding: 0.25rem 0 0.25rem var(--tree-item-icon-left, 1.25rem);
   border-radius: 0.25rem;
@@ -183,7 +213,18 @@ button {
 .process-row:hover .close {
   opacity: 1;
 }
-.process-row:hover .shortcut {
+.process-row:not(.compact):hover .shortcut {
   opacity: 0;
+}
+.process-row.compact {
+  justify-content: flex-start;
+  padding-right: var(--compact-tree-inline-padding, 0.75rem);
+  padding-left: var(--compact-tree-inline-padding, 0.75rem);
+}
+.process-row.compact .process-select {
+  flex: 0 0 auto;
+}
+.process-row.compact.tree-active::before {
+  left: 0;
 }
 </style>

@@ -8,10 +8,16 @@ export type WorkspaceShortcutAction =
   | { type: "focus-workspace-from-right" }
   | { type: "escape" }
   | { type: "open-settings" }
+  | { type: "create-terminal" }
+  | { type: "close-terminal" }
+  | { type: "toggle-left-sidebar" }
   | { type: "toggle-right-sidebar" };
+
+export type WorkspaceContentFocusTarget = "terminal" | "workspace";
 
 export type WorkspaceShortcutInput = {
   key: string;
+  code: string;
   metaKey: boolean;
   shiftKey: boolean;
   altKey: boolean;
@@ -19,8 +25,16 @@ export type WorkspaceShortcutInput = {
   editableTarget: boolean;
   focusRegion: WorkspaceFocusRegion;
   terminalSelected: boolean;
+  activeTerminalAvailable: boolean;
   gitSidebarAvailable: boolean;
 };
+
+export function workspaceContentFocusTarget(
+  activeTerminalAvailable: boolean,
+  terminalSelectionActive: boolean,
+): WorkspaceContentFocusTarget {
+  return activeTerminalAvailable && terminalSelectionActive ? "terminal" : "workspace";
+}
 
 export function workspaceShortcutAction(
   input: WorkspaceShortcutInput,
@@ -58,6 +72,25 @@ export function workspaceShortcutAction(
 
   if (input.key === "Escape") return { type: "escape" };
   if (input.metaKey && input.key === ",") return { type: "open-settings" };
+  if (input.metaKey && (input.key.toLowerCase() === "t" || input.code === "KeyT")) {
+    return { type: "create-terminal" };
+  }
+  if (
+    input.metaKey &&
+    input.activeTerminalAvailable &&
+    (input.key.toLowerCase() === "w" || input.code === "KeyW")
+  ) {
+    return { type: "close-terminal" };
+  }
+  if (
+    input.metaKey &&
+    !input.shiftKey &&
+    !input.altKey &&
+    !input.ctrlKey &&
+    (input.key.toLowerCase() === "p" || input.code === "KeyP")
+  ) {
+    return { type: "toggle-left-sidebar" };
+  }
   if (input.metaKey && input.key.toLowerCase() === "d" && input.gitSidebarAvailable) {
     return { type: "toggle-right-sidebar" };
   }
