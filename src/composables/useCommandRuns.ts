@@ -15,7 +15,7 @@ export type CommandRunDependencies = {
         mode: ProjectCommand["mode"];
       };
     },
-  ) => Promise<TerminalTab>;
+  ) => Promise<TerminalTab | undefined>;
   restartTab: (tab: TerminalTab) => Promise<void>;
   stopTab: (tab: TerminalTab) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
@@ -44,7 +44,7 @@ export function useCommandRuns({
     return tabs.find((tab) => isCommandRun(tab, projectId, commandId));
   }
 
-  async function run(project: Project, command: ProjectCommand): Promise<TerminalTab> {
+  async function run(project: Project, command: ProjectCommand): Promise<TerminalTab | undefined> {
     const cwd = command.directory ?? project.directory;
     const launch = {
       kind: "command" as const,

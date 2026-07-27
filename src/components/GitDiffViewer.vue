@@ -143,7 +143,6 @@ watch(state, (result) => {
   min-width: 0;
   flex-direction: column;
   background: var(--color-panel-bg);
-  outline: none;
 }
 .diff-sidebar.collapsed {
   width: var(--sidebar-collapsed-width) !important;

@@ -280,12 +280,6 @@ button {
   padding: 0;
   text-align: left;
 }
-.project-toggle:focus,
-.project-toggle:focus-visible,
-.group-select:focus,
-.group-select:focus-visible {
-  outline: none;
-}
 .project-toggle strong {
   overflow: hidden;
   color: var(--color-text-strong);
@@ -381,10 +375,6 @@ button {
 }
 .add-row:hover {
   color: var(--color-text);
-}
-.add-row:focus,
-.add-row:focus-visible {
-  outline: none;
 }
 .add-row span {
   display: inline-grid;

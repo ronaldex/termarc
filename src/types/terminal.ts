@@ -1,6 +1,6 @@
 import type { FitAddon } from "@xterm/addon-fit";
 import type { WebglAddon } from "@xterm/addon-webgl";
-import type { Terminal } from "@xterm/xterm";
+import type { IDisposable, Terminal } from "@xterm/xterm";
 import type { ProjectCommandMode } from "./project";
 
 export type PtyEvent = {
@@ -63,12 +63,15 @@ export type TerminalRuntime = {
   terminal: Terminal;
   fitAddon: FitAddon;
   webglAddon?: WebglAddon;
+  linkDisposable?: IDisposable;
   webglFailed: boolean;
   container?: HTMLDivElement;
   session?: PtyStarted;
   startGeneration: number;
   stopRequested: boolean;
   writeQueue: Promise<unknown>;
+  pendingWriteBytes: number;
+  pendingWriteCount: number;
   disposed: boolean;
 };
 

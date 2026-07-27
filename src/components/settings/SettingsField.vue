@@ -54,7 +54,6 @@ withDefaults(
   padding: 0 0.625rem;
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
-  outline: none;
   color: var(--color-text-strong);
   background: var(--color-surface-1);
   font: inherit;
@@ -113,10 +112,6 @@ withDefaults(
 .settings-field :deep(input[type="checkbox"]:checked::after) {
   background: var(--color-app-bg);
   transform: translateX(calc(var(--toggle-width) - var(--toggle-height)));
-}
-.settings-field :deep(input[type="checkbox"]:focus-visible) {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
 }
 @media (max-width: 48rem) {
   .settings-field {

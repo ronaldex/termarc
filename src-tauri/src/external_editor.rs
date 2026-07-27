@@ -17,10 +17,13 @@ pub(crate) fn open_terminal_path(path: String, editor: ExternalEditor) -> Result
         .map_err(|error| format!("Could not resolve path: {error}"))?;
 
     let mut command = platform_open_command(&canonical, editor);
-    command
+    let mut child = command
         .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("Could not open path: {error}"))
+        .map_err(|error| format!("Could not open path: {error}"))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

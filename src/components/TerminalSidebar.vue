@@ -156,10 +156,6 @@ useProjectTreeNavigation({
   align-items: stretch;
   border-right: 1px solid var(--color-border-muted);
 }
-.sidebar:focus,
-.sidebar:focus-visible {
-  outline: none;
-}
 button,
 input {
   font: inherit;
@@ -214,7 +210,6 @@ button {
   min-width: 0;
   flex: 1;
   border: 0;
-  outline: 0;
   color: var(--color-text);
   background: transparent;
   font-size: 0.75rem;

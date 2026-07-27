@@ -163,7 +163,6 @@ defineExpose({ focusActiveFile });
   min-height: 0;
   height: 100%;
   flex-direction: column;
-  outline: none;
 }
 .diff-message {
   padding: 1.125rem 0.875rem;
@@ -264,10 +263,6 @@ defineExpose({ focusActiveFile });
   stroke-width: 1.5;
   transition: transform 120ms ease;
 }
-.file-toggle:focus,
-.file-toggle:focus-visible {
-  outline: none;
-}
 .file-toggle[aria-expanded="true"] > svg {
   transform: rotate(90deg);
 }
@@ -348,7 +343,6 @@ defineExpose({ focusActiveFile });
   position: relative;
   overflow: hidden;
   border-top: 1px solid var(--color-border-muted);
-  outline: none;
 }
 .file-change.diff-content-focused .file-diff::after {
   position: absolute;
