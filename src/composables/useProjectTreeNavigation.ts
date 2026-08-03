@@ -80,6 +80,7 @@ export function useProjectTreeNavigation(options: {
   filter: Ref<string>;
   selection: Ref<SidebarSelection>;
   sidebarElement: Ref<HTMLElement | undefined>;
+  shortcutScopeActive?: Ref<boolean>;
   onAction: (action: ProjectTreeNavigationAction) => void;
 }) {
   const tree = computed(() =>
@@ -87,6 +88,7 @@ export function useProjectTreeNavigation(options: {
   );
 
   function onKeydown(event: KeyboardEvent): void {
+    if (options.shortcutScopeActive?.value) return;
     const sidebarHasFocus = options.sidebarElement.value?.contains(document.activeElement) ?? false;
     if (
       !sidebarHasFocus ||

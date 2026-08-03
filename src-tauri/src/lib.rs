@@ -1,40 +1,52 @@
+pub mod cli;
 mod external_editor;
 mod git;
 mod notifications;
 mod paths;
 mod plugins;
+mod project_local_config;
 mod projects;
 mod pty;
+mod windows;
 
 use plugins::mac_rounded_corners;
 use pty::AppState;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
 };
 use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app_document_loaded = Arc::new(AtomicBool::new(false));
-    let loaded_for_navigation = Arc::clone(&app_document_loaded);
-    let loaded_for_page = Arc::clone(&app_document_loaded);
+    let loaded_app_windows = Arc::new(Mutex::new(HashSet::<String>::new()));
+    let loaded_for_navigation = Arc::clone(&loaded_app_windows);
+    let loaded_for_page = Arc::clone(&loaded_app_windows);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
-                .on_navigation(move |_webview, url| {
-                    // Permit the initial app document only. Links are opened explicitly by
-                    // the frontend and must never navigate or reload the application webview.
-                    is_app_navigation(url) && !loaded_for_navigation.load(Ordering::Acquire)
+                .on_navigation(move |webview, url| {
+                    // Permit one initial app document per window. Links are opened explicitly
+                    // by the frontend and must never navigate or reload an application webview.
+                    is_app_navigation(url)
+                        && loaded_for_navigation
+                            .lock()
+                            .is_ok_and(|loaded| !loaded.contains(webview.label()))
                 })
-                .on_page_load(move |_webview, _payload| {
-                    loaded_for_page.store(true, Ordering::Release);
+                .on_page_load(move |webview, _payload| {
+                    if let Ok(mut loaded) = loaded_for_page.lock() {
+                        loaded.insert(webview.label().to_string());
+                    }
                 })
                 .build(),
         )
+        .setup(|app| {
+            windows::setup_menu(app)?;
+            Ok(())
+        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             pty::start_pty,
@@ -42,8 +54,12 @@ pub fn run() {
             notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
             external_editor::open_terminal_path,
+            cli::install_symlink,
             projects::load_projects,
             projects::save_projects,
+            projects::load_project_tree_state,
+            projects::save_project_tree_state,
+            projects::save_local_project_commands,
             pty::write_to_pty,
             pty::resize_pty,
             pty::get_pty_status,
@@ -53,11 +69,12 @@ pub fn run() {
             pty::stop_pty,
             mac_rounded_corners::enable_rounded_corners,
             mac_rounded_corners::enable_modern_window_style,
-            mac_rounded_corners::reposition_traffic_lights
+            mac_rounded_corners::reposition_traffic_lights,
+            windows::create_window
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Destroyed) {
-                window.state::<AppState>().stop_all();
+                window.state::<AppState>().stop_for_window(window.label());
             }
         })
         .run(tauri::generate_context!())

@@ -60,11 +60,18 @@ fn strip_location_suffix(path: &str) -> &str {
 }
 
 pub(crate) fn projects_path() -> PathBuf {
+    termdeck_config_directory().join("projects.json")
+}
+
+pub(crate) fn project_tree_state_path() -> PathBuf {
+    termdeck_config_directory().join("state.json")
+}
+
+fn termdeck_config_directory() -> PathBuf {
     home_directory()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
         .join("termdeck")
-        .join("projects.json")
 }
 
 fn home_directory() -> Option<PathBuf> {

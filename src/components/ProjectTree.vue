@@ -9,7 +9,7 @@ import CommandTreeRow from "./CommandTreeRow.vue";
 import OverlayScrollArea from "./OverlayScrollArea.vue";
 import ProjectBadge from "./ProjectBadge.vue";
 import SidebarChevron from "./SidebarChevron.vue";
-import TerminalTreeRow from "./TerminalTreeRow.vue";
+import TerminalTreeRow, { type TerminalContextMenuRequest } from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
   projects: ProjectTreeProject[];
@@ -24,7 +24,8 @@ const displayProjects = computed(() => projectTreeModel(props.projects, props.ta
 
 const emit = defineEmits<{
   close: [id: string];
-  rename: [id: string, name: string];
+  rename: [id: string];
+  contextMenu: [request: TerminalContextMenuRequest];
   toggleProject: [id: string];
   toggleTerminals: [id: string];
   toggleCommands: [id: string];
@@ -136,7 +137,8 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
                 :active="isTreeActive(tab.id)"
                 :collapsed="collapsed"
                 @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"
-                @rename="(id, name) => emit('rename', id, name)"
+                @rename="emit('rename', $event)"
+                @context-menu="emit('contextMenu', $event)"
                 @close="emit('close', $event)"
               />
             </div>

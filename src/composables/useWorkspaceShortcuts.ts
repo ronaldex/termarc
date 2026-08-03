@@ -48,6 +48,8 @@ export function useWorkspaceShortcuts(options: {
   closeActiveTerminal: () => void;
   shouldActivateSidebar: (selection: SidebarSelection) => boolean;
   activateSidebar: (selection: SidebarSelection) => void;
+  /** True while a modal owns keyboard input. */
+  shortcutScopeActive?: Ref<boolean>;
 }): void {
   function currentFocusRegion(): WorkspaceFocusRegion {
     if (options.sidebar.value?.hasTreeFocus()) return "left-sidebar";
@@ -57,6 +59,7 @@ export function useWorkspaceShortcuts(options: {
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (options.shortcutScopeActive?.value) return;
     const focusRegion = currentFocusRegion();
     const action = workspaceShortcutAction({
       key: event.key,

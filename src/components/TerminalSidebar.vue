@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRefs } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRefs, watch } from "vue";
 import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigation";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
+import TerminalContextMenu from "./TerminalContextMenu.vue";
+import TerminalRenameModal from "./TerminalRenameModal.vue";
+import type { TerminalContextMenuRequest } from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
   tabs: TerminalTabState[];
@@ -17,7 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   manage: [projectId?: string];
   close: [id: string];
-  rename: [id: string, name: string];
+  setTerminalTitleOverride: [id: string, title: string];
+  renameModalChange: [open: boolean];
   toggle: [];
   addProject: [];
   toggleProject: [id: string];
@@ -36,6 +40,16 @@ const projectTree = ref<InstanceType<typeof ProjectTree>>();
 const searchInput = ref<HTMLInputElement>();
 const { projects, tabs, selection, collapsed } = toRefs(props);
 const treeFilter = computed(() => (collapsed.value ? "" : filter.value));
+const contextMenu = ref<TerminalContextMenuRequest>();
+const renameTabId = ref<string>();
+const renameTrigger = ref<HTMLButtonElement>();
+const overlayActive = computed(() => Boolean(contextMenu.value || renameTabId.value));
+const contextMenuTab = computed(() =>
+  contextMenu.value ? props.tabs.find((tab) => tab.id === contextMenu.value?.tabId) : undefined,
+);
+const renameTab = computed(() =>
+  renameTabId.value ? props.tabs.find((tab) => tab.id === renameTabId.value) : undefined,
+);
 
 function focusTree(): void {
   const focused = projectTree.value?.focusActiveItem();
@@ -53,8 +67,54 @@ function hasTreeFocus(): boolean {
 }
 
 function closeTerminal(id: string): void {
+  dismissContextMenu();
   emit("close", id);
   requestAnimationFrame(focusTree);
+}
+
+function dismissContextMenu(): void {
+  contextMenu.value = undefined;
+}
+
+async function openContextMenu(request: TerminalContextMenuRequest): Promise<void> {
+  emit("focus", {
+    id: request.tabId,
+    kind: "terminal",
+    projectId: props.tabs.find((tab) => tab.id === request.tabId)?.projectId ?? "",
+    tabId: request.tabId,
+  });
+  await nextTick();
+  contextMenu.value = request;
+}
+
+function openRename(id: string): void {
+  renameTrigger.value = contextMenu.value?.trigger;
+  dismissContextMenu();
+  renameTabId.value = id;
+  emit("renameModalChange", true);
+}
+
+function closeRename(): void {
+  const trigger = renameTrigger.value;
+  renameTrigger.value = undefined;
+  renameTabId.value = undefined;
+  emit("renameModalChange", false);
+  void nextTick(() => {
+    if (trigger) trigger.focus();
+    else focusTree();
+  });
+}
+
+function saveRename(title: string): void {
+  const id = renameTabId.value;
+  closeRename();
+  if (id) emit("setTerminalTitleOverride", id, title);
+}
+
+function resetTitle(): void {
+  const id = contextMenu.value?.tabId;
+  dismissContextMenu();
+  if (id) emit("setTerminalTitleOverride", id, "");
 }
 
 function choose(node: SidebarSelection): void {
@@ -75,6 +135,7 @@ useProjectTreeNavigation({
   filter: treeFilter,
   selection,
   sidebarElement,
+  shortcutScopeActive: overlayActive,
   onAction(action) {
     if (action.type === "focus") choose(action.selection);
     else if (action.type === "activate") emit("activate", action.selection);
@@ -82,6 +143,40 @@ useProjectTreeNavigation({
     else if (action.type === "toggle-terminals") emit("toggleTerminals", action.projectId);
     else emit("toggleCommands", action.projectId);
   },
+});
+
+function dismissMenuOnKeydown(event: KeyboardEvent): void {
+  if (!contextMenu.value) return;
+  if (["Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(event.key)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dismissContextMenu();
+  }
+}
+function dismissMenuOnPointerDown(event: PointerEvent): void {
+  if (
+    !(event.target instanceof Node) ||
+    !document.querySelector(".terminal-context-menu")?.contains(event.target)
+  ) {
+    dismissContextMenu();
+  }
+}
+watch(() => props.selection.id, dismissContextMenu);
+watch(() => props.collapsed, dismissContextMenu);
+onMounted(() => {
+  document.addEventListener("pointerdown", dismissMenuOnPointerDown, true);
+  window.addEventListener("keydown", dismissMenuOnKeydown, { capture: true });
+  window.addEventListener("blur", dismissContextMenu);
+  window.addEventListener("resize", dismissContextMenu);
+  document.addEventListener("scroll", dismissContextMenu, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", dismissMenuOnPointerDown, true);
+  window.removeEventListener("keydown", dismissMenuOnKeydown, { capture: true });
+  window.removeEventListener("blur", dismissContextMenu);
+  window.removeEventListener("resize", dismissContextMenu);
+  document.removeEventListener("scroll", dismissContextMenu, true);
+  emit("renameModalChange", false);
 });
 </script>
 
@@ -122,7 +217,8 @@ useProjectTreeNavigation({
       :selection="selection"
       :collapsed="collapsed"
       @close="closeTerminal"
-      @rename="(id, name) => emit('rename', id, name)"
+      @rename="openRename"
+      @context-menu="openContextMenu"
       @toggle-project="emit('toggleProject', $event)"
       @toggle-terminals="emit('toggleTerminals', $event)"
       @toggle-commands="emit('toggleCommands', $event)"
@@ -134,6 +230,23 @@ useProjectTreeNavigation({
     />
 
     <SidebarFooter :collapsed="collapsed" @toggle="emit('toggle')" @add="emit('addProject')" />
+
+    <TerminalContextMenu
+      v-if="contextMenu && contextMenuTab"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :has-custom-name="Boolean(contextMenuTab.customTitle)"
+      @rename="openRename(contextMenu.tabId)"
+      @reset="resetTitle"
+      @close-terminal="closeTerminal(contextMenu.tabId)"
+      @dismiss="dismissContextMenu"
+    />
+    <TerminalRenameModal
+      v-if="renameTab"
+      :initial-name="renameTab.customTitle"
+      @save="saveRename"
+      @cancel="closeRename"
+    />
   </aside>
 </template>
 

@@ -21,7 +21,8 @@ function commandTab(projectId = project.id): TerminalTab {
     projectId,
     cwd: "/old",
     currentCwd: "/old",
-    name: "Old build",
+    customTitle: "Pinned build",
+    launchTitle: "Old build",
     launch: {
       kind: "command",
       commandId: command.id,
@@ -62,7 +63,8 @@ describe("useCommandRuns", () => {
     await runs.run(project, updated);
 
     expect(tab).toMatchObject({
-      name: updated.name,
+      customTitle: "Pinned build",
+      launchTitle: updated.name,
       cwd: updated.directory,
       currentCwd: updated.directory,
       launch: {
@@ -73,6 +75,17 @@ describe("useCommandRuns", () => {
       },
     });
     expect(restartTab).toHaveBeenCalledWith(tab);
+  });
+
+  it("uses a command label for new runs without treating it as a custom override", async () => {
+    const { runs, createTab } = setup();
+
+    await runs.run(project, command);
+
+    expect(createTab).toHaveBeenCalledWith(project.id, project.directory, {
+      launchTitle: command.name,
+      launch: expect.objectContaining({ commandId: command.id }),
+    });
   });
 
   it("closes a run when its command is removed", async () => {

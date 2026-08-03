@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, ref } from "vue";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { terminalDisplayModel } from "../utils/terminalLabels";
 import CompactTreeItemIndicator from "./CompactTreeItemIndicator.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
+
+export type TerminalContextMenuRequest = {
+  tabId: string;
+  x: number;
+  y: number;
+  trigger: HTMLButtonElement;
+};
 
 const props = defineProps<{
   tab: TerminalTabState;
@@ -13,13 +20,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   close: [id: string];
-  rename: [id: string, name: string];
+  rename: [id: string];
+  contextMenu: [request: TerminalContextMenuRequest];
   focus: [selection: SidebarSelection];
 }>();
 
-const editing = ref(false);
-const editedName = ref("");
-const renameInput = ref<HTMLInputElement>();
+const terminalButton = ref<HTMLButtonElement>();
 const display = computed(() => terminalDisplayModel(props.tab));
 const shortcutNumber = computed(() => props.tab.shortcutNumber ?? props.tab.number);
 const showsShortcut = computed(() => shortcutNumber.value <= 9);
@@ -32,34 +38,39 @@ function focus(): void {
     tabId: props.tab.id,
   });
 }
-function beginRename(): void {
-  if (props.collapsed) return;
-  editing.value = true;
-  editedName.value = props.tab.name ?? "";
-  void nextTick(() => renameInput.value?.select());
+function requestContextMenu(x: number, y: number): void {
+  const trigger = terminalButton.value;
+  if (trigger) emit("contextMenu", { tabId: props.tab.id, x, y, trigger });
 }
-function finishRename(): void {
-  if (!editing.value) return;
-  editing.value = false;
-  emit("rename", props.tab.id, editedName.value);
+function openContextMenu(event: MouseEvent): void {
+  requestContextMenu(event.clientX, event.clientY);
 }
-function cancelRename(): void {
-  editing.value = false;
+function openContextMenuFromKeyboard(event: KeyboardEvent): void {
+  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+  event.preventDefault();
+  const bounds = terminalButton.value?.getBoundingClientRect();
+  if (bounds) requestContextMenu(bounds.left + 12, bounds.bottom - 4);
 }
 </script>
 
 <template>
-  <div class="process-row" :class="{ 'tree-active': active, compact: collapsed }">
+  <div
+    class="process-row"
+    :class="{ 'tree-active': active, compact: collapsed }"
+    @contextmenu.prevent="openContextMenu"
+  >
     <button
+      ref="terminalButton"
       class="process-select"
-      :title="collapsed ? display.tooltip : 'Double-click to name terminal'"
+      :title="collapsed ? display.tooltip : undefined"
       :aria-label="
         collapsed
           ? `${showsShortcut ? `Terminal ${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
           : undefined
       "
       @click="focus"
-      @dblclick.stop="beginRename"
+      @dblclick.stop="emit('rename', tab.id)"
+      @keydown="openContextMenuFromKeyboard"
     >
       <CompactTreeItemIndicator
         v-if="collapsed"
@@ -79,21 +90,7 @@ function cancelRename(): void {
         :running="display.running"
         :title="display.tooltip"
       />
-      <span v-if="editing && !collapsed" class="process-labels">
-        <input
-          ref="renameInput"
-          v-model="editedName"
-          class="process-name-input"
-          aria-label="Terminal name"
-          placeholder="Terminal name"
-          @click.stop
-          @dblclick.stop
-          @keydown.enter.prevent="finishRename"
-          @keydown.escape.prevent="cancelRename"
-          @blur="finishRename"
-        />
-      </span>
-      <span v-else-if="!collapsed" class="process-labels">
+      <span v-if="!collapsed" class="process-labels">
         <span
           class="process-title"
           :class="{ 'path-label': display.primaryIsPath }"
@@ -115,6 +112,7 @@ function cancelRename(): void {
       v-if="!collapsed"
       class="close"
       title="Close terminal"
+      aria-label="Close terminal"
       @click.stop="emit('close', tab.id)"
     >
       ×
@@ -184,15 +182,6 @@ button {
 .path-label {
   direction: rtl;
   text-align: left;
-}
-.process-name-input {
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid var(--color-border-strong);
-  color: var(--color-text);
-  background: transparent;
-  font: inherit;
-  font-size: 0.75rem;
 }
 .shortcut {
   width: 1.25rem;
