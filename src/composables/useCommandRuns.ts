@@ -7,7 +7,7 @@ export type CommandRunDependencies = {
     projectId: string,
     cwd: string,
     options: {
-      name: string;
+      launchTitle: string;
       launch: {
         kind: "command";
         commandId: string;
@@ -45,7 +45,7 @@ export function useCommandRuns({
   }
 
   async function run(project: Project, command: ProjectCommand): Promise<TerminalTab | undefined> {
-    const cwd = command.directory ?? project.directory;
+    const cwd = commandDirectory(project.directory, command.directory);
     const launch = {
       kind: "command" as const,
       commandId: command.id,
@@ -53,11 +53,11 @@ export function useCommandRuns({
       mode: command.mode,
     };
     const existing = find(project.id, command.id);
-    if (!existing) return createTab(project.id, cwd, { name: command.name, launch });
+    if (!existing) return createTab(project.id, cwd, { launchTitle: command.name, launch });
 
     existing.cwd = cwd;
     existing.currentCwd = cwd;
-    existing.name = command.name;
+    existing.launchTitle = command.name.trim() || undefined;
     existing.launch = launch;
     await restartTab(existing);
     return existing;
@@ -74,4 +74,10 @@ export function useCommandRuns({
   }
 
   return { find, run, stop, remove };
+}
+
+function commandDirectory(projectDirectory: string, commandDirectory?: string): string {
+  if (!commandDirectory || commandDirectory === ".") return projectDirectory;
+  if (commandDirectory.startsWith("/") || commandDirectory.startsWith("~")) return commandDirectory;
+  return `${projectDirectory.replace(/\/$/, "")}/${commandDirectory}`;
 }

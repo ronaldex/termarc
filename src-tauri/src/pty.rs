@@ -11,7 +11,7 @@ use std::{
     thread,
 };
 use tauri::{
-    State,
+    State, Window,
     ipc::{Channel, Response},
 };
 
@@ -26,6 +26,7 @@ struct PtySession {
     input: SyncSender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
+    window_label: String,
 }
 
 #[derive(Default)]
@@ -35,12 +36,15 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
-    pub(crate) fn stop_all(&self) {
+    pub(crate) fn stop_for_window(&self, window_label: &str) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
 
-        for session in sessions.values_mut() {
+        for session in sessions
+            .values_mut()
+            .filter(|session| session.window_label == window_label)
+        {
             let _ = session.killer.kill();
         }
     }
@@ -112,6 +116,7 @@ pub(crate) fn start_pty(
     request: StartPtyRequest,
     on_output: Channel<Response>,
     on_event: Channel<PtyEvent>,
+    window: Window,
     state: State<'_, AppState>,
 ) -> Result<PtyStarted, String> {
     let rows = request.rows.clamp(1, 1_000);
@@ -192,6 +197,7 @@ pub(crate) fn start_pty(
             input,
             killer,
             pid,
+            window_label: window.label().to_string(),
         },
     );
     drop(sessions);

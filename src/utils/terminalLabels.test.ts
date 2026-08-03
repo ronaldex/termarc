@@ -17,10 +17,16 @@ function tab(overrides: Partial<TerminalTabState> = {}): TerminalTabState {
 }
 
 describe("terminalDisplayModel", () => {
-  it("prioritizes a custom name and exposes process activity as the secondary label", () => {
+  it("prioritizes custom, launch, and terminal titles over activity", () => {
     expect(
       terminalDisplayModel(
-        tab({ name: "Frontend", terminalTitle: "vite", processName: "node", currentCwd: "/app" }),
+        tab({
+          customTitle: "Frontend",
+          launchTitle: "Development",
+          terminalTitle: "vite",
+          processName: "node",
+          currentCwd: "/app",
+        }),
       ),
     ).toEqual({
       primaryLabel: "Frontend",
@@ -33,7 +39,12 @@ describe("terminalDisplayModel", () => {
     });
   });
 
-  it("uses the terminal-provided title before process activity", () => {
+  it("uses launch title before terminal-provided title and activity", () => {
+    expect(
+      terminalDisplayModel(tab({ launchTitle: "Build", terminalTitle: "vite" })),
+    ).toMatchObject({
+      primaryLabel: "Build",
+    });
     expect(
       terminalDisplayModel(tab({ terminalTitle: "pi - term-deck", processName: "pi" })),
     ).toMatchObject({
@@ -72,7 +83,7 @@ describe("terminalDisplayModel", () => {
   });
 
   it("shows cwd as a path-like secondary label for a named idle terminal", () => {
-    expect(terminalDisplayModel(tab({ name: "Shell", currentCwd: "/repo" }))).toMatchObject({
+    expect(terminalDisplayModel(tab({ customTitle: "Shell", currentCwd: "/repo" }))).toMatchObject({
       secondaryLabel: "/repo",
       secondaryIsPath: true,
     });
@@ -81,7 +92,8 @@ describe("terminalDisplayModel", () => {
 
 describe("terminalMatchesFilter", () => {
   const subject = tab({
-    name: "Frontend",
+    customTitle: "Frontend",
+    launchTitle: "Development",
     terminalTitle: "Vite Dev Server",
     processName: "node",
     currentCwd: "/workspace/packages/web",

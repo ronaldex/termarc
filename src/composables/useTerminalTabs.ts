@@ -20,13 +20,14 @@ import { openPath } from "../services/externalEditor";
 import { installTerminalLinks } from "../terminal/terminalLinks";
 import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
 import { terminalTheme } from "../terminal/terminalThemes";
+import { normalizeTerminalTitle, updateTerminalTitleOverride } from "../utils/terminalTitles";
 import { useAppSettings } from "./useAppSettings";
 import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
 
 const MAX_PENDING_WRITE_BYTES = 4 * 1024 * 1024;
 const MAX_PENDING_WRITE_COUNT = 256;
 
-export function useTerminalTabs() {
+export function useTerminalTabs(options: { isShortcutScopeActive?: () => boolean } = {}) {
   const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
   const activeTabId = ref<string>();
@@ -47,7 +48,7 @@ export function useTerminalTabs() {
   async function createTab(
     projectId: string,
     cwd: string,
-    options: { launch?: TerminalLaunch; name?: string } = {},
+    options: { launch?: TerminalLaunch; launchTitle?: string; customTitle?: string } = {},
   ): Promise<TerminalTab | undefined> {
     if (disposed) return undefined;
     await prepareTerminalFonts();
@@ -59,7 +60,8 @@ export function useTerminalTabs() {
       number,
       shortcutNumber: number,
       title: `Terminal ${number}`,
-      name: options.name,
+      customTitle: normalizeTerminalTitle(options.customTitle ?? ""),
+      launchTitle: normalizeTerminalTitle(options.launchTitle ?? ""),
       currentCwd: cwd,
       detail: "Starting shell…",
       projectId,
@@ -122,7 +124,7 @@ export function useTerminalTabs() {
 
   function installTerminalTitle(tab: TerminalTab): void {
     tab.terminal.onTitleChange((title) => {
-      tab.terminalTitle = title.trim() || undefined;
+      tab.terminalTitle = normalizeTerminalTitle(title);
       activityMonitor.trigger();
     });
   }
@@ -306,9 +308,9 @@ export function useTerminalTabs() {
       });
   }
 
-  function renameTab(id: string, name: string): void {
+  function setTerminalTitleOverride(id: string, title: string): void {
     const tab = tabs.find((item) => item.id === id);
-    if (tab) tab.name = name.trim() || undefined;
+    if (tab) updateTerminalTitleOverride(tab, title);
   }
 
   async function startTab(tab: TerminalTab): Promise<void> {
@@ -476,6 +478,7 @@ export function useTerminalTabs() {
   }
 
   function handleKeyboard(event: KeyboardEvent): void {
+    if (options.isShortcutScopeActive?.()) return;
     setCommandKeyPressed(event.metaKey);
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
@@ -541,9 +544,6 @@ export function useTerminalTabs() {
       })
       .catch((error) => console.error("Could not listen for notification clicks", error));
     activityMonitor.start();
-    void createTab(projectId, cwd).catch((error) => {
-      if (!disposed) console.error("Could not create initial terminal", error);
-    });
   }
   function dispose(): void {
     if (disposed) return;
@@ -574,7 +574,7 @@ export function useTerminalTabs() {
     createTab,
     selectTab,
     closeTab,
-    renameTab,
+    setTerminalTitleOverride,
     setTabShortcutOrder,
     restartTab,
     stopTab,

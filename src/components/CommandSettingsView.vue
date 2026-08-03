@@ -42,6 +42,10 @@ function selectMode(mode: ProjectCommandMode): void {
   draft.value.mode = mode;
 }
 
+function selectStorage(storage: "global" | "project"): void {
+  draft.value.storage = storage;
+}
+
 function save(): void {
   const command = {
     ...draft.value,
@@ -90,6 +94,32 @@ function remove(): void {
               placeholder="npm run dev"
               spellcheck="false"
             ></textarea>
+          </SettingsField>
+
+          <SettingsField title="Storage" description="Choose where this command is saved." group>
+            <div class="mode-options">
+              <button
+                type="button"
+                class="mode-option"
+                :class="{ selected: (draft.storage ?? 'global') === 'global' }"
+                @click="selectStorage('global')"
+              >
+                <span class="radio"></span>
+                <span><strong>Global</strong><small>Available on this Mac.</small></span>
+              </button>
+              <button
+                type="button"
+                class="mode-option"
+                :class="{ selected: draft.storage === 'project' }"
+                @click="selectStorage('project')"
+              >
+                <span class="radio"></span>
+                <span
+                  ><strong>Project-local</strong
+                  ><small>Saved in .termdeck.json in this project.</small></span
+                >
+              </button>
+            </div>
           </SettingsField>
 
           <SettingsField

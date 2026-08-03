@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from "vue";
+import { installCliSymlink } from "../api/cli";
 import { useAppSettings } from "../composables/useAppSettings";
 import {
   EXTERNAL_EDITOR_OPTIONS,
@@ -15,6 +17,21 @@ import SettingsPage from "./settings/SettingsPage.vue";
 import SettingsSection from "./settings/SettingsSection.vue";
 
 const { settings } = useAppSettings();
+const cliStatus = ref<{ kind: "success" | "error"; message: string }>();
+const installingCli = ref(false);
+
+async function installCli(): Promise<void> {
+  installingCli.value = true;
+  cliStatus.value = undefined;
+  try {
+    const path = await installCliSymlink();
+    cliStatus.value = { kind: "success", message: `Installed at ${path}` };
+  } catch (error) {
+    cliStatus.value = { kind: "error", message: String(error) };
+  } finally {
+    installingCli.value = false;
+  }
+}
 
 function testAgentReadyNotification(): void {
   void sendAgentReadyNotification({
@@ -48,6 +65,26 @@ function testAgentReadyNotification(): void {
               </option>
             </select>
           </SettingsField>
+        </SettingsCard>
+      </SettingsSection>
+      <SettingsSection title="COMMAND LINE">
+        <SettingsCard>
+          <SettingsActionRow
+            title="Termdeck CLI"
+            description="Add a termdeck symlink to ~/.local/bin so you can launch and manage Termdeck from your shell."
+          >
+            <SettingsButton type="button" :disabled="installingCli" @click="installCli">
+              {{ installingCli ? "Installing…" : "Add symlink" }}
+            </SettingsButton>
+          </SettingsActionRow>
+          <p
+            v-if="cliStatus"
+            class="cli-status"
+            :class="cliStatus.kind"
+            :role="cliStatus.kind === 'error' ? 'alert' : 'status'"
+          >
+            {{ cliStatus.message }}
+          </p>
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="TERMINAL">
@@ -95,5 +132,20 @@ function testAgentReadyNotification(): void {
 form {
   display: flex;
   flex-direction: column;
+}
+.cli-status {
+  margin: 0 0.75rem 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.625rem;
+  overflow-wrap: anywhere;
+}
+.cli-status.success {
+  color: var(--color-status-running);
+  background: var(--color-success-bg);
+}
+.cli-status.error {
+  color: var(--color-status-error);
+  background: var(--color-danger-bg);
 }
 </style>

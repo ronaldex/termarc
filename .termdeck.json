@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "command-1784280820106",
+      "name": "Build",
+      "command": "source ~/.zshrc && npm run tauri build",
+      "mode": "single-shot"
+    },
+    {
+      "id": "command-1784280437901",
+      "name": "Dev",
+      "command": "source ~/.zshrc && npm run tauri dev",
+      "mode": "persistent"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Termdeck is a fast, native desktop terminal workspace."
 authors = ["you"]
 edition = "2024"
+default-run = "termdeck"
 
 [lib]
 name = "termdeck_lib"

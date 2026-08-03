@@ -12,15 +12,15 @@ export type TerminalDisplayModel = {
 
 export function terminalDisplayModel(tab: TerminalTabState): TerminalDisplayModel {
   const activityLabel = tab.agent === "pi" ? "Pi" : tab.processName || tab.currentCwd || tab.cwd;
-  const hasNamedLabel = Boolean(tab.name || tab.terminalTitle);
+  const hasNamedLabel = Boolean(tab.customTitle || tab.launchTitle || tab.terminalTitle);
 
   return {
-    primaryLabel: tab.name || tab.terminalTitle || activityLabel,
+    primaryLabel: tab.customTitle || tab.launchTitle || tab.terminalTitle || activityLabel,
     secondaryLabel: hasNamedLabel ? activityLabel : undefined,
     tooltip: activityLabel,
     busy: tab.agentState === "processing",
     running: Boolean(tab.processName),
-    primaryIsPath: !tab.name && !tab.terminalTitle && !tab.processName,
+    primaryIsPath: !tab.customTitle && !tab.launchTitle && !tab.terminalTitle && !tab.processName,
     secondaryIsPath: !tab.processName && !tab.agent,
   };
 }
@@ -28,7 +28,13 @@ export function terminalDisplayModel(tab: TerminalTabState): TerminalDisplayMode
 export function terminalMatchesFilter(tab: TerminalTabState, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [tab.name, tab.terminalTitle, tab.processName, tab.currentCwd, tab.cwd, tab.title].some(
-    (value) => value?.toLowerCase().includes(normalized),
-  );
+  return [
+    tab.customTitle,
+    tab.launchTitle,
+    tab.terminalTitle,
+    tab.processName,
+    tab.currentCwd,
+    tab.cwd,
+    tab.title,
+  ].some((value) => value?.toLowerCase().includes(normalized));
 }

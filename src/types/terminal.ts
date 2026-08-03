@@ -49,7 +49,11 @@ export type TerminalTabState = TerminalActivity & {
   number: number;
   shortcutNumber?: number;
   title: string;
-  name?: string;
+  /** A user-selected title that always takes display precedence. */
+  customTitle?: string;
+  /** The current command's configured label. */
+  launchTitle?: string;
+  /** Title reported by xterm's terminal title sequence. */
   terminalTitle?: string;
   detail: string;
   projectId: string;

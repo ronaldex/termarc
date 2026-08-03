@@ -78,6 +78,9 @@ function commandModeLabel(mode: string): string {
                 <code>{{ command.command }}</code>
               </span>
             </button>
+            <span class="command-storage">{{
+              command.storage === "project" ? "Project" : "Global"
+            }}</span>
             <span class="command-mode">{{ commandModeLabel(command.mode) }}</span>
             <SettingsButton
               type="button"
@@ -176,12 +179,16 @@ form {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
+.command-storage,
 .command-mode {
   padding: 0.25rem 0.5rem;
   border-radius: 0.625rem;
   color: var(--color-text-muted);
   background: var(--color-surface-2);
   font-size: 0.5625rem;
+}
+.command-storage {
+  color: var(--color-terminal-cyan);
 }
 .saved {
   color: var(--color-status-running);

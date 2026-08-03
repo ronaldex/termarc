@@ -16,10 +16,12 @@ import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
 import { applyAppTheme } from "./themes/themeCatalog";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
+import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
 const { settings, load: loadAppSettings } = useAppSettings();
+const renameModalOpen = ref(false);
 
 const {
   tabs,
@@ -29,7 +31,7 @@ const {
   createTab,
   selectTab,
   closeTab,
-  renameTab,
+  setTerminalTitleOverride,
   setTabShortcutOrder,
   restartTab,
   stopTab,
@@ -41,7 +43,7 @@ const {
   focusActiveTerminal,
   start,
   dispose,
-} = useTerminalTabs();
+} = useTerminalTabs({ isShortcutScopeActive: () => renameModalOpen.value });
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const terminalSidebar = ref<InstanceType<typeof TerminalSidebar>>();
 const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
@@ -70,11 +72,33 @@ const {
   load: loadProjectConfiguration,
   add: addProjectState,
   update: updateProject,
+  saveCommand: saveProjectCommand,
+  removeCommand: removeProjectCommand,
   remove: removeProjectState,
   toggleProject,
   toggleTerminals,
   toggleCommands,
 } = useProjects();
+let terminalPersistenceEnabled = false;
+
+function persistOpenTerminals(): void {
+  if (!terminalPersistenceEnabled) return;
+  for (const project of projects.value) {
+    const terminals = projectTerminalsFromTabs(tabs, project.id);
+    if (!projectTerminalsEqual(project.terminals, terminals)) project.terminals = terminals;
+  }
+}
+
+watch(
+  () =>
+    tabs.map((tab) => ({
+      projectId: tab.projectId,
+      kind: tab.launch.kind,
+      customTitle: tab.customTitle,
+    })),
+  persistOpenTerminals,
+  { deep: true },
+);
 
 watch(
   () => terminalShortcutOrder(tabs, treeProjects.value),
@@ -137,6 +161,12 @@ function manageProjects(projectId?: string): void {
 function addProject(): void {
   selectProject(addProjectState());
 }
+async function removeProject(projectId: string): Promise<void> {
+  await Promise.all(
+    tabs.filter((tab) => tab.projectId === projectId).map((tab) => closeTab(tab.id)),
+  );
+  removeProjectState(projectId);
+}
 function selectCommand(projectId: string, commandId?: string): void {
   if (commandId) selectCommandSelection(projectId, commandId);
   else selectAddCommand(projectId);
@@ -163,13 +193,14 @@ async function stopCommand(projectId: string, commandId: string): Promise<void> 
 function showCommands(projectId: string): void {
   selectCommands(projectId);
 }
-function saveCommand(project: Project, commandId: string): void {
-  updateProject(project);
-  selectCommand(project.id, commandId);
+async function saveCommand(project: Project, commandId: string): Promise<void> {
+  await saveProjectCommand(project, commandId);
+  const updatedProject = projects.value.find((item) => item.id === project.id);
+  if (updatedProject) selectProject(updatedProject);
 }
 async function removeCommand(project: Project, commandId: string): Promise<void> {
   await commandRuns.remove(project.id, commandId);
-  updateProject(project);
+  await removeProjectCommand(project.id, commandId);
   showCommands(project.id);
 }
 
@@ -212,6 +243,7 @@ useWorkspaceShortcuts({
     );
   },
   activateSidebar,
+  shortcutScopeActive: renameModalOpen,
 });
 
 onMounted(async () => {
@@ -226,6 +258,45 @@ onMounted(async () => {
   const initialProject = projects.value[0];
   selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
+
+  let firstRestoredTabId: string | undefined;
+  let restoreSucceeded = true;
+  for (const [projectIndex, project] of projects.value.entries()) {
+    // Legacy project files had no terminal list and opened one shell for the
+    // first project. Preserve that behavior once, then persist explicit lists.
+    const savedTerminals = project.terminals ?? (projectIndex === 0 ? [{}] : []);
+    for (const terminal of savedTerminals) {
+      try {
+        const tab = await createTab(project.id, project.directory, {
+          customTitle: terminal.customTitle,
+        });
+        if (!tab) {
+          restoreSucceeded = false;
+          continue;
+        }
+        firstRestoredTabId ??= tab.id;
+      } catch (error) {
+        restoreSucceeded = false;
+        console.error(`Could not restore a terminal for ${project.name}`, error);
+      }
+    }
+  }
+
+  if (firstRestoredTabId) {
+    const tab = tabs.find((item) => item.id === firstRestoredTabId);
+    if (tab) {
+      selectTerminal(tab.projectId, tab.id);
+      selectTab(tab.id);
+    }
+  } else {
+    selectProject(initialProject);
+  }
+
+  // Do not let intermediate restoration states overwrite the saved layout.
+  // If restoration failed, retain the saved state rather than persisting a
+  // partial terminal list.
+  terminalPersistenceEnabled = restoreSucceeded;
+  persistOpenTerminals();
 });
 watch(
   () => settings.terminalFontSize,
@@ -288,7 +359,8 @@ onBeforeUnmount(() => {
       @reload-command="reloadCommand"
       @stop-command="stopCommand"
       @close="closeTerminal"
-      @rename="renameTab"
+      @set-terminal-title-override="setTerminalTitleOverride"
+      @rename-modal-change="renameModalOpen = $event"
       @toggle="toggleLeft"
     />
     <div
@@ -311,7 +383,7 @@ onBeforeUnmount(() => {
       @select-project="selectProject"
       @add-project="addProject"
       @save-project="updateProject"
-      @remove-project="removeProjectState"
+      @remove-project="removeProject"
       @save-command="saveCommand"
       @remove-command="removeCommand"
       @select-command="selectCommand"

@@ -35,6 +35,28 @@ On macOS, the application bundle is written to
 
 To build only the web frontend, run `npm run build`.
 
+## CLI
+
+Termdeck's app executable also provides a lightweight macOS CLI for launching
+the app and managing the local project registry. Add a symlink from **App
+settings**, or install it into `~/.local/bin` (or set `TERMDECK_BIN_DIR`):
+
+```sh
+npm run cli:install
+```
+
+This symlinks the executable inside `/Applications/Termdeck.app` as `termdeck`.
+Add that directory to your `PATH`, then use:
+
+```sh
+termdeck --help
+termdeck launch
+termdeck projects list
+termdeck projects create "Termdeck" ~/Development/term-deck
+```
+
+Use `--json` with list/status commands for machine-readable output.
+
 ## Formatting
 
 ```sh
