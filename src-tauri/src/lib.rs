@@ -7,6 +7,7 @@ mod plugins;
 mod project_local_config;
 mod projects;
 mod pty;
+mod themes;
 mod windows;
 
 use plugins::mac_rounded_corners;
@@ -53,6 +54,7 @@ pub fn run() {
             notifications::notify_agent_ready,
             notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
+            themes::load_custom_themes,
             external_editor::open_terminal_path,
             cli::install_symlink,
             projects::load_projects,

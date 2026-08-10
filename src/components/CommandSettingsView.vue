@@ -198,18 +198,18 @@ form {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .mode-option:hover {
   border-color: var(--color-border-strong);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
 }
 .mode-option.selected {
   border-color: var(--color-text-faint);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
 }
 .mode-option strong,
 .mode-option small {

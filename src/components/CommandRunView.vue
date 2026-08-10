@@ -41,7 +41,7 @@ function modeLabel(): string {
   min-height: 0;
   overflow: auto;
   color: var(--color-text);
-  background: var(--color-surface-0);
+  background: var(--color-surface-base);
 }
 .page-header {
   display: flex;
@@ -80,7 +80,7 @@ function modeLabel(): string {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.875rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font-family: "JetBrains Mono", monospace;
 }
 h2 {
@@ -95,7 +95,7 @@ code {
   border: 1px solid var(--color-border);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font-size: 0.6875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -109,7 +109,7 @@ code {
   padding: 0.25rem 0.5rem;
   border-radius: 0.625rem;
   color: var(--color-text-muted);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
   font-size: 0.5625rem;
   text-transform: capitalize;
 }
@@ -128,7 +128,7 @@ button {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font-size: 0.625rem;
   cursor: pointer;
 }

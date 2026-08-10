@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
 import AppTitlebar from "./components/AppTitlebar.vue";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
@@ -14,14 +14,38 @@ import { useWorkspaceShortcuts } from "./composables/useWorkspaceShortcuts";
 import { useWorkspaceTerminalNavigation } from "./composables/useWorkspaceTerminalNavigation";
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
-import { applyAppTheme } from "./themes/themeCatalog";
+import { loadCustomThemes } from "./api/themes";
+import { resolveExternalEditor } from "./settings/options";
+import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
+const TITLEBAR_HEIGHT = 32;
+// Traffic-light offsets are visually tuned for this titlebar height.
+const MAC_WINDOW_STYLE = { cornerRadius: 14, offsetX: -8, offsetY: -9 };
+
 const { settings, load: loadAppSettings } = useAppSettings();
 const renameModalOpen = ref(false);
+const {
+  projects,
+  treeProjects,
+  load: loadProjectConfiguration,
+  add: addProjectState,
+  update: updateProject,
+  saveCommand: saveProjectCommand,
+  removeCommand: removeProjectCommand,
+  remove: removeProjectState,
+  toggleProject,
+  toggleTerminals,
+  toggleCommands,
+} = useProjects();
+
+function editorForProject(projectId: string) {
+  const project = projects.value.find((item) => item.id === projectId);
+  return resolveExternalEditor(project?.externalEditor, settings.externalEditor);
+}
 
 const {
   tabs,
@@ -43,7 +67,10 @@ const {
   focusActiveTerminal,
   start,
   dispose,
-} = useTerminalTabs({ isShortcutScopeActive: () => renameModalOpen.value });
+} = useTerminalTabs({
+  isShortcutScopeActive: () => renameModalOpen.value,
+  externalEditorForProject: editorForProject,
+});
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const terminalSidebar = ref<InstanceType<typeof TerminalSidebar>>();
 const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
@@ -53,32 +80,21 @@ const lastProjectId = ref<string>();
 let appDisposed = false;
 const {
   leftOpen: leftSidebarOpen,
+  leftPresentation: leftSidebarPresentation,
   rightOpen: rightSidebarOpen,
+  rightPresentation: rightSidebarPresentation,
   leftWidth: leftSidebarWidth,
   rightWidth: rightSidebarWidth,
   openLeftTemporarily,
   restoreLeftPreference,
   toggleLeft,
-  expandRight,
+  openRightPreferred,
   openRightTemporarily,
   restoreRightPreference,
   toggleRight,
   closeRight,
   startResize,
 } = useSidebarLayout();
-const {
-  projects,
-  treeProjects,
-  load: loadProjectConfiguration,
-  add: addProjectState,
-  update: updateProject,
-  saveCommand: saveProjectCommand,
-  removeCommand: removeProjectCommand,
-  remove: removeProjectState,
-  toggleProject,
-  toggleTerminals,
-  toggleCommands,
-} = useProjects();
 let terminalPersistenceEnabled = false;
 
 function persistOpenTerminals(): void {
@@ -120,6 +136,9 @@ const {
   selectProjectManagement,
   openSettings,
 } = useWorkspaceSelection(projects);
+const selectedExternalEditor = computed(() =>
+  resolveExternalEditor(selectedProject.value?.externalEditor, settings.externalEditor),
+);
 const { focusSidebar, activateSidebar: activateSidebarSelection } = useSidebarActivation({
   projects,
   tabs,
@@ -247,7 +266,13 @@ useWorkspaceShortcuts({
 });
 
 onMounted(async () => {
-  void enableModernWindowStyle({ cornerRadius: 14, offsetX: -5, offsetY: -4 });
+  void enableModernWindowStyle(MAC_WINDOW_STYLE);
+  try {
+    const themes = await loadCustomThemes();
+    registerCustomThemes(Object.fromEntries(themes.map((theme) => [theme.id, theme])));
+  } catch (error) {
+    console.error("Could not load custom themes", error);
+  }
   loadAppSettings();
   try {
     await loadProjectConfiguration();
@@ -335,11 +360,26 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'without-git-sidebar': !gitSidebarAvailable }">
+  <div
+    class="app-shell"
+    :class="{
+      'without-git-sidebar': !gitSidebarAvailable,
+      'left-sidebar-overlay': leftSidebarPresentation === 'overlay',
+      'right-sidebar-overlay': rightSidebarPresentation === 'overlay',
+    }"
+    :style="{
+      '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
+      '--left-sidebar-width': `${leftSidebarWidth}px`,
+      '--right-sidebar-width': `${rightSidebarWidth}px`,
+    }"
+  >
     <AppTitlebar :active-tab="activeTab" />
     <TerminalSidebar
       ref="terminalSidebar"
-      :class="{ 'sidebar-hidden': !leftSidebarOpen }"
+      :class="{
+        'sidebar-hidden': !leftSidebarOpen,
+        overlay: leftSidebarPresentation === 'overlay',
+      }"
       :style="{
         width: leftSidebarOpen ? `${leftSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
       }"
@@ -361,11 +401,13 @@ onBeforeUnmount(() => {
       @close="closeTerminal"
       @set-terminal-title-override="setTerminalTitleOverride"
       @rename-modal-change="renameModalOpen = $event"
+      @preview="openLeftTemporarily"
       @toggle="toggleLeft"
     />
     <div
-      v-if="leftSidebarOpen"
+      v-if="leftSidebarPresentation !== 'collapsed'"
       class="resize-handle left-resize"
+      :class="{ 'overlay-resize': leftSidebarPresentation === 'overlay' }"
       title="Resize terminal sidebar"
       @pointerdown="startResize('left', $event)"
     />
@@ -394,23 +436,27 @@ onBeforeUnmount(() => {
       @stop-command="stopCommand"
     />
     <div
-      v-if="rightSidebarOpen && gitSidebarAvailable"
+      v-if="rightSidebarPresentation !== 'collapsed' && gitSidebarAvailable"
       class="resize-handle right-resize"
+      :class="{ 'overlay-resize': rightSidebarPresentation === 'overlay' }"
       title="Resize Git changes sidebar"
       @pointerdown="startResize('right', $event)"
     />
     <GitDiffViewer
       v-if="gitSidebarAvailable"
       ref="gitSidebar"
+      :class="{ overlay: rightSidebarPresentation === 'overlay' }"
       :style="{
         width: rightSidebarOpen ? `${rightSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
       }"
       :directory="selectedProject?.directory"
       :active="rightSidebarOpen"
       :font-size="settings.terminalFontSize"
+      :external-editor="selectedExternalEditor"
       @available="gitSidebarAvailable = $event"
       @collapse="closeRight"
-      @expand="expandRight"
+      @preview="openRightTemporarily"
+      @expand="openRightPreferred"
     />
   </div>
 </template>
@@ -450,12 +496,20 @@ button {
   font: inherit;
 }
 .app-shell {
+  --left-sidebar-track: auto;
+  --left-resize-track: 0.25rem;
+  --right-resize-track: 0.25rem;
+  --right-sidebar-track: auto;
+  --left-overlay-max-width: calc(100% - var(--sidebar-collapsed-width));
+  --right-overlay-max-width: calc(100% - var(--sidebar-collapsed-width));
   position: relative;
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: auto 0.25rem minmax(0, 1fr) 0.25rem auto;
-  grid-template-rows: minmax(42px, auto) minmax(0, 1fr);
+  grid-template-columns:
+    var(--left-sidebar-track) var(--left-resize-track) minmax(0, 1fr)
+    var(--right-resize-track) var(--right-sidebar-track);
+  grid-template-rows: minmax(var(--titlebar-height), auto) minmax(0, 1fr);
   background: var(--color-app-bg);
   overflow: hidden;
 }
@@ -472,7 +526,15 @@ button {
   user-select: none;
 }
 .app-shell.without-git-sidebar {
-  grid-template-columns: auto 0.25rem minmax(0, 1fr) 0 0;
+  --right-resize-track: 0;
+  --right-sidebar-track: 0;
+  --left-overlay-max-width: 100%;
+}
+.app-shell.left-sidebar-overlay {
+  --left-sidebar-track: var(--sidebar-collapsed-width);
+}
+.app-shell.right-sidebar-overlay {
+  --right-sidebar-track: var(--sidebar-collapsed-width);
 }
 .app-shell::before,
 .app-shell::after {
@@ -515,6 +577,22 @@ button {
 .app-shell > .right-resize {
   grid-column: 4;
 }
+.app-shell > .left-resize.overlay-resize,
+.app-shell > .right-resize.overlay-resize {
+  position: absolute;
+  z-index: 31;
+  top: 0;
+  bottom: 0;
+  grid-column: 1 / -1;
+  transform: translateX(-50%);
+}
+.app-shell > .left-resize.overlay-resize {
+  left: min(var(--left-sidebar-width), var(--left-overlay-max-width));
+}
+.app-shell > .right-resize.overlay-resize {
+  right: min(var(--right-sidebar-width), var(--right-overlay-max-width));
+  transform: translateX(50%);
+}
 .app-shell > .diff-sidebar {
   grid-column: 5;
   grid-row: 2;
@@ -533,38 +611,31 @@ button {
 .resize-handle:hover::after {
   background: var(--color-accent);
 }
+.app-shell > .sidebar.overlay,
+.app-shell > .diff-sidebar.overlay {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.app-shell > .sidebar.overlay {
+  left: 0;
+  max-width: var(--left-overlay-max-width);
+  border-right: 1px solid var(--color-border-muted);
+  box-shadow: 0.75rem 0 2rem rgb(0 0 0 / 28%);
+}
+.app-shell > .diff-sidebar.overlay {
+  right: 0;
+  max-width: var(--right-overlay-max-width);
+  border-left: 1px solid var(--color-border-muted);
+  box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 28%);
+}
 @media (max-width: 56rem) {
-  .app-shell,
-  .app-shell.without-git-sidebar {
-    grid-template-columns: auto 0 minmax(0, 1fr) 0 auto;
-  }
-  .left-resize,
-  .right-resize {
-    display: none;
-  }
-  .app-shell > .sidebar:not(.collapsed),
-  .app-shell > .diff-sidebar:not(.collapsed) {
-    position: absolute;
-    z-index: 30;
-    top: 0;
-    bottom: 0;
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  .app-shell > .sidebar:not(.collapsed) {
-    left: 0;
-    width: min(20rem, calc(100% - var(--sidebar-collapsed-width))) !important;
-    border-right: 1px solid var(--color-border-muted);
-    box-shadow: 0.75rem 0 2rem rgb(0 0 0 / 28%);
-  }
-  .app-shell.without-git-sidebar > .sidebar:not(.collapsed) {
-    width: min(20rem, 100%) !important;
-  }
-  .app-shell > .diff-sidebar:not(.collapsed) {
-    right: 0;
-    width: min(30rem, calc(100% - var(--sidebar-collapsed-width))) !important;
-    border-left: 1px solid var(--color-border-muted);
-    box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 28%);
+  .app-shell {
+    --left-resize-track: 0;
+    --right-resize-track: 0;
   }
 }
 </style>

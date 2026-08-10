@@ -22,12 +22,16 @@ import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
 import { terminalTheme } from "../terminal/terminalThemes";
 import { normalizeTerminalTitle, updateTerminalTitleOverride } from "../utils/terminalTitles";
 import { useAppSettings } from "./useAppSettings";
+import type { ExternalEditor } from "../types/settings";
 import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
 
 const MAX_PENDING_WRITE_BYTES = 4 * 1024 * 1024;
 const MAX_PENDING_WRITE_COUNT = 256;
 
-export function useTerminalTabs(options: { isShortcutScopeActive?: () => boolean } = {}) {
+export function useTerminalTabs(configuration: {
+  isShortcutScopeActive?: () => boolean;
+  externalEditorForProject: (projectId: string) => ExternalEditor;
+}) {
   const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
   const activeTabId = ref<string>();
@@ -94,7 +98,7 @@ export function useTerminalTabs(options: { isShortcutScopeActive?: () => boolean
       installTerminalLinks(
         tab,
         () => commandKeyPressed,
-        (path) => openPath(path, settings.externalEditor),
+        (path) => openPath(path, configuration.externalEditorForProject(tab.projectId)),
       ),
     );
     installTerminalTitle(tab);
@@ -478,7 +482,7 @@ export function useTerminalTabs(options: { isShortcutScopeActive?: () => boolean
   }
 
   function handleKeyboard(event: KeyboardEvent): void {
-    if (options.isShortcutScopeActive?.()) return;
+    if (configuration.isShortcutScopeActive?.()) return;
     setCommandKeyPressed(event.metaKey);
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),

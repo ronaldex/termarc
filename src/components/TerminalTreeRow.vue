@@ -3,7 +3,6 @@ import { computed, ref } from "vue";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { terminalDisplayModel } from "../utils/terminalLabels";
-import CompactTreeItemIndicator from "./CompactTreeItemIndicator.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
 
 export type TerminalContextMenuRequest = {
@@ -72,19 +71,7 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
       @dblclick.stop="emit('rename', tab.id)"
       @keydown="openContextMenuFromKeyboard"
     >
-      <CompactTreeItemIndicator
-        v-if="collapsed"
-        :shortcut-number="showsShortcut ? shortcutNumber : undefined"
-      >
-        <TerminalStatusIndicator
-          :status="tab.status"
-          :busy="display.busy"
-          :running="display.running"
-          :title="display.tooltip"
-        />
-      </CompactTreeItemIndicator>
       <TerminalStatusIndicator
-        v-else
         :status="tab.status"
         :busy="display.busy"
         :running="display.running"
@@ -148,21 +135,20 @@ button {
   content: "";
 }
 .process-select {
-  display: flex;
+  display: grid;
   min-width: 0;
   flex: 1;
+  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr) var(--tree-action-column);
   align-items: center;
-  gap: 0.5rem;
+  column-gap: var(--tree-column-gap);
   padding: 0;
   text-align: left;
 }
 .process-labels {
   display: flex;
   min-width: 0;
-  flex: 1;
   flex-direction: column;
   gap: 0.125rem;
-  padding-right: 0.5rem;
 }
 .process-title,
 .process-labels small {
@@ -184,11 +170,10 @@ button {
   text-align: left;
 }
 .shortcut {
-  width: 1.25rem;
-  margin-left: auto;
+  width: 100%;
   color: var(--color-text-faint);
   font-size: 0.625rem;
-  text-align: center;
+  text-align: right;
 }
 .close {
   position: absolute;
@@ -205,11 +190,12 @@ button {
   opacity: 0;
 }
 .process-row.compact {
-  justify-content: flex-start;
-  padding-right: var(--compact-tree-inline-padding, 0.75rem);
-  padding-left: var(--compact-tree-inline-padding, 0.75rem);
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
 }
 .process-row.compact .process-select {
+  display: flex;
   flex: 0 0 auto;
 }
 .process-row.compact.tree-active::before {

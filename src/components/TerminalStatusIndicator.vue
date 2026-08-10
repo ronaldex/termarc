@@ -30,9 +30,9 @@ withDefaults(
 <style scoped>
 .terminal-status {
   display: grid;
-  width: var(--compact-tree-icon-width, 0.75rem);
-  height: var(--compact-tree-icon-width, 0.75rem);
-  flex: 0 0 var(--compact-tree-icon-width, 0.75rem);
+  width: var(--tree-item-icon-size, 0.75rem);
+  height: var(--tree-item-icon-size, 0.75rem);
+  flex: 0 0 var(--tree-item-icon-size, 0.75rem);
   place-items: center;
 }
 .terminal-status-dot {

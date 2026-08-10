@@ -66,7 +66,7 @@ function initials(name: string): string {
   border-top: 1px solid var(--color-border);
 }
 .project-row:hover {
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
 }
 .badge {
   display: grid;
@@ -76,7 +76,7 @@ function initials(name: string): string {
   place-items: center;
   border-radius: 0.25rem;
   color: var(--color-text);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-size: 0.5rem;
   font-weight: 700;
 }

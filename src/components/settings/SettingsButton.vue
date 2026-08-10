@@ -23,7 +23,7 @@ withDefaults(
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
@@ -35,7 +35,7 @@ withDefaults(
 }
 .settings-button:hover:not(:disabled) {
   border-color: var(--color-border-strong);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
 }
 .settings-button.primary {
   border-color: var(--color-accent-bg);

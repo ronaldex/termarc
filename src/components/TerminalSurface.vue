@@ -118,7 +118,7 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   border-radius: 0.875rem;
   color: var(--color-terminal-cyan);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font-family:
     "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }

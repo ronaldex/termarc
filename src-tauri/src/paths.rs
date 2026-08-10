@@ -67,6 +67,10 @@ pub(crate) fn project_tree_state_path() -> PathBuf {
     termdeck_config_directory().join("state.json")
 }
 
+pub(crate) fn themes_directory() -> PathBuf {
+    termdeck_config_directory().join("themes")
+}
+
 fn termdeck_config_directory() -> PathBuf {
     home_directory()
         .unwrap_or_else(|| PathBuf::from("."))

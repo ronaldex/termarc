@@ -26,7 +26,7 @@ withDefaults(
   min-height: 0;
   overflow: auto;
   color: var(--color-text);
-  background: var(--color-surface-0);
+  background: var(--color-surface-base);
 }
 .page-header {
   display: flex;
@@ -35,7 +35,7 @@ withDefaults(
   gap: 0.75rem;
   padding: 0 1.5rem;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-0);
+  background: var(--color-surface-base);
 }
 .page-header strong {
   color: var(--color-text-strong);

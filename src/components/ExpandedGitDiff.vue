@@ -212,7 +212,7 @@ defineExpose({ focusActiveFile });
   top: 0;
   display: flex;
   height: 2.25rem;
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
 }
 .file-header:hover {
   background: var(--color-surface-hover);
@@ -274,7 +274,7 @@ defineExpose({ focusActiveFile });
   place-items: center;
   border-radius: 0.25rem;
   color: var(--color-text-muted);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.5625rem;
   font-weight: 700;
@@ -366,9 +366,9 @@ defineExpose({ focusActiveFile });
   --diff-add-lineNumber--: color-mix(in srgb, var(--color-status-running) 24%, var(--color-app-bg));
   --diff-del-lineNumber--: color-mix(in srgb, var(--color-status-error) 24%, var(--color-app-bg));
   --diff-plain-content--: var(--color-app-bg);
-  --diff-expand-content--: var(--color-surface-1);
-  --diff-plain-lineNumber--: var(--color-surface-1);
-  --diff-expand-lineNumber--: var(--color-surface-1);
+  --diff-expand-content--: var(--color-surface-raised);
+  --diff-plain-lineNumber--: var(--color-surface-raised);
+  --diff-expand-lineNumber--: var(--color-surface-raised);
   --diff-plain-lineNumber-color--: var(--color-text-subtle);
   --diff-expand-lineNumber-color--: var(--color-text-subtle);
   --diff-hunk-content--: color-mix(in srgb, var(--color-accent) 12%, var(--color-app-bg));
@@ -386,7 +386,7 @@ defineExpose({ focusActiveFile });
   );
   --diff-add-widget--: var(--color-accent);
   --diff-add-widget-color--: var(--color-app-bg);
-  --diff-empty-content--: var(--color-surface-1);
+  --diff-empty-content--: var(--color-surface-raised);
   --diff-hunk-content-color--: var(--color-text-muted);
 }
 .diff-footer {

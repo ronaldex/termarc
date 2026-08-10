@@ -10,6 +10,7 @@ const props = defineProps<{
   error?: string;
 }>();
 const emit = defineEmits<{
+  preview: [];
   expand: [];
   reveal: [path: string];
 }>();
@@ -35,7 +36,7 @@ function statusLabel(file: DiffData): string {
       :title="summaryLabel"
       :aria-label="`${summaryLabel}. Show Git changes`"
       aria-live="polite"
-      @click="emit('expand')"
+      @click="emit('preview')"
     >
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="4" cy="3" r="1.5" />
@@ -133,7 +134,7 @@ button:hover {
   padding: 0 0.1875rem;
   border-radius: 0.4375rem;
   color: var(--color-text-strong);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-size: 0.5rem;
   line-height: 0.875rem;
 }

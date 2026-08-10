@@ -57,6 +57,17 @@ termdeck projects create "Termdeck" ~/Development/term-deck
 
 Use `--json` with list/status commands for machine-readable output.
 
+## Custom themes
+
+Create `~/.config/termdeck/themes` and copy [theme.json](examples/theme.json) into that
+directory. Its lowercase filename (for example, `my-theme.json`) becomes the theme ID. Edit
+the `label`, `colorScheme` (`light` or `dark`), and color tokens;
+every token is required. The surface colors progress from `surface-base` through
+`surface-raised`, `surface-active`, and `surface-emphasis` to distinguish nested and
+interactive UI layers. Restart Termdeck after saving the file, then select the theme in
+**App settings**. Invalid theme files are ignored, and custom theme IDs cannot replace the
+built-in themes.
+
 ## Formatting
 
 ```sh

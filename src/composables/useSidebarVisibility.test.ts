@@ -1,109 +1,86 @@
 import { ref } from "vue";
 import { describe, expect, it } from "vitest";
-import { useResponsiveSidebarVisibility, useSidebarVisibility } from "./useSidebarVisibility";
+import { useSidebarVisibility } from "./useSidebarVisibility";
 
 describe("useSidebarVisibility", () => {
-  it("opens temporarily without changing the preferred state", () => {
-    const visibility = useSidebarVisibility(false);
+  it("starts with the configured preference", () => {
+    const closed = useSidebarVisibility(ref(false));
+    const open = useSidebarVisibility(ref(false), true);
 
-    visibility.openTemporarily();
-
-    expect(visibility.open.value).toBe(true);
-    expect(visibility.preferredOpen.value).toBe(false);
-    expect(visibility.temporarilyOpen.value).toBe(true);
+    expect(closed.presentation.value).toBe("collapsed");
+    expect(open.intent.value).toBe("preferred");
+    expect(open.presentation.value).toBe("docked");
   });
 
-  it("restores the preferred state after a temporary opening", () => {
-    const visibility = useSidebarVisibility(false);
+  it("presents temporary openings as overlays and restores the closed state", () => {
+    const visibility = useSidebarVisibility(ref(false));
+
     visibility.openTemporarily();
 
+    expect(visibility.intent.value).toBe("temporary");
+    expect(visibility.presentation.value).toBe("overlay");
+    visibility.restorePreference();
+    expect(visibility.presentation.value).toBe("collapsed");
+  });
+
+  it("keeps preferred openings when focus restoration runs", () => {
+    const visibility = useSidebarVisibility(ref(false));
+
+    visibility.openPreferred();
     visibility.restorePreference();
 
-    expect(visibility.open.value).toBe(false);
-    expect(visibility.preferredOpen.value).toBe(false);
+    expect(visibility.intent.value).toBe("preferred");
+    expect(visibility.presentation.value).toBe("docked");
   });
 
-  it("keeps a preferred sidebar open when restoring", () => {
-    const visibility = useSidebarVisibility(true);
+  it("does not replace a preferred opening with a temporary one", () => {
+    const visibility = useSidebarVisibility(ref(false), true);
 
-    visibility.restorePreference();
-
-    expect(visibility.open.value).toBe(true);
-  });
-
-  it("toggles the effective state and clears temporary state", () => {
-    const visibility = useSidebarVisibility(false);
     visibility.openTemporarily();
 
-    visibility.toggle();
-
-    expect(visibility.open.value).toBe(false);
-    expect(visibility.temporarilyOpen.value).toBe(false);
+    expect(visibility.intent.value).toBe("preferred");
+    expect(visibility.presentation.value).toBe("docked");
   });
 
-  it("closes both preferred and temporary visibility", () => {
-    const visibility = useSidebarVisibility(true);
-    visibility.temporarilyOpen.value = true;
+  it("presents preferred openings as overlays in compact mode", () => {
+    const visibility = useSidebarVisibility(ref(true), true);
 
-    visibility.close();
-
-    expect(visibility.open.value).toBe(false);
-    expect(visibility.preferredOpen.value).toBe(false);
-    expect(visibility.temporarilyOpen.value).toBe(false);
-  });
-});
-
-describe("useResponsiveSidebarVisibility", () => {
-  it("collapses when entering temporary-only mode and preserves the wider preference", () => {
-    const temporaryOnly = ref(false);
-    const visibility = useResponsiveSidebarVisibility(true, temporaryOnly);
-    visibility.openTemporarily();
-
-    temporaryOnly.value = true;
-
-    expect(visibility.open.value).toBe(false);
-    expect(visibility.temporarilyOpen.value).toBe(false);
-    expect(visibility.preferredOpen.value).toBe(true);
-
-    temporaryOnly.value = false;
-    expect(visibility.open.value).toBe(true);
+    expect(visibility.intent.value).toBe("preferred");
+    expect(visibility.presentation.value).toBe("overlay");
   });
 
-  it("opens only temporarily in compact mode", () => {
-    const temporaryOnly = ref(true);
-    const visibility = useResponsiveSidebarVisibility(true, temporaryOnly);
-
-    visibility.open.value = true;
-
-    expect(visibility.open.value).toBe(true);
-    expect(visibility.temporarilyOpen.value).toBe(true);
-    visibility.restorePreference();
-    expect(visibility.open.value).toBe(false);
-  });
-
-  it("toggles and closes only the temporary state in compact mode", () => {
-    const temporaryOnly = ref(true);
-    const visibility = useResponsiveSidebarVisibility(true, temporaryOnly);
-
-    visibility.toggle();
-    expect(visibility.open.value).toBe(true);
-    visibility.close();
-
-    expect(visibility.open.value).toBe(false);
-    expect(visibility.preferredOpen.value).toBe(true);
-  });
-
-  it("collapses multiple sidebars on the same compact breakpoint transition", () => {
+  it("dismisses temporary openings across breakpoint changes", () => {
     const compactMode = ref(false);
-    const left = useResponsiveSidebarVisibility(true, compactMode);
-    const right = useResponsiveSidebarVisibility(false, compactMode);
-    right.open.value = true;
+    const visibility = useSidebarVisibility(compactMode);
+    visibility.openTemporarily();
 
     compactMode.value = true;
 
-    expect(left.open.value).toBe(false);
-    expect(right.open.value).toBe(false);
-    expect(left.preferredOpen.value).toBe(true);
-    expect(right.preferredOpen.value).toBe(true);
+    expect(visibility.intent.value).toBe("closed");
+    expect(visibility.presentation.value).toBe("collapsed");
+  });
+
+  it("changes preferred openings between docked and overlay presentations", () => {
+    const compactMode = ref(false);
+    const visibility = useSidebarVisibility(compactMode, true);
+
+    compactMode.value = true;
+    expect(visibility.presentation.value).toBe("overlay");
+
+    compactMode.value = false;
+    expect(visibility.presentation.value).toBe("docked");
+  });
+
+  it("toggles and closes either presentation", () => {
+    const visibility = useSidebarVisibility(ref(false));
+
+    visibility.toggle();
+    expect(visibility.intent.value).toBe("preferred");
+    visibility.toggle();
+    expect(visibility.intent.value).toBe("closed");
+
+    visibility.openTemporarily();
+    visibility.close();
+    expect(visibility.intent.value).toBe("closed");
   });
 });

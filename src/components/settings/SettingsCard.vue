@@ -7,7 +7,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 0.625rem;
-  background: var(--color-surface-0);
+  background: var(--color-surface-base);
 }
 .settings-card :deep(> * + *) {
   border-top: 1px solid var(--color-border);

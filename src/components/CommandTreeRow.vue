@@ -3,7 +3,6 @@ import { computed } from "vue";
 import type { ProjectCommand } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import CompactTreeItemIndicator from "./CompactTreeItemIndicator.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
 
 const props = defineProps<{
@@ -22,10 +21,6 @@ const emit = defineEmits<{
 }>();
 
 const running = computed(() => props.tab?.status === "starting" || props.tab?.status === "running");
-const shortcutNumber = computed(() => {
-  const number = props.tab?.shortcutNumber ?? props.tab?.number;
-  return number && number <= 9 ? number : undefined;
-});
 const selection = computed<SidebarSelection>(() => ({
   id: `${props.projectId}:command:${props.command.id}`,
   kind: "command",
@@ -49,22 +44,12 @@ function runOrReload(): void {
       :aria-label="collapsed ? command.name : undefined"
       @click="select"
     >
-      <CompactTreeItemIndicator v-if="collapsed" :shortcut-number="shortcutNumber">
-        <TerminalStatusIndicator
-          v-if="tab"
-          :status="tab.status"
-          :running="tab.status === 'running'"
-        />
-        <span v-else class="command-icon">›_</span>
-      </CompactTreeItemIndicator>
-      <template v-else>
-        <TerminalStatusIndicator
-          v-if="tab"
-          :status="tab.status"
-          :running="tab.status === 'running'"
-        />
-        <span v-else class="command-icon">›_</span>
-      </template>
+      <TerminalStatusIndicator
+        v-if="tab"
+        :status="tab.status"
+        :running="tab.status === 'running'"
+      />
+      <span v-else class="command-icon">›_</span>
       <span v-if="!collapsed" class="command-labels">
         <strong>{{ command.name }}</strong>
         <small :title="command.command">{{ command.command }}</small>
@@ -133,20 +118,25 @@ button {
   color: var(--color-text);
 }
 .command-select {
-  display: flex;
+  display: grid;
   min-width: 0;
   flex: 1;
+  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr);
   align-items: center;
-  gap: 0.5rem;
+  column-gap: var(--tree-column-gap);
   padding: 0;
   text-align: left;
 }
 .command-icon {
-  width: var(--compact-tree-icon-width, 0.75rem);
-  flex: 0 0 var(--compact-tree-icon-width, 0.75rem);
+  display: grid;
+  width: var(--tree-item-icon-size);
+  height: var(--tree-item-icon-size);
+  flex: 0 0 var(--tree-item-icon-size);
+  place-items: center;
   color: var(--color-text-subtle);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5rem;
+  line-height: 1;
 }
 .command-labels {
   display: flex;
@@ -173,7 +163,9 @@ button {
 }
 .command-actions {
   display: flex;
+  min-width: var(--tree-action-column);
   flex: 0 0 auto;
+  justify-content: flex-end;
   gap: 0.25rem;
 }
 .command-actions button {
@@ -185,7 +177,7 @@ button {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-size: 0.5625rem;
 }
 .command-actions button:hover {
@@ -215,10 +207,11 @@ button {
 }
 .command-row.compact .command-select {
   box-sizing: border-box;
+  display: flex;
   flex: 0 0 100%;
-  justify-content: flex-start;
-  padding-right: var(--compact-tree-inline-padding, 0.75rem);
-  padding-left: var(--compact-tree-inline-padding, 0.75rem);
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
 }
 .command-row.compact.tree-active::before {
   left: 0;

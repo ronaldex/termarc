@@ -100,7 +100,7 @@ onMounted(async () => {
   border-radius: 0.625rem;
   box-shadow: 0 1.25rem 3.5rem rgb(0 0 0 / 40%);
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font: inherit;
 }
 header h2 {
@@ -130,7 +130,7 @@ input {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-0);
+  background: var(--color-surface-base);
   font: inherit;
   font-size: 0.75rem;
 }
@@ -150,7 +150,7 @@ button {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
