@@ -22,6 +22,7 @@ const emit = defineEmits<{
   close: [id: string];
   setTerminalTitleOverride: [id: string, title: string];
   renameModalChange: [open: boolean];
+  preview: [];
   toggle: [];
   addProject: [];
   toggleProject: [id: string];
@@ -57,7 +58,7 @@ function focusTree(): void {
 }
 
 async function focusSearch(): Promise<void> {
-  if (props.collapsed) emit("toggle");
+  if (props.collapsed) emit("preview");
   await nextTick();
   searchInput.value?.focus();
 }
@@ -120,11 +121,28 @@ function resetTitle(): void {
 function choose(node: SidebarSelection): void {
   const terminalWasFocused = props.isTerminalFocused();
   emit("focus", node);
+  if (props.collapsed) {
+    emit("preview");
+    requestAnimationFrame(focusTree);
+    return;
+  }
   if (terminalWasFocused && node.kind === "terminal" && node.tabId) {
     emit("activate", node);
     return;
   }
   requestAnimationFrame(focusTree);
+}
+
+function activate(node: SidebarSelection): void {
+  if (props.collapsed) {
+    choose(node);
+    return;
+  }
+  emit("activate", node);
+}
+
+function preview(): void {
+  if (props.collapsed) emit("preview");
 }
 
 defineExpose({ focusTree, hasTreeFocus });
@@ -187,6 +205,7 @@ onBeforeUnmount(() => {
     :class="{ collapsed }"
     tabindex="-1"
     aria-label="Project tree"
+    @click="preview"
   >
     <div class="filter-row" :class="{ compact: collapsed }">
       <button
@@ -226,7 +245,7 @@ onBeforeUnmount(() => {
       @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
       @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
       @focus="choose"
-      @activate="emit('activate', $event)"
+      @activate="activate"
     />
 
     <SidebarFooter :collapsed="collapsed" @toggle="emit('toggle')" @add="emit('addProject')" />
@@ -255,6 +274,15 @@ onBeforeUnmount(() => {
   --bg: var(--color-sidebar-bg);
   --line: var(--color-border);
   --muted: var(--color-text-subtle);
+  --tree-toggle-column: 0.625rem;
+  --tree-icon-column: 1.25rem;
+  --tree-item-icon-size: var(--tree-icon-column);
+  --tree-column-gap: 0.5rem;
+  --tree-action-column: 1.5rem;
+  --tree-inline-start: 0.875rem;
+  --tree-inline-end: 0.75rem;
+  --tree-chevron-offset: -0.125rem;
+  --tree-item-icon-left: calc(var(--tree-toggle-column) + var(--tree-column-gap));
   position: relative;
   display: flex;
   min-width: 0;
@@ -266,6 +294,7 @@ onBeforeUnmount(() => {
 }
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width) !important;
+  --tree-item-icon-size: 0.75rem;
   align-items: stretch;
   border-right: 1px solid var(--color-border-muted);
 }
@@ -284,37 +313,41 @@ button {
   height: 2.5rem;
   flex: 0 0 2.5rem;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0 0.875rem 0 1.125rem;
+  gap: var(--tree-column-gap);
+  padding: 0 var(--tree-inline-end) 0 var(--tree-inline-start);
   border-bottom: 1px solid var(--line);
 }
 .search-button {
   display: grid;
-  width: 1rem;
+  width: var(--tree-toggle-column);
   height: 1.75rem;
-  flex: 0 0 1rem;
+  flex: 0 0 var(--tree-toggle-column);
   padding: 0;
   place-items: center;
+  transform: translateX(var(--tree-chevron-offset));
 }
 .filter-row.compact {
   justify-content: center;
   gap: 0;
   padding: 0;
 }
+.filter-row.compact .search-button {
+  transform: none;
+}
 .search-icon {
   position: relative;
-  width: 0.875rem;
-  height: 0.875rem;
-  flex: 0 0 0.875rem;
-  border: 1.5px solid var(--color-text-muted);
+  width: var(--tree-toggle-column);
+  height: var(--tree-toggle-column);
+  flex: 0 0 var(--tree-toggle-column);
+  border: 1.25px solid var(--color-text-muted);
   border-radius: 50%;
 }
 .search-icon::after {
   position: absolute;
-  right: -0.25rem;
-  bottom: -0.125rem;
-  width: 0.375rem;
-  height: 0.1rem;
+  right: -0.1875rem;
+  bottom: -0.1rem;
+  width: 0.3125rem;
+  height: 0.08rem;
   background: var(--color-text-muted);
   content: "";
   transform: rotate(45deg);

@@ -39,6 +39,13 @@ export function isExternalEditor(value: unknown): value is ExternalEditor {
   return typeof value === "string" && externalEditors.has(value as ExternalEditor);
 }
 
+export function resolveExternalEditor(
+  projectEditor: ExternalEditor | undefined,
+  appEditor: ExternalEditor,
+): ExternalEditor {
+  return projectEditor ?? appEditor;
+}
+
 export function externalEditorLabel(editor: ExternalEditor): string {
   return EXTERNAL_EDITOR_OPTIONS.find(({ value }) => value === editor)?.label ?? editor;
 }

@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { useAppSettings } from "../composables/useAppSettings";
+import { EXTERNAL_EDITOR_OPTIONS, externalEditorLabel } from "../settings/options";
 import type { Project } from "../types/project";
+import type { ExternalEditor } from "../types/settings";
 import SettingsActionRow from "./settings/SettingsActionRow.vue";
 import SettingsButton from "./settings/SettingsButton.vue";
 import SettingsCard from "./settings/SettingsCard.vue";
@@ -16,8 +19,15 @@ const emit = defineEmits<{
   addCommand: [];
   editCommand: [commandId: string];
 }>();
+const { settings } = useAppSettings();
 const draft = ref(copyProject(props.project));
 const saved = ref(false);
+const editorOverride = computed<ExternalEditor | "">({
+  get: () => draft.value.externalEditor ?? "",
+  set: (value) => {
+    draft.value.externalEditor = value || undefined;
+  },
+});
 
 watch(
   () => props.project,
@@ -59,6 +69,23 @@ function commandModeLabel(mode: string): string {
             description="Terminals and commands run from this directory by default."
           >
             <input v-model="draft.directory" required spellcheck="false" />
+          </SettingsField>
+          <SettingsField
+            title="Editor"
+            description="Override the app editor when opening files from this project."
+          >
+            <select v-model="editorOverride">
+              <option value="">
+                Use app setting ({{ externalEditorLabel(settings.externalEditor) }})
+              </option>
+              <option
+                v-for="editor in EXTERNAL_EDITOR_OPTIONS"
+                :key="editor.value"
+                :value="editor.value"
+              >
+                {{ editor.label }}
+              </option>
+            </select>
           </SettingsField>
         </SettingsCard>
       </SettingsSection>
@@ -175,7 +202,7 @@ form {
   place-items: center;
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
@@ -184,7 +211,7 @@ form {
   padding: 0.25rem 0.5rem;
   border-radius: 0.625rem;
   color: var(--color-text-muted);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
   font-size: 0.5625rem;
 }
 .command-storage {

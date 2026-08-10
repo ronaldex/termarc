@@ -1,9 +1,4 @@
-export type ColorTheme =
-  | "termdeck"
-  | "catppuccin-latte"
-  | "catppuccin-frappe"
-  | "catppuccin-macchiato"
-  | "catppuccin-mocha";
+export type ColorTheme = string;
 
 export type ExternalEditor = "vscode" | "vscodium" | "phpstorm";
 

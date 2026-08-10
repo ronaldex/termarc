@@ -17,6 +17,8 @@ pub(crate) struct ProjectConfig {
     name: String,
     directory: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    external_editor: Option<crate::external_editor::ExternalEditor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     commands: Option<Vec<ProjectCommand>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     terminals: Option<Vec<ProjectTerminal>>,
@@ -70,6 +72,8 @@ pub(crate) struct LoadedProjectConfig {
     id: String,
     name: String,
     directory: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    external_editor: Option<crate::external_editor::ExternalEditor>,
     commands: Vec<ProjectCommand>,
     global_commands: Vec<ProjectCommand>,
     local_commands: Vec<ProjectCommand>,
@@ -120,6 +124,7 @@ fn load_project(project: ProjectConfig) -> LoadedProjectConfig {
         id: project.id,
         name: project.name,
         directory: project.directory,
+        external_editor: project.external_editor,
         commands,
         global_commands,
         local_commands,
@@ -226,4 +231,39 @@ fn temporary_path(path: &Path) -> PathBuf {
         .and_then(|name| name.to_str())
         .unwrap_or("projects.json");
     path.with_file_name(format!(".{file_name}.{}.{id}.tmp", std::process::id()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProjectConfig;
+
+    #[test]
+    fn loads_legacy_projects_without_an_editor_override() {
+        let project: ProjectConfig =
+            serde_json::from_str(r#"{"id":"project-1","name":"Project","directory":"."}"#)
+                .expect("legacy project should load");
+
+        assert!(project.external_editor.is_none());
+    }
+
+    #[test]
+    fn round_trips_project_editor_overrides() {
+        let project: ProjectConfig = serde_json::from_str(
+            r#"{"id":"project-1","name":"Project","directory":".","externalEditor":"phpstorm"}"#,
+        )
+        .expect("project editor should load");
+        let serialized = serde_json::to_value(project).expect("project should serialize");
+
+        assert_eq!(serialized["externalEditor"], "phpstorm");
+    }
+
+    #[test]
+    fn omits_missing_project_editor_overrides() {
+        let project: ProjectConfig =
+            serde_json::from_str(r#"{"id":"project-1","name":"Project","directory":"."}"#)
+                .expect("project should load");
+        let serialized = serde_json::to_value(project).expect("project should serialize");
+
+        assert!(serialized.get("externalEditor").is_none());
+    }
 }

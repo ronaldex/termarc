@@ -19,7 +19,7 @@ const initials = computed(() => projectInitials(props.name));
   place-items: center;
   border-radius: 0.25rem;
   color: var(--color-text);
-  background: var(--color-surface-3);
+  background: var(--color-surface-emphasis);
   font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: normal;

@@ -31,7 +31,7 @@ const display = computed(() =>
 <style scoped>
 .titlebar {
   display: flex;
-  min-height: 42px;
+  min-height: var(--titlebar-height);
   grid-column: 1 / -1;
   align-items: center;
   gap: 1.5rem;

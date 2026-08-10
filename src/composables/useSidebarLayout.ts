@@ -1,11 +1,11 @@
 import { onBeforeUnmount, ref } from "vue";
 import { useMediaQuery } from "./useMediaQuery";
-import { useResponsiveSidebarVisibility } from "./useSidebarVisibility";
+import { useSidebarVisibility } from "./useSidebarVisibility";
 
 export function useSidebarLayout() {
   const compactSidebarMode = useMediaQuery("(max-width: 56rem)");
-  const left = useResponsiveSidebarVisibility(true, compactSidebarMode);
-  const right = useResponsiveSidebarVisibility(false, compactSidebarMode);
+  const left = useSidebarVisibility(compactSidebarMode, true);
+  const right = useSidebarVisibility(compactSidebarMode);
   const leftWidth = ref(240);
   const rightWidth = ref(480);
   let stopResize: (() => void) | undefined;
@@ -32,25 +32,20 @@ export function useSidebarLayout() {
     window.addEventListener("pointerup", stop);
   }
 
-  function expandRight(): void {
-    right.open.value = true;
-  }
-
   onBeforeUnmount(() => stopResize?.());
 
   return {
     leftOpen: left.open,
-    leftPreferredOpen: left.preferredOpen,
-    leftTemporarilyOpen: left.temporarilyOpen,
+    leftPresentation: left.presentation,
     rightOpen: right.open,
-    rightPreferredOpen: right.preferredOpen,
-    rightTemporarilyOpen: right.temporarilyOpen,
+    rightPresentation: right.presentation,
     leftWidth,
     rightWidth,
     openLeftTemporarily: left.openTemporarily,
+    openLeftPreferred: left.openPreferred,
     restoreLeftPreference: left.restorePreference,
     toggleLeft: left.toggle,
-    expandRight,
+    openRightPreferred: right.openPreferred,
     openRightTemporarily: right.openTemporarily,
     restoreRightPreference: right.restorePreference,
     toggleRight: right.toggle,

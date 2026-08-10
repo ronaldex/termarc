@@ -169,7 +169,7 @@ defineExpose({ focusContent, hasContentFocus });
   border: 1px solid var(--color-border);
   border-radius: 0.625rem;
   color: var(--color-text-muted);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
 }
 h2 {
   margin: 0 0 0.5rem;

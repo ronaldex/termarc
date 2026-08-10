@@ -239,12 +239,14 @@ button {
 }
 .project-row {
   position: relative;
-  display: flex;
+  display: grid;
   min-height: 3rem;
+  grid-template-columns: var(--tree-toggle-column) minmax(0, 1fr);
   align-items: center;
-  padding: 0.5rem 0.625rem 0.5rem 0.875rem;
+  column-gap: var(--tree-column-gap);
+  padding: 0.5rem var(--tree-inline-end) 0.5rem var(--tree-inline-start);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
 }
 .project-row.tree-active::before,
 .group-heading.tree-active::before {
@@ -259,14 +261,11 @@ button {
   bottom: 0.5rem;
   left: 0;
 }
-.project-chevron {
-  width: 0.625rem;
-  height: 1rem;
-  margin-right: 0.5rem;
-}
+.project-chevron,
 .group-chevron {
-  width: 0.625rem;
+  width: var(--tree-toggle-column);
   height: 1rem;
+  transform: translateX(var(--tree-chevron-offset));
 }
 .project-chevron :deep(svg),
 .group-chevron :deep(svg) {
@@ -274,11 +273,11 @@ button {
   height: 0.75rem;
 }
 .project-toggle {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex: 1;
+  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr);
   align-items: center;
-  gap: 0.5rem;
+  column-gap: var(--tree-column-gap);
   padding: 0;
   text-align: left;
 }
@@ -291,20 +290,20 @@ button {
   white-space: nowrap;
 }
 .project-content {
-  --tree-item-icon-left: 1.125rem;
-  padding: 0 0.75rem 0.75rem 0.875rem;
+  padding: 0 var(--tree-inline-end) 0.75rem var(--tree-inline-start);
 }
 .group {
   margin: 0.0625rem 0 0.375rem;
 }
 .group-heading {
   position: relative;
-  display: flex;
+  display: grid;
   width: 100%;
   min-height: 2rem;
+  grid-template-columns: var(--tree-toggle-column) minmax(0, 1fr);
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0 0.25rem 0.0625rem;
+  column-gap: var(--tree-column-gap);
+  padding: 0.25rem 0;
   color: var(--color-text-subtle);
   font-size: 0.625rem;
   font-weight: 650;
@@ -316,11 +315,11 @@ button {
   left: -0.875rem;
 }
 .group-select {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex: 1;
+  grid-template-columns: var(--tree-icon-column) auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem;
+  column-gap: var(--tree-column-gap);
   padding: 0;
   color: inherit;
   font-weight: inherit;
@@ -328,8 +327,7 @@ button {
   text-align: left;
 }
 .group-icon {
-  width: max(0.75rem, 1em);
-  flex: 0 0 max(0.75rem, 1em);
+  width: var(--tree-icon-column);
   color: var(--color-text-subtle);
   font-size: 0.6875rem;
   text-align: center;
@@ -341,6 +339,7 @@ button {
   background: var(--color-border);
 }
 .group-select small {
+  justify-self: end;
   color: var(--color-text-faint);
   font-size: 0.5625rem;
   font-weight: 400;
@@ -359,9 +358,9 @@ button {
 }
 .add-terminal-icon {
   display: grid;
-  width: var(--compact-tree-icon-width, 0.75rem);
-  height: var(--compact-tree-icon-width, 0.75rem);
-  flex: 0 0 var(--compact-tree-icon-width, 0.75rem);
+  width: var(--tree-item-icon-size);
+  height: var(--tree-item-icon-size);
+  flex: 0 0 var(--tree-item-icon-size);
   place-items: center;
   line-height: 1;
 }
@@ -391,38 +390,32 @@ button {
   stroke-linecap: round;
   stroke-width: 1.5;
 }
-.project-list.compact {
-  --compact-tree-icon-width: 0.75rem;
-  --compact-tree-inline-padding: 0.75rem;
-  --compact-tree-suffix-gap: 0.125rem;
-}
 .project-list.compact .project-row {
+  display: flex;
   justify-content: center;
   padding-right: 0;
   padding-left: 0;
 }
 .project-list.compact .project-toggle,
 .project-list.compact .group-select {
+  display: flex;
   flex: 0 0 100%;
-}
-.project-list.compact .project-toggle,
-.project-list.compact .group-select {
   justify-content: center;
 }
 .project-list.compact .group-select {
   box-sizing: border-box;
   gap: 0.25rem;
-  padding: 0 var(--compact-tree-inline-padding);
+  padding: 0;
 }
 .project-list.compact .group-select i {
-  min-width: 0;
-  margin-left: 0;
+  display: none;
 }
 .project-list.compact .project-content {
   padding-right: 0;
   padding-left: 0;
 }
 .project-list.compact .group-heading {
+  display: flex;
   justify-content: center;
   gap: 0;
   padding-right: 0;
@@ -431,10 +424,10 @@ button {
 .project-list.compact .add-row {
   box-sizing: border-box;
   width: 100%;
-  justify-content: flex-start;
+  justify-content: center;
   margin-left: 0;
-  padding-right: var(--compact-tree-inline-padding);
-  padding-left: var(--compact-tree-inline-padding);
+  padding-right: 0;
+  padding-left: 0;
 }
 .project-list.compact .group-heading.tree-active::before,
 .project-list.compact .add-row.tree-active::before {

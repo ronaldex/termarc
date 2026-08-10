@@ -1,3 +1,5 @@
+import type { ExternalEditor } from "./settings";
+
 export type ProjectCommandMode = "single-shot" | "persistent";
 
 export type ProjectCommandStorage = "global" | "project";
@@ -20,6 +22,7 @@ export type Project = {
   id: string;
   name: string;
   directory: string;
+  externalEditor?: ExternalEditor;
   commands?: ProjectCommand[];
   /** Unmerged command lists, used to write each configuration store safely. */
   globalCommands?: ProjectCommand[];

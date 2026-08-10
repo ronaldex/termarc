@@ -14,7 +14,7 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
   border: 1px solid var(--color-border-strong);
   border-radius: 0.375rem;
   color: var(--color-text);
-  background: var(--color-surface-1);
+  background: var(--color-surface-raised);
   font-size: 0.625rem;
   font-weight: 600;
   cursor: pointer;
@@ -24,7 +24,7 @@ withDefaults(defineProps<{ variant?: "secondary" | "danger" }>(), {
 .button:hover:not(:disabled) {
   border-color: var(--color-border-strong);
   color: var(--color-text-strong);
-  background: var(--color-surface-2);
+  background: var(--color-surface-active);
 }
 
 .button:disabled {

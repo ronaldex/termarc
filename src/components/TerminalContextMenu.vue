@@ -70,7 +70,7 @@ onMounted(async () => {
   box-shadow:
     0 1px 2px rgb(0 0 0 / 14%),
     0 0.75rem 1.875rem rgb(0 0 0 / 28%);
-  background: color-mix(in srgb, var(--color-surface-2) 88%, transparent);
+  background: color-mix(in srgb, var(--color-surface-active) 88%, transparent);
   backdrop-filter: blur(18px) saturate(160%);
   font: inherit;
   user-select: none;

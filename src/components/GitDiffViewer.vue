@@ -8,14 +8,25 @@ import { openPath } from "../services/externalEditor";
 import { externalEditorLabel } from "../settings/options";
 import { themeDefinition } from "../themes/themeCatalog";
 import { splitGitDiff } from "../utils/gitDiff";
+import type { ExternalEditor } from "../types/settings";
 import CollapsedGitRail from "./CollapsedGitRail.vue";
 import ExpandedGitDiff from "./ExpandedGitDiff.vue";
 
 const props = withDefaults(
-  defineProps<{ directory?: string; active: boolean; fontSize?: number }>(),
+  defineProps<{
+    directory?: string;
+    active: boolean;
+    fontSize?: number;
+    externalEditor: ExternalEditor;
+  }>(),
   { fontSize: 13 },
 );
-const emit = defineEmits<{ collapse: []; expand: []; available: [value: boolean] }>();
+const emit = defineEmits<{
+  collapse: [];
+  preview: [];
+  expand: [];
+  available: [value: boolean];
+}>();
 const { settings } = useAppSettings();
 const panelElement = ref<HTMLElement>();
 const expandedView = ref<InstanceType<typeof ExpandedGitDiff>>();
@@ -37,7 +48,7 @@ const files = computed(() => {
 });
 const repository = computed(() => state.value?.repository);
 const diffTheme = computed(() => themeDefinition(settings.colorTheme).colorScheme);
-const editorName = computed(() => externalEditorLabel(settings.externalEditor));
+const editorName = computed(() => externalEditorLabel(props.externalEditor));
 const { expandedFiles, allFilesExpanded, toggleFile, toggleAllFiles } = useDiffExpansion(
   repository,
   files,
@@ -49,7 +60,7 @@ async function openFile(path: string): Promise<void> {
 
   try {
     const resolved = await resolveTerminalPath(repositoryPath, path);
-    if (resolved?.kind === "file") await openPath(resolved.path, settings.externalEditor);
+    if (resolved?.kind === "file") await openPath(resolved.path, props.externalEditor);
   } catch (error) {
     console.error("Could not open diff file", error);
   }
@@ -78,7 +89,7 @@ async function revealPendingFile(): Promise<void> {
 
 function revealFile(path: string): void {
   pendingRevealPath.value = path;
-  emit("expand");
+  emit("preview");
   void nextTick(revealPendingFile);
 }
 
@@ -113,6 +124,7 @@ watch(state, (result) => {
       :files="files"
       :loading="loading"
       :error="state?.error"
+      @preview="emit('preview')"
       @expand="emit('expand')"
       @reveal="revealFile"
     />

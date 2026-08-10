@@ -200,6 +200,7 @@ function normalizeProject(project: Project): Project {
     id: project.id,
     name: project.name,
     directory: project.directory,
+    externalEditor: project.externalEditor,
     commands: project.commands?.map((command) => ({ ...command })) ?? [],
     globalCommands:
       project.globalCommands?.map((command) => ({ ...command })) ??
@@ -251,6 +252,7 @@ function storedProject(project: Project): Project {
     id: project.id,
     name: project.name,
     directory: project.directory,
+    externalEditor: project.externalEditor,
     commands: (project.globalCommands ?? project.commands ?? [])
       .filter((command) => command.storage !== "project")
       .map(({ storage: _storage, ...command }) => command),
