@@ -12,8 +12,8 @@ export async function prepareTerminalFonts(): Promise<void> {
   // xterm measures its cell size when it opens. Load both bundled weights
   // first so text and Nerd Font icons always use the same monospace metrics.
   await Promise.all([
-    document.fonts.load('400 13px "Termdeck JetBrainsMono Nerd Font"', "term-deck \u{f07c}"),
-    document.fonts.load('600 13px "Termdeck JetBrainsMono Nerd Font"', "term-deck \u{f07c}"),
+    document.fonts.load('400 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
+    document.fonts.load('600 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
   ]);
   await document.fonts.ready;
 }

@@ -11,19 +11,14 @@ import type { AppSettings, ColorTheme } from "../types/settings";
 const DEFAULT_SETTINGS: AppSettings = {
   terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
   terminalFontSize: 13,
-  colorTheme: "termdeck",
+  colorTheme: "termarc",
   externalEditor: "vscodium",
   notifyWhenAgentReady: false,
   playSoundWhenAgentReady: true,
 };
 
-const STORAGE_KEY = "termdeck-settings";
+const STORAGE_KEY = "termarc-settings";
 const STORAGE_VERSION = 2;
-const LEGACY_FONT_FAMILIES = new Set([
-  '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-  '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
-  '"JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-]);
 
 interface PersistedSettings {
   version: typeof STORAGE_VERSION;
@@ -63,15 +58,15 @@ function validatedSettings(value: unknown): AppSettings {
   if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
 
   return {
-    terminalFontFamily:
-      isTerminalFont(value.terminalFontFamily) &&
-      !LEGACY_FONT_FAMILIES.has(value.terminalFontFamily)
-        ? value.terminalFontFamily
-        : DEFAULT_SETTINGS.terminalFontFamily,
+    terminalFontFamily: isTerminalFont(value.terminalFontFamily)
+      ? value.terminalFontFamily
+      : DEFAULT_SETTINGS.terminalFontFamily,
     terminalFontSize: isTerminalFontSize(value.terminalFontSize)
       ? value.terminalFontSize
       : DEFAULT_SETTINGS.terminalFontSize,
-    colorTheme: isColorTheme(value.colorTheme) ? value.colorTheme : DEFAULT_SETTINGS.colorTheme,
+    colorTheme: isColorTheme(value.colorTheme)
+      ? value.colorTheme
+      : DEFAULT_SETTINGS.colorTheme,
     externalEditor: isExternalEditor(value.externalEditor)
       ? value.externalEditor
       : DEFAULT_SETTINGS.externalEditor,

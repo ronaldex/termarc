@@ -3,7 +3,7 @@ import catppuccinFrappe from "./builtin/catppuccin-frappe.json";
 import catppuccinLatte from "./builtin/catppuccin-latte.json";
 import catppuccinMacchiato from "./builtin/catppuccin-macchiato.json";
 import catppuccinMocha from "./builtin/catppuccin-mocha.json";
-import termdeck from "./builtin/termdeck.json";
+import termarc from "./builtin/termarc.json";
 
 export type ThemeColorScheme = "light" | "dark";
 
@@ -56,7 +56,7 @@ export type ThemeDefinition = {
 };
 
 const BUILTIN_THEME_FILES = [
-  ["termdeck", termdeck],
+  ["termarc", termarc],
   ["catppuccin-latte", catppuccinLatte],
   ["catppuccin-frappe", catppuccinFrappe],
   ["catppuccin-macchiato", catppuccinMacchiato],
@@ -87,7 +87,7 @@ export function registerCustomThemes(themes: Record<string, ThemeDefinition>): v
 }
 
 export function themeDefinition(theme: string): ThemeDefinition {
-  return THEME_CATALOG[theme] ?? THEME_CATALOG.termdeck!;
+  return THEME_CATALOG[theme] ?? THEME_CATALOG.termarc!;
 }
 
 export function applyAppTheme(theme: string, root: HTMLElement = document.documentElement): void {

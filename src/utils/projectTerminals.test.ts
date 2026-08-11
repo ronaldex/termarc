@@ -12,6 +12,7 @@ function terminal(
   kind: "shell" | "command" = "shell",
 ): TerminalTabState {
   return {
+    id: `${projectId}-${customTitle ?? kind}`,
     projectId,
     customTitle,
     launch:
@@ -35,7 +36,10 @@ describe("project terminal persistence", () => {
       terminal("project-a", "Ignored command", "command"),
     ];
 
-    expect(projectTerminalsFromTabs(tabs, "project-a")).toEqual([{ customTitle: "Editor" }, {}]);
+    expect(projectTerminalsFromTabs(tabs, "project-a")).toEqual([
+      { id: "project-a- Editor ", customTitle: "Editor" },
+      { id: "project-a-shell" },
+    ]);
   });
 
   it("preserves missing terminal lists for legacy migration and explicit empty lists", () => {
@@ -44,15 +48,19 @@ describe("project terminal persistence", () => {
   });
 
   it("normalizes blank custom names", () => {
-    expect(normalizeProjectTerminals([{ customTitle: "   " }, { customTitle: " Logs " }])).toEqual([
-      {},
-      { customTitle: "Logs" },
-    ]);
+    expect(
+      normalizeProjectTerminals([
+        { id: "one", customTitle: "   " },
+        { id: "two", customTitle: " Logs " },
+      ]),
+    ).toEqual([{ id: "one" }, { id: "two", customTitle: "Logs" }]);
   });
 
-  it("distinguishes legacy missing state from an explicit matching list", () => {
+  it("distinguishes missing state from an explicit matching list", () => {
     expect(projectTerminalsEqual(undefined, [])).toBe(false);
     expect(projectTerminalsEqual([], [])).toBe(true);
-    expect(projectTerminalsEqual([{ customTitle: "One" }], [{ customTitle: "Two" }])).toBe(false);
+    expect(
+      projectTerminalsEqual([{ id: "a", customTitle: "One" }], [{ id: "a", customTitle: "Two" }]),
+    ).toBe(false);
   });
 });

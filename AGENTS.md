@@ -1,6 +1,6 @@
-# Termdeck
+# Termarc
 
-Termdeck is a macOS-focused terminal workspace built with Vue 3, TypeScript, Vite, Tauri 2, Rust, and xterm.js.
+Termarc is a macOS-focused terminal workspace built with Vue 3, TypeScript, Vite, Tauri 2, Rust, and xterm.js.
 
 ## Project structure
 
@@ -33,7 +33,7 @@ Key terminal modules:
 
 ### Integrations
 
-- `extensions/pi/`: Pi agent integration and the Termdeck OSC status protocol.
+- `extensions/pi/`: Pi agent integration and the Termarc OSC status protocol.
 
 ## Commands
 

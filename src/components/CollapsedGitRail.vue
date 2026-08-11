@@ -156,7 +156,7 @@ button:hover {
   align-items: center;
   gap: 0.0625rem;
   padding-bottom: 0.375rem;
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-family: "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.5rem;
 }
 .additions {
@@ -184,7 +184,7 @@ button:hover {
   border-radius: 0.375rem;
   color: var(--color-text-muted);
   background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-family: "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.5rem;
   font-weight: 700;
 }

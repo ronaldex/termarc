@@ -120,7 +120,7 @@ onMounted(() => {
   color: var(--color-terminal-cyan);
   background: var(--color-surface-raised);
   font-family:
-    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 .empty-state strong {
   color: var(--color-text);

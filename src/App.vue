@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import AppTitlebar from "./components/AppTitlebar.vue";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
@@ -34,12 +35,18 @@ const {
   load: loadProjectConfiguration,
   add: addProjectState,
   update: updateProject,
+  setProjectTerminals,
   saveCommand: saveProjectCommand,
   removeCommand: removeProjectCommand,
+  reorderCommands: reorderCommandState,
   remove: removeProjectState,
   toggleProject,
   toggleTerminals,
   toggleCommands,
+  persistenceDirty,
+  persistenceSaving,
+  persistenceError,
+  flushPersistence,
 } = useProjects();
 
 function editorForProject(projectId: string) {
@@ -57,6 +64,7 @@ const {
   closeTab,
   setTerminalTitleOverride,
   setTabShortcutOrder,
+  reorderProjectTerminals: reorderTerminalTabs,
   restartTab,
   stopTab,
   setTerminalContainer,
@@ -78,6 +86,8 @@ const gitSidebar = ref<InstanceType<typeof GitDiffViewer>>();
 const gitSidebarAvailable = ref(true);
 const lastProjectId = ref<string>();
 let appDisposed = false;
+let closeInProgress = false;
+let unlistenCloseRequested: (() => void) | undefined;
 const {
   leftOpen: leftSidebarOpen,
   leftPresentation: leftSidebarPresentation,
@@ -95,19 +105,58 @@ const {
   closeRight,
   startResize,
 } = useSidebarLayout();
-let terminalPersistenceEnabled = false;
+const terminalPersistenceEligible = new Set<string>();
+
+function toggleLeftSidebar(): void {
+  const closing = leftSidebarOpen.value;
+  toggleLeft();
+  if (closing) requestAnimationFrame(() => workspaceMain.value?.focusContent());
+}
 
 function persistOpenTerminals(): void {
-  if (!terminalPersistenceEnabled) return;
   for (const project of projects.value) {
+    if (!terminalPersistenceEligible.has(project.id)) continue;
     const terminals = projectTerminalsFromTabs(tabs, project.id);
-    if (!projectTerminalsEqual(project.terminals, terminals)) project.terminals = terminals;
+    if (!projectTerminalsEqual(project.terminals, terminals))
+      setProjectTerminals(project.id, terminals);
   }
+}
+
+function retryOrDismissPersistenceError(): void {
+  if (persistenceDirty.value)
+    void flushPersistence().catch((error) => console.error("Could not save projects", error));
+  else persistenceError.value = undefined;
+}
+
+function reorderCommands(
+  projectId: string,
+  movedCommandId: string,
+  targetCommandId: string,
+  placement: "before" | "after",
+): void {
+  void reorderCommandState(projectId, movedCommandId, targetCommandId, placement).catch((error) =>
+    console.error("Could not persist command order", error),
+  );
+}
+
+function reorderProjectTerminals(
+  projectId: string,
+  movedTabId: string,
+  targetTabId: string,
+  placement: "before" | "after",
+): void {
+  terminalPersistenceEligible.add(projectId);
+  reorderTerminalTabs(projectId, movedTabId, targetTabId, placement);
+  persistOpenTerminals();
+  void flushPersistence().catch((error) =>
+    console.error("Could not persist terminal order", error),
+  );
 }
 
 watch(
   () =>
     tabs.map((tab) => ({
+      id: tab.id,
       projectId: tab.projectId,
       kind: tab.launch.kind,
       customTitle: tab.customTitle,
@@ -169,8 +218,14 @@ const { cycleTerminal: cycleSidebarTerminal, closeTerminal } = useWorkspaceTermi
 async function createProjectTerminal(projectId: string, cwd: string): Promise<void> {
   const tab = await createTab(projectId, cwd);
   if (!tab) return;
+  terminalPersistenceEligible.add(projectId);
   selectTerminal(projectId, tab.id);
   selectTab(tab.id);
+}
+function saveProjectMetadata(project: Project): void {
+  void updateProject(project).catch((error) =>
+    console.error("Could not update project settings", error),
+  );
 }
 function manageProjects(projectId?: string): void {
   const project = projects.value.find((item) => item.id === projectId);
@@ -178,13 +233,26 @@ function manageProjects(projectId?: string): void {
   else selectProjectManagement(selectedProject.value?.id ?? projects.value[0].id);
 }
 function addProject(): void {
-  selectProject(addProjectState());
+  const project = addProjectState();
+  terminalPersistenceEligible.add(project.id);
+  selectProject(project);
+}
+async function closeProjectTerminal(id: string): Promise<void> {
+  const projectId = tabs.find((tab) => tab.id === id && tab.launch.kind === "shell")?.projectId;
+  if (projectId) terminalPersistenceEligible.add(projectId);
+  await closeTerminal(id);
+}
+function setProjectTerminalTitle(id: string, title: string): void {
+  const projectId = tabs.find((tab) => tab.id === id && tab.launch.kind === "shell")?.projectId;
+  if (projectId) terminalPersistenceEligible.add(projectId);
+  setTerminalTitleOverride(id, title);
 }
 async function removeProject(projectId: string): Promise<void> {
   await Promise.all(
     tabs.filter((tab) => tab.projectId === projectId).map((tab) => closeTab(tab.id)),
   );
   removeProjectState(projectId);
+  terminalPersistenceEligible.delete(projectId);
 }
 function selectCommand(projectId: string, commandId?: string): void {
   if (commandId) selectCommandSelection(projectId, commandId);
@@ -229,7 +297,7 @@ useWorkspaceShortcuts({
   gitSidebar,
   openLeftSidebar: openLeftTemporarily,
   restoreLeftSidebar: restoreLeftPreference,
-  toggleLeftSidebar: toggleLeft,
+  toggleLeftSidebar,
   openRightSidebar: openRightTemporarily,
   restoreRightSidebar: restoreRightPreference,
   toggleRightSidebar: toggleRight,
@@ -252,7 +320,7 @@ useWorkspaceShortcuts({
     if (project) void createProjectTerminal(project.id, project.directory);
   },
   closeActiveTerminal: () => {
-    if (activeTab.value) void closeTab(activeTab.value.id);
+    if (activeTab.value) void closeProjectTerminal(activeTab.value.id);
   },
   shouldActivateSidebar(selection) {
     return (
@@ -267,6 +335,27 @@ useWorkspaceShortcuts({
 
 onMounted(async () => {
   void enableModernWindowStyle(MAC_WINDOW_STYLE);
+  void getCurrentWindow()
+    .onCloseRequested(async (event) => {
+      event.preventDefault();
+      if (closeInProgress) return;
+      closeInProgress = true;
+      persistOpenTerminals();
+      try {
+        await flushPersistence();
+      } catch (error) {
+        console.error("Could not flush projects before closing", error);
+      } finally {
+        unlistenCloseRequested?.();
+        unlistenCloseRequested = undefined;
+        await getCurrentWindow().close();
+      }
+    })
+    .then((unlisten) => {
+      if (appDisposed) unlisten();
+      else unlistenCloseRequested = unlisten;
+    })
+    .catch((error) => console.error("Could not listen for window close", error));
   try {
     const themes = await loadCustomThemes();
     registerCustomThemes(Object.fromEntries(themes.map((theme) => [theme.id, theme])));
@@ -285,26 +374,25 @@ onMounted(async () => {
   start(initialProject.id, initialProject.directory);
 
   let firstRestoredTabId: string | undefined;
-  let restoreSucceeded = true;
-  for (const [projectIndex, project] of projects.value.entries()) {
-    // Legacy project files had no terminal list and opened one shell for the
-    // first project. Preserve that behavior once, then persist explicit lists.
-    const savedTerminals = project.terminals ?? (projectIndex === 0 ? [{}] : []);
-    for (const terminal of savedTerminals) {
+  for (const project of projects.value) {
+    let projectRestoreSucceeded = true;
+    for (const terminal of project.terminals ?? []) {
       try {
         const tab = await createTab(project.id, project.directory, {
+          id: terminal.id,
           customTitle: terminal.customTitle,
         });
         if (!tab) {
-          restoreSucceeded = false;
+          projectRestoreSucceeded = false;
           continue;
         }
         firstRestoredTabId ??= tab.id;
       } catch (error) {
-        restoreSucceeded = false;
+        projectRestoreSucceeded = false;
         console.error(`Could not restore a terminal for ${project.name}`, error);
       }
     }
+    if (projectRestoreSucceeded) terminalPersistenceEligible.add(project.id);
   }
 
   if (firstRestoredTabId) {
@@ -320,7 +408,6 @@ onMounted(async () => {
   // Do not let intermediate restoration states overwrite the saved layout.
   // If restoration failed, retain the saved state rather than persisting a
   // partial terminal list.
-  terminalPersistenceEnabled = restoreSucceeded;
   persistOpenTerminals();
 });
 watch(
@@ -355,6 +442,10 @@ watch(activeTabId, (id) => {
 watch([leftSidebarOpen, rightSidebarOpen], fitActiveTerminalAfterLayout, { flush: "post" });
 onBeforeUnmount(() => {
   appDisposed = true;
+  unlistenCloseRequested?.();
+  unlistenCloseRequested = undefined;
+  persistOpenTerminals();
+  void flushPersistence().catch((error) => console.error("Could not flush projects", error));
   dispose();
 });
 </script>
@@ -374,6 +465,15 @@ onBeforeUnmount(() => {
     }"
   >
     <AppTitlebar :active-tab="activeTab" />
+    <span v-if="persistenceSaving" class="app-sr-only" role="status">
+      Saving workspace configuration
+    </span>
+    <div v-if="persistenceError" class="persistence-error" role="alert">
+      <span>Could not save workspace configuration: {{ persistenceError }}</span>
+      <button type="button" :disabled="persistenceSaving" @click="retryOrDismissPersistenceError">
+        {{ persistenceSaving ? "Retrying…" : persistenceDirty ? "Retry" : "Dismiss" }}
+      </button>
+    </div>
     <TerminalSidebar
       ref="terminalSidebar"
       :class="{
@@ -398,11 +498,13 @@ onBeforeUnmount(() => {
       @run-command="runCommand"
       @reload-command="reloadCommand"
       @stop-command="stopCommand"
-      @close="closeTerminal"
-      @set-terminal-title-override="setTerminalTitleOverride"
+      @reorder-terminal="reorderProjectTerminals"
+      @reorder-command="reorderCommands"
+      @close="closeProjectTerminal"
+      @set-terminal-title-override="setProjectTerminalTitle"
       @rename-modal-change="renameModalOpen = $event"
       @preview="openLeftTemporarily"
-      @toggle="toggleLeft"
+      @toggle="toggleLeftSidebar"
     />
     <div
       v-if="leftSidebarPresentation !== 'collapsed'"
@@ -424,7 +526,7 @@ onBeforeUnmount(() => {
       @host="attachHost"
       @select-project="selectProject"
       @add-project="addProject"
-      @save-project="updateProject"
+      @save-project="saveProjectMetadata"
       @remove-project="removeProject"
       @save-command="saveCommand"
       @remove-command="removeCommand"
@@ -475,6 +577,41 @@ onBeforeUnmount(() => {
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+.app-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.persistence-error {
+  position: fixed;
+  top: calc(var(--titlebar-height) + 0.5rem);
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  max-width: min(38rem, calc(100vw - 2rem));
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-status-error);
+  border-radius: 0.5rem;
+  color: var(--color-text-strong);
+  background: var(--color-surface-raised);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 30%);
+  font-size: 0.75rem;
+  transform: translateX(-50%);
+}
+.persistence-error button {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.375rem;
+  color: inherit;
+  background: var(--color-surface-emphasis);
+  cursor: pointer;
 }
 * {
   box-sizing: border-box;

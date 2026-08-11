@@ -16,16 +16,13 @@ fn open_window(app: &AppHandle) -> Result<(), String> {
         .windows
         .first()
         .cloned()
-        .ok_or_else(|| "Termdeck has no window configuration".to_string())?;
-    config.label = format!(
-        "termdeck-{}",
-        NEXT_WINDOW_ID.fetch_add(1, Ordering::Relaxed)
-    );
+        .ok_or_else(|| "Termarc has no window configuration".to_string())?;
+    config.label = format!("termarc-{}", NEXT_WINDOW_ID.fetch_add(1, Ordering::Relaxed));
 
     WebviewWindowBuilder::from_config(app, &config)
-        .map_err(|error| format!("could not configure Termdeck window: {error}"))?
+        .map_err(|error| format!("could not configure Termarc window: {error}"))?
         .build()
-        .map_err(|error| format!("could not create Termdeck window: {error}"))?;
+        .map_err(|error| format!("could not create Termarc window: {error}"))?;
 
     Ok(())
 }
@@ -46,7 +43,7 @@ pub(crate) fn setup_menu(app: &mut tauri::App) -> tauri::Result<()> {
         &[
             &Submenu::with_items(
                 app,
-                "Termdeck",
+                "Termarc",
                 true,
                 &[
                     &PredefinedMenuItem::about(app, None, None)?,

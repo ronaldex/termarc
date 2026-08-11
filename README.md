@@ -1,4 +1,4 @@
-# Termdeck
+# Termarc
 
 A native terminal workspace built with:
 
@@ -31,40 +31,40 @@ npm run tauri build
 ```
 
 On macOS, the application bundle is written to
-`src-tauri/target/release/bundle/macos/Termdeck.app`.
+`src-tauri/target/release/bundle/macos/Termarc.app`.
 
 To build only the web frontend, run `npm run build`.
 
 ## CLI
 
-Termdeck's app executable also provides a lightweight macOS CLI for launching
+Termarc's app executable also provides a lightweight macOS CLI for launching
 the app and managing the local project registry. Add a symlink from **App
-settings**, or install it into `~/.local/bin` (or set `TERMDECK_BIN_DIR`):
+settings**, or install it into `~/.local/bin` (or set `TERMARC_BIN_DIR`):
 
 ```sh
 npm run cli:install
 ```
 
-This symlinks the executable inside `/Applications/Termdeck.app` as `termdeck`.
+This symlinks the executable inside `/Applications/Termarc.app` as `termarc`.
 Add that directory to your `PATH`, then use:
 
 ```sh
-termdeck --help
-termdeck launch
-termdeck projects list
-termdeck projects create "Termdeck" ~/Development/term-deck
+termarc --help
+termarc launch
+termarc projects list
+termarc projects create "Termarc" ~/Development/termarc
 ```
 
 Use `--json` with list/status commands for machine-readable output.
 
 ## Custom themes
 
-Create `~/.config/termdeck/themes` and copy [theme.json](examples/theme.json) into that
+Create `~/.config/termarc/themes` and copy [theme.json](examples/theme.json) into that
 directory. Its lowercase filename (for example, `my-theme.json`) becomes the theme ID. Edit
 the `label`, `colorScheme` (`light` or `dark`), and color tokens;
 every token is required. The surface colors progress from `surface-base` through
 `surface-raised`, `surface-active`, and `surface-emphasis` to distinguish nested and
-interactive UI layers. Restart Termdeck after saving the file, then select the theme in
+interactive UI layers. Restart Termarc after saving the file, then select the theme in
 **App settings**. Invalid theme files are ignored, and custom theme IDs cannot replace the
 built-in themes.
 
@@ -90,8 +90,8 @@ keyboard shortcuts are `Cmd+T` / `Cmd+W` on macOS and `Ctrl+Shift+T` /
 The Git changes sidebar refreshes every two seconds and displays `git diff HEAD`
 for the active terminal shell's current working directory with the
 `@git-diff-view/vue` unified diff renderer. On macOS and Linux,
-Termdeck resolves that directory from the shell process; other platforms fall
-back to Termdeck's launch directory.
+Termarc resolves that directory from the shell process; other platforms fall
+back to Termarc's launch directory.
 
 The frontend includes a focused xterm.js 6.0 compatibility shim that encodes
 `Shift+Enter` as Kitty keyboard sequence `CSI 13;2u`, allowing Pi to distinguish
@@ -100,16 +100,17 @@ stable xterm.js release.
 
 ## Pi status integration
 
-Termdeck detects the Pi process automatically. To also show whether Pi is
-processing or waiting for input, install the included minimal Pi extension:
+Termarc detects the Pi process automatically. To also show whether Pi is
+processing or waiting for input, open **Settings → Agent integrations** and
+install the Pi extension. For a manual development install, run:
 
 ```sh
 mkdir -p ~/.pi/agent/extensions
-cp extensions/pi/termdeck-status.ts ~/.pi/agent/extensions/termdeck-status.ts
+cp extensions/pi/termarc-status.ts ~/.pi/agent/extensions/termarc-status.ts
 ```
 
 Restart Pi (or run `/reload`) after installing it. The extension emits private
-terminal control sequences on Pi lifecycle events; Termdeck consumes them
+terminal control sequences on Pi lifecycle events; Termarc consumes them
 without displaying any terminal output.
 
 ## Roadmap

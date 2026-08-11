@@ -12,7 +12,7 @@ const display = computed(() =>
 
 <template>
   <header class="titlebar" data-tauri-drag-region>
-    <span class="app-title">Termdeck</span>
+    <span class="app-title">Termarc</span>
     <div class="active-terminal" data-tauri-drag-region>
       <TerminalStatusIndicator
         :status="activeTab?.status ?? 'stopped'"
@@ -72,6 +72,6 @@ const display = computed(() =>
   flex: 1;
   color: var(--color-text-subtle);
   font-family:
-    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 </style>

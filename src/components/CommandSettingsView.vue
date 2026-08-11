@@ -20,7 +20,7 @@ const draft = ref(createDraft());
 const saved = ref(false);
 
 watch(
-  () => [props.project.id, props.command] as const,
+  () => [props.project.id, props.command?.id] as const,
   () => {
     draft.value = createDraft();
     saved.value = false;
@@ -49,6 +49,8 @@ function selectStorage(storage: "global" | "project"): void {
 function save(): void {
   const command = {
     ...draft.value,
+    // Ordering remains owned by the live project state while this form is open.
+    order: props.command?.order ?? draft.value.order,
     name: draft.value.name.trim(),
     command: draft.value.command.trim(),
   };
@@ -116,7 +118,7 @@ function remove(): void {
                 <span class="radio"></span>
                 <span
                   ><strong>Project-local</strong
-                  ><small>Saved in .termdeck.json in this project.</small></span
+                  ><small>Saved in .termarc.json in this project.</small></span
                 >
               </button>
             </div>

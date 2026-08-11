@@ -275,7 +275,7 @@ defineExpose({ focusActiveFile });
   border-radius: 0.25rem;
   color: var(--color-text-muted);
   background: var(--color-surface-emphasis);
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-family: "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.5625rem;
   font-weight: 700;
 }
@@ -295,7 +295,7 @@ defineExpose({ focusActiveFile });
   overflow: hidden;
   min-width: 0;
   flex: 1;
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-family: "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.625rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -307,7 +307,7 @@ defineExpose({ focusActiveFile });
   display: flex;
   flex: 0 0 auto;
   gap: 0.375rem;
-  font-family: "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-family: "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
 .additions {

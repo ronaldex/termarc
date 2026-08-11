@@ -60,22 +60,22 @@ fn strip_location_suffix(path: &str) -> &str {
 }
 
 pub(crate) fn projects_path() -> PathBuf {
-    termdeck_config_directory().join("projects.json")
+    config_directory().join("projects.json")
 }
 
 pub(crate) fn project_tree_state_path() -> PathBuf {
-    termdeck_config_directory().join("state.json")
+    config_directory().join("state.json")
 }
 
 pub(crate) fn themes_directory() -> PathBuf {
-    termdeck_config_directory().join("themes")
+    config_directory().join("themes")
 }
 
-fn termdeck_config_directory() -> PathBuf {
+pub(crate) fn config_directory() -> PathBuf {
     home_directory()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("termdeck")
+        .join("termarc")
 }
 
 fn home_directory() -> Option<PathBuf> {

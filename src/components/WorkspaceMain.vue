@@ -97,6 +97,7 @@ defineExpose({ focusContent, hasContentFocus });
       @remove="emit('removeProject', $event)"
       @add-command="emit('selectCommand', selectedProject.id)"
       @edit-command="emit('editCommand', selectedProject.id, $event)"
+      @remove-command="emit('removeCommand', selectedProject, $event)"
     />
     <AppSettingsView v-else-if="selection.kind === 'app-settings'" />
     <CommandRunView

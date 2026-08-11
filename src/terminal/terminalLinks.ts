@@ -45,7 +45,7 @@ export function installTerminalLinks(
   }
 
   // Handle OSC 8 ourselves. xterm renders OSC 8 links with a dotted underline
-  // unconditionally, while Termdeck only reveals links while Command is held.
+  // unconditionally, while Termarc only reveals links while Command is held.
   const oscHandler = tab.terminal.parser.registerOscHandler(8, (data) => {
     const separator = data.indexOf(";");
     const uri = separator >= 0 ? data.slice(separator + 1) : "";

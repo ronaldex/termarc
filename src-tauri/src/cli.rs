@@ -17,37 +17,79 @@ struct Project {
     commands: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     terminals: Option<serde_json::Value>,
+    /** Preserve fields owned by newer app versions during CLI mutations. */
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[tauri::command]
 pub fn install_symlink() -> Result<String, String> {
-    let executable =
-        env::current_exe().map_err(|error| format!("could not locate Termdeck: {error}"))?;
+    let executable = current_app_executable()?;
     if !executable
         .components()
         .any(|component| component.as_os_str() == "Contents")
     {
-        return Err("install the Termdeck app before adding its CLI to PATH".into());
+        return Err("install the Termarc app before adding its CLI to PATH".into());
     }
-    let directory = env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".local/bin");
-    fs::create_dir_all(&directory)
+    let link = cli_symlink_path();
+    let directory = link
+        .parent()
+        .ok_or_else(|| format!("CLI path has no parent: {}", link.display()))?;
+    fs::create_dir_all(directory)
         .map_err(|error| format!("could not create {}: {error}", directory.display()))?;
-    let link = directory.join("termdeck");
-    if link.exists() || link.symlink_metadata().is_ok() {
-        let target = fs::read_link(&link).ok();
-        if target.as_deref() == Some(executable.as_path()) {
+    if link.symlink_metadata().is_ok() {
+        if symlink_targets(&link, &executable) {
             return Ok(link.to_string_lossy().into_owned());
         }
         return Err(format!(
-            "{} already exists; remove it before installing the Termdeck CLI",
+            "{} already exists; remove it before installing the Termarc CLI",
             link.display()
         ));
     }
     create_symlink(&executable, &link)?;
     Ok(link.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn is_symlink_installed() -> Result<bool, String> {
+    Ok(symlink_targets(
+        &cli_symlink_path(),
+        &current_app_executable()?,
+    ))
+}
+
+#[tauri::command]
+pub fn remove_symlink() -> Result<String, String> {
+    let link = cli_symlink_path();
+    if link.symlink_metadata().is_err() {
+        return Ok(link.to_string_lossy().into_owned());
+    }
+    if !symlink_targets(&link, &current_app_executable()?) {
+        return Err(format!(
+            "{} is not the Termarc CLI symlink and was not removed",
+            link.display()
+        ));
+    }
+    fs::remove_file(&link)
+        .map_err(|error| format!("could not remove {}: {error}", link.display()))?;
+    Ok(link.to_string_lossy().into_owned())
+}
+
+fn current_app_executable() -> Result<PathBuf, String> {
+    env::current_exe().map_err(|error| format!("could not locate Termarc: {error}"))
+}
+
+fn cli_symlink_path() -> PathBuf {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".local/bin/termarc")
+}
+
+fn symlink_targets(link: &Path, executable: &Path) -> bool {
+    link.symlink_metadata()
+        .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        && fs::read_link(link).is_ok_and(|target| target == executable)
 }
 
 #[cfg(unix)]
@@ -70,7 +112,7 @@ pub fn run() {
         .collect::<Vec<_>>();
     let result = execute(&arguments, json);
     if let Err(error) = result {
-        eprintln!("termdeck: {error}");
+        eprintln!("termarc: {error}");
         process::exit(1);
     }
 }
@@ -116,6 +158,7 @@ fn execute(arguments: &[String], json: bool) -> Result<(), String> {
             Ok(())
         }
         [group, command, name, directory] if group == "projects" && command == "create" => {
+            let _guard = crate::projects::project_config_write_lock()?;
             let mut projects = load_projects()?;
             let directory = expand_user_path(directory);
             if !directory.is_dir() {
@@ -131,6 +174,7 @@ fn execute(arguments: &[String], json: bool) -> Result<(), String> {
                 directory: directory.to_string_lossy().into_owned(),
                 commands: None,
                 terminals: Some(serde_json::json!([])),
+                extra: serde_json::Map::new(),
             };
             projects.push(project.clone());
             save_projects(&projects)?;
@@ -138,6 +182,7 @@ fn execute(arguments: &[String], json: bool) -> Result<(), String> {
             Ok(())
         }
         [group, command, id, name] if group == "projects" && command == "rename" => {
+            let _guard = crate::projects::project_config_write_lock()?;
             let mut projects = load_projects()?;
             let project = projects
                 .iter_mut()
@@ -150,6 +195,7 @@ fn execute(arguments: &[String], json: bool) -> Result<(), String> {
             Ok(())
         }
         [group, command, id] if group == "projects" && command == "delete" => {
+            let _guard = crate::projects::project_config_write_lock()?;
             let mut projects = load_projects()?;
             if projects.len() <= 1 {
                 return Err("cannot delete the only project".into());
@@ -163,18 +209,18 @@ fn execute(arguments: &[String], json: bool) -> Result<(), String> {
             print_value(&serde_json::json!({ "deleted": id }), json);
             Ok(())
         }
-        _ => Err("unknown command; run `termdeck --help`".into()),
+        _ => Err("unknown command; run `termarc --help`".into()),
     }
 }
 
 fn launch() -> Result<(), String> {
     Command::new("open")
-        .args(["-a", "Termdeck"])
+        .args(["-a", "Termarc"])
         .status()
-        .map_err(|error| format!("could not launch Termdeck: {error}"))?
+        .map_err(|error| format!("could not launch Termarc: {error}"))?
         .success()
         .then_some(())
-        .ok_or_else(|| "could not launch Termdeck".into())
+        .ok_or_else(|| "could not launch Termarc".into())
 }
 
 fn load_projects() -> Result<Vec<Project>, String> {
@@ -195,12 +241,9 @@ fn save_projects(projects: &[Project]) -> Result<(), String> {
         .ok_or_else(|| format!("project path has no parent: {}", path.display()))?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    fs::write(
-        &path,
-        serde_json::to_vec_pretty(projects)
-            .map_err(|error| format!("could not serialize projects: {error}"))?,
-    )
-    .map_err(|error| format!("could not write {}: {error}", path.display()))
+    let contents = serde_json::to_vec_pretty(projects)
+        .map_err(|error| format!("could not serialize projects: {error}"))?;
+    crate::projects::atomic_write(&path, &contents)
 }
 
 fn next_project_id(projects: &[Project]) -> String {
@@ -215,11 +258,7 @@ fn next_project_id(projects: &[Project]) -> String {
 }
 
 fn data_directory() -> PathBuf {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config")
-        .join("termdeck")
+    crate::paths::config_directory()
 }
 
 fn projects_path() -> PathBuf {
@@ -254,8 +293,27 @@ fn print_value(value: &impl Serialize, json: bool) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::Project;
+
+    #[test]
+    fn project_mutations_preserve_app_owned_fields() {
+        let mut project: Project = serde_json::from_str(
+            r#"{"id":"p","name":"Old","directory":".","externalEditor":"vscode","future":{"enabled":true},"commands":[{"id":"build","order":2}],"terminals":[{"id":"terminal-a"}]}"#,
+        )
+        .expect("project should parse");
+        project.name = "New".into();
+        let value = serde_json::to_value(project).expect("project should serialize");
+        assert_eq!(value["externalEditor"], "vscode");
+        assert_eq!(value["future"]["enabled"], true);
+        assert_eq!(value["commands"][0]["order"], 2);
+        assert_eq!(value["terminals"][0]["id"], "terminal-a");
+    }
+}
+
 fn print_help() {
     println!(
-        "Termdeck command line interface\n\nUsage:\n  termdeck [--json] <command> ...\n  termdeck --help\n  termdeck --version\n\nCommands:\n  launch | open                 Launch the Termdeck macOS app.\n  status                        Show local Termdeck configuration status.\n  projects list                 List configured projects.\n  projects get <id>             Show a project.\n  projects create <name> <path> Add an existing directory as a project.\n  projects rename <id> <name>   Rename a project.\n  projects delete <id>          Delete a project (cannot delete the last one).\n\nOptions:\n  --help                        Show this help.\n  --version                     Print the CLI version.\n  --json                        Emit JSON output."
+        "Termarc command line interface\n\nUsage:\n  termarc [--json] <command> ...\n  termarc --help\n  termarc --version\n\nCommands:\n  launch | open                 Launch the Termarc macOS app.\n  status                        Show local Termarc configuration status.\n  projects list                 List configured projects.\n  projects get <id>             Show a project.\n  projects create <name> <path> Add an existing directory as a project.\n  projects rename <id> <name>   Rename a project.\n  projects delete <id>          Delete a project (cannot delete the last one).\n\nOptions:\n  --help                        Show this help.\n  --version                     Print the CLI version.\n  --json                        Emit JSON output."
     );
 }
