@@ -154,7 +154,7 @@ pub(crate) fn start_pty(
     }
     process.env("TERM", "xterm-256color");
     process.env("COLORTERM", "truecolor");
-    process.env("TERM_PROGRAM", "Termdeck");
+    process.env("TERM_PROGRAM", "Termarc");
 
     let mut child = pair
         .slave
@@ -357,7 +357,9 @@ pub(crate) fn stop_pty(id: String, state: State<'_, AppState>) -> Result<(), Str
 
 #[cfg(not(windows))]
 fn configure_fixed_command(process: &mut CommandBuilder, _shell: &str, command: &str) {
-    process.arg("-lc");
+    // Commands run in a PTY and should inherit the same startup environment as
+    // an interactive terminal, including PATH changes configured in ~/.zshrc.
+    process.arg("-lic");
     process.arg(command);
 }
 

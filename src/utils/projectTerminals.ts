@@ -1,14 +1,25 @@
 import type { ProjectTerminal } from "../types/project";
 import type { TerminalTabState } from "../types/terminal";
+import { normalizeTerminalOrdering } from "./terminalOrdering";
 import { normalizeTerminalTitle } from "./terminalTitles";
+
+export function createTerminalId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+}
 
 export function normalizeProjectTerminals(
   terminals: readonly ProjectTerminal[] | undefined,
+  createId: () => string = createTerminalId,
+  usedIds?: Set<string>,
 ): ProjectTerminal[] | undefined {
-  return terminals?.map((terminal) => {
+  const cleaned = terminals?.map((terminal) => {
     const customTitle = normalizeTerminalTitle(terminal.customTitle ?? "");
-    return customTitle ? { customTitle } : {};
+    return customTitle ? { id: terminal.id, customTitle } : { id: terminal.id };
   });
+  return normalizeTerminalOrdering(cleaned, createId, usedIds).terminals;
 }
 
 export function projectTerminalsFromTabs(
@@ -19,7 +30,7 @@ export function projectTerminalsFromTabs(
     .filter((tab) => tab.projectId === projectId && tab.launch.kind === "shell")
     .map((tab) => {
       const customTitle = normalizeTerminalTitle(tab.customTitle ?? "");
-      return customTitle ? { customTitle } : {};
+      return customTitle ? { id: tab.id, customTitle } : { id: tab.id };
     });
 }
 
@@ -30,6 +41,9 @@ export function projectTerminalsEqual(
   return (
     left !== undefined &&
     left.length === right.length &&
-    left.every((terminal, index) => terminal.customTitle === right[index]?.customTitle)
+    left.every(
+      (terminal, index) =>
+        terminal.id === right[index]?.id && terminal.customTitle === right[index]?.customTitle,
+    )
   );
 }

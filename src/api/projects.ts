@@ -17,9 +17,32 @@ export function saveProjectTreeState(state: Record<string, ProjectTreeState>): P
   return invoke("save_project_tree_state", { state });
 }
 
+export function loadLocalProjectCommands(directory: string): Promise<ProjectCommand[]> {
+  return invoke("load_local_project_commands", { directory });
+}
+
 export function saveLocalProjectCommands(
   directory: string,
   commands: ProjectCommand[],
 ): Promise<void> {
   return invoke("save_local_project_commands", { directory, commands });
+}
+
+export type CommandOrderFailure = {
+  stage: "validation" | "global" | "local" | "rollback" | "lock";
+  message: string;
+};
+
+export function saveProjectCommandOrder(
+  projectId: string,
+  directory: string,
+  globalCommands: ProjectCommand[],
+  localCommands: ProjectCommand[],
+): Promise<void> {
+  return invoke("save_project_command_order", {
+    projectId,
+    directory,
+    globalCommands,
+    localCommands,
+  });
 }

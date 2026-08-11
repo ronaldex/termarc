@@ -18,6 +18,7 @@ const emit = defineEmits<{
   remove: [id: string];
   addCommand: [];
   editCommand: [commandId: string];
+  removeCommand: [commandId: string];
 }>();
 const { settings } = useAppSettings();
 const draft = ref(copyProject(props.project));
@@ -36,6 +37,13 @@ watch(
     saved.value = false;
   },
 );
+watch(
+  () => props.project.commands,
+  (commands) => {
+    draft.value.commands = commands?.map((command) => ({ ...command })) ?? [];
+  },
+  { deep: true },
+);
 
 function copyProject(project: Project): Project {
   return { ...project, commands: project.commands?.map((command) => ({ ...command })) ?? [] };
@@ -44,11 +52,6 @@ function copyProject(project: Project): Project {
 function save(): void {
   emit("save", copyProject(draft.value));
   saved.value = true;
-}
-
-function removeCommand(commandId: string): void {
-  draft.value.commands = (draft.value.commands ?? []).filter((command) => command.id !== commandId);
-  saved.value = false;
 }
 
 function commandModeLabel(mode: string): string {
@@ -113,7 +116,7 @@ function commandModeLabel(mode: string): string {
               type="button"
               variant="danger"
               :aria-label="`Remove ${command.name}`"
-              @click="removeCommand(command.id)"
+              @click="emit('removeCommand', command.id)"
             >
               Remove
             </SettingsButton>
@@ -130,7 +133,7 @@ function commandModeLabel(mode: string): string {
         <SettingsCard>
           <SettingsActionRow
             title="Delete project"
-            description="Remove this project from Termdeck. Project files are not deleted."
+            description="Remove this project from Termarc. Project files are not deleted."
           >
             <SettingsButton type="button" variant="danger" @click="emit('remove', project.id)">
               Delete project

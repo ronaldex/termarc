@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "command-1784280437901",
+      "name": "dev",
+      "command": "npm run tauri dev",
+      "mode": "persistent",
+      "order": 0
+    },
+    {
+      "id": "command-1784280820106",
+      "name": "build",
+      "command": "npm run tauri build",
+      "mode": "single-shot",
+      "order": 1
+    }
+  ]
+}

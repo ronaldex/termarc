@@ -100,7 +100,7 @@ function initials(name: string): string {
   overflow: hidden;
   color: var(--color-text-muted);
   font-family:
-    "Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    "Termarc JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 0.625rem;
   text-overflow: ellipsis;
   white-space: nowrap;

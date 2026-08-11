@@ -40,7 +40,7 @@ fn configure_notification_application() -> bool {
     // as a failure caused every notification after the first to lose click handling.
     static CONFIGURED: OnceLock<bool> = OnceLock::new();
     *CONFIGURED.get_or_init(|| {
-        let Some(bundle_identifier) = get_bundle_identifier("Termdeck") else {
+        let Some(bundle_identifier) = get_bundle_identifier("Termarc") else {
             return false;
         };
         if let Err(error) = set_application(&bundle_identifier) {

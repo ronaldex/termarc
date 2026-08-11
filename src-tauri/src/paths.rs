@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,22 +60,31 @@ fn strip_location_suffix(path: &str) -> &str {
 }
 
 pub(crate) fn projects_path() -> PathBuf {
-    termdeck_config_directory().join("projects.json")
+    config_directory().join("projects.json")
 }
 
 pub(crate) fn project_tree_state_path() -> PathBuf {
-    termdeck_config_directory().join("state.json")
+    config_directory().join("state.json")
 }
 
 pub(crate) fn themes_directory() -> PathBuf {
-    termdeck_config_directory().join("themes")
+    config_directory().join("themes")
 }
 
-fn termdeck_config_directory() -> PathBuf {
-    home_directory()
+/// Returns the Termarc data directory, moving the legacy directory when possible.
+/// If the move fails, continue using the legacy directory so existing data remains usable.
+pub(crate) fn config_directory() -> PathBuf {
+    let config_root = home_directory()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config")
-        .join("termdeck")
+        .join(".config");
+    let directory = config_root.join("termarc");
+    let legacy_directory = config_root.join("termdeck");
+
+    if directory.exists() || !legacy_directory.exists() {
+        return directory;
+    }
+
+    fs::rename(&legacy_directory, &directory).map_or(legacy_directory, |_| directory)
 }
 
 fn home_directory() -> Option<PathBuf> {

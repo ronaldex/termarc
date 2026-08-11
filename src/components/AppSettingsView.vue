@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { installCliSymlink } from "../api/cli";
+import { onMounted, ref } from "vue";
+import {
+  AGENT_EXTENSION_OPTIONS,
+  installAgentExtension,
+  isAgentExtensionInstalled,
+  removeAgentExtension,
+  type AgentExtensionId,
+} from "../api/agentExtensions";
+import { installCliSymlink, isCliSymlinkInstalled, removeCliSymlink } from "../api/cli";
 import { useAppSettings } from "../composables/useAppSettings";
 import {
   EXTERNAL_EDITOR_OPTIONS,
@@ -15,27 +22,98 @@ import SettingsCard from "./settings/SettingsCard.vue";
 import SettingsField from "./settings/SettingsField.vue";
 import SettingsPage from "./settings/SettingsPage.vue";
 import SettingsSection from "./settings/SettingsSection.vue";
+import SettingsToggle from "./settings/SettingsToggle.vue";
+
+type ActionStatus = { kind: "success" | "error"; message: string };
 
 const { settings } = useAppSettings();
-const cliStatus = ref<{ kind: "success" | "error"; message: string }>();
-const installingCli = ref(false);
+const cliStatus = ref<ActionStatus>();
+const cliInstalled = ref(false);
+const cliBusy = ref(true);
+const extensionStatuses = ref<Partial<Record<AgentExtensionId, ActionStatus>>>({});
+const extensionInstalled = ref<Partial<Record<AgentExtensionId, boolean>>>({});
+const extensionBusy = ref<AgentExtensionId>();
+const extensionsLoaded = ref(false);
 
-async function installCli(): Promise<void> {
-  installingCli.value = true;
-  cliStatus.value = undefined;
+function checkboxValue(event: Event): boolean {
+  return (event.target as HTMLInputElement).checked;
+}
+
+async function loadInstallationStates(): Promise<void> {
   try {
-    const path = await installCliSymlink();
-    cliStatus.value = { kind: "success", message: `Installed at ${path}` };
+    cliInstalled.value = await isCliSymlinkInstalled();
   } catch (error) {
     cliStatus.value = { kind: "error", message: String(error) };
   } finally {
-    installingCli.value = false;
+    cliBusy.value = false;
   }
+
+  await Promise.all(
+    AGENT_EXTENSION_OPTIONS.map(async (extension) => {
+      try {
+        extensionInstalled.value[extension.id] = await isAgentExtensionInstalled(extension.id);
+      } catch (error) {
+        extensionStatuses.value[extension.id] = { kind: "error", message: String(error) };
+      }
+    }),
+  );
+  extensionsLoaded.value = true;
+}
+
+async function toggleCli(event: Event): Promise<void> {
+  const enabled = checkboxValue(event);
+  cliBusy.value = true;
+  cliStatus.value = undefined;
+  try {
+    const path = enabled ? await installCliSymlink() : await removeCliSymlink();
+    cliInstalled.value = enabled;
+    cliStatus.value = {
+      kind: "success",
+      message: `${enabled ? "Installed at" : "Removed"} ${path}`,
+    };
+  } catch (error) {
+    (event.target as HTMLInputElement).checked = cliInstalled.value;
+    cliStatus.value = { kind: "error", message: String(error) };
+  } finally {
+    cliBusy.value = false;
+  }
+}
+
+async function toggleExtension(
+  agent: AgentExtensionId,
+  reloadHint: string,
+  event: Event,
+): Promise<void> {
+  const enabled = checkboxValue(event);
+  extensionBusy.value = agent;
+  extensionStatuses.value[agent] = undefined;
+  try {
+    const path = enabled ? await installAgentExtension(agent) : await removeAgentExtension(agent);
+    extensionInstalled.value[agent] = enabled;
+    extensionStatuses.value[agent] = {
+      kind: "success",
+      message: enabled ? `Installed at ${path}. ${reloadHint}` : `Removed ${path}`,
+    };
+  } catch (error) {
+    (event.target as HTMLInputElement).checked = extensionInstalled.value[agent] ?? false;
+    extensionStatuses.value[agent] = { kind: "error", message: String(error) };
+  } finally {
+    extensionBusy.value = undefined;
+  }
+}
+
+onMounted(() => void loadInstallationStates());
+
+function updateNotificationSetting(
+  setting: "notifyWhenAgentReady" | "playSoundWhenAgentReady",
+  event: Event,
+): void {
+  settings[setting] = checkboxValue(event);
 }
 
 function testAgentReadyNotification(): void {
   void sendAgentReadyNotification({
-    body: "Termdeck notifications are working.",
+    body: "Termarc notifications are working.",
     notification: settings.notifyWhenAgentReady,
     sound: settings.playSoundWhenAgentReady,
   });
@@ -43,18 +121,18 @@ function testAgentReadyNotification(): void {
 </script>
 
 <template>
-  <SettingsPage title="Termdeck" kind="App settings">
+  <SettingsPage title="Termarc" kind="App settings">
     <form>
       <SettingsSection title="GENERAL">
         <SettingsCard>
-          <SettingsField title="Color theme" description="The color theme used by Termdeck.">
+          <SettingsField title="Color theme" description="The color theme used by Termarc.">
             <select v-model="settings.colorTheme">
               <option v-for="theme in COLOR_THEME_OPTIONS" :key="theme.value" :value="theme.value">
                 {{ theme.label }}
               </option>
             </select>
           </SettingsField>
-          <SettingsField title="Editor" description="The editor used to open files from Termdeck.">
+          <SettingsField title="Editor" description="The editor used to open files from Termarc.">
             <select v-model="settings.externalEditor">
               <option
                 v-for="editor in EXTERNAL_EDITOR_OPTIONS"
@@ -69,22 +147,47 @@ function testAgentReadyNotification(): void {
       </SettingsSection>
       <SettingsSection title="COMMAND LINE">
         <SettingsCard>
-          <SettingsActionRow
-            title="Termdeck CLI"
-            description="Add a termdeck symlink to ~/.local/bin so you can launch and manage Termdeck from your shell."
+          <SettingsField
+            title="Termarc CLI"
+            description="Add a termarc symlink to ~/.local/bin so you can launch and manage Termarc from your shell."
           >
-            <SettingsButton type="button" :disabled="installingCli" @click="installCli">
-              {{ installingCli ? "Installing…" : "Add symlink" }}
-            </SettingsButton>
-          </SettingsActionRow>
+            <SettingsToggle
+              label="Install Termarc CLI symlink"
+              :checked="cliInstalled"
+              :disabled="cliBusy"
+              @change="toggleCli"
+            />
+          </SettingsField>
           <p
             v-if="cliStatus"
-            class="cli-status"
+            class="action-status"
             :class="cliStatus.kind"
             :role="cliStatus.kind === 'error' ? 'alert' : 'status'"
           >
             {{ cliStatus.message }}
           </p>
+        </SettingsCard>
+      </SettingsSection>
+      <SettingsSection title="AGENT INTEGRATIONS">
+        <SettingsCard>
+          <template v-for="extension in AGENT_EXTENSION_OPTIONS" :key="extension.id">
+            <SettingsField :title="extension.name" :description="extension.description">
+              <SettingsToggle
+                :label="`Install ${extension.name} extension`"
+                :checked="extensionInstalled[extension.id] ?? false"
+                :disabled="!extensionsLoaded || extensionBusy !== undefined"
+                @change="toggleExtension(extension.id, extension.reloadHint, $event)"
+              />
+            </SettingsField>
+            <p
+              v-if="extensionStatuses[extension.id]"
+              class="action-status"
+              :class="extensionStatuses[extension.id]?.kind"
+              :role="extensionStatuses[extension.id]?.kind === 'error' ? 'alert' : 'status'"
+            >
+              {{ extensionStatuses[extension.id]?.message }}
+            </p>
+          </template>
         </SettingsCard>
       </SettingsSection>
       <SettingsSection title="TERMINAL">
@@ -107,13 +210,21 @@ function testAgentReadyNotification(): void {
             title="Agent ready notifications"
             description="Notify you whenever Pi finishes processing."
           >
-            <input v-model="settings.notifyWhenAgentReady" type="checkbox" />
+            <SettingsToggle
+              label="Enable agent ready notifications"
+              :checked="settings.notifyWhenAgentReady"
+              @change="updateNotificationSetting('notifyWhenAgentReady', $event)"
+            />
           </SettingsField>
           <SettingsField
             title="Agent ready sound"
             description="Play a sound whenever Pi finishes processing."
           >
-            <input v-model="settings.playSoundWhenAgentReady" type="checkbox" />
+            <SettingsToggle
+              label="Enable agent ready sound"
+              :checked="settings.playSoundWhenAgentReady"
+              @change="updateNotificationSetting('playSoundWhenAgentReady', $event)"
+            />
           </SettingsField>
           <SettingsActionRow
             description="Use this to confirm that your selected alerts are working."
@@ -133,18 +244,18 @@ form {
   display: flex;
   flex-direction: column;
 }
-.cli-status {
+.action-status {
   margin: 0 0.75rem 0.75rem;
   padding: 0.5rem 0.625rem;
   border-radius: 0.375rem;
   font-size: 0.625rem;
   overflow-wrap: anywhere;
 }
-.cli-status.success {
+.action-status.success {
   color: var(--color-status-running);
   background: var(--color-success-bg);
 }
-.cli-status.error {
+.action-status.error {
   color: var(--color-status-error);
   background: var(--color-danger-bg);
 }

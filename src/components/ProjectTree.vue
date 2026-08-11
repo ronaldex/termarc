@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useScrollActiveItem } from "../composables/useScrollActiveItem";
+import { useProjectTreeSorting, type SortItem } from "../composables/useProjectTreeSorting";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { projectTreeModel } from "../utils/projectTreeModel";
+import type { DropPlacement } from "../utils/terminalOrdering";
 import CommandTreeRow from "./CommandTreeRow.vue";
 import OverlayScrollArea from "./OverlayScrollArea.vue";
 import ProjectBadge from "./ProjectBadge.vue";
@@ -21,6 +23,8 @@ const props = defineProps<{
 const projectList = ref<InstanceType<typeof OverlayScrollArea>>();
 const activeItem = ref<HTMLElement>();
 const displayProjects = computed(() => projectTreeModel(props.projects, props.tabs, props.filter));
+const sortingEnabled = computed(() => !props.collapsed && !props.filter);
+const announcement = ref("");
 
 const emit = defineEmits<{
   close: [id: string];
@@ -32,6 +36,18 @@ const emit = defineEmits<{
   runCommand: [projectId: string, commandId: string];
   reloadCommand: [projectId: string, commandId: string];
   stopCommand: [projectId: string, commandId: string];
+  reorderTerminal: [
+    projectId: string,
+    movedTabId: string,
+    targetTabId: string,
+    placement: DropPlacement,
+  ];
+  reorderCommand: [
+    projectId: string,
+    movedCommandId: string,
+    targetCommandId: string,
+    placement: DropPlacement,
+  ];
   focus: [selection: SidebarSelection];
   activate: [selection: SidebarSelection];
 }>();
@@ -63,6 +79,36 @@ function focusActiveItem(): boolean {
         );
   button?.focus();
   return document.activeElement === button;
+}
+function emitDrop(source: SortItem, target: SortItem & { placement: DropPlacement }): void {
+  if (source.kind === "terminal")
+    emit("reorderTerminal", source.projectId, source.id, target.id, target.placement);
+  else emit("reorderCommand", source.projectId, source.id, target.id, target.placement);
+}
+const { beginPointerDrag, dropClass } = useProjectTreeSorting({
+  enabled: sortingEnabled,
+  scrollViewport: () => projectList.value?.getViewport(),
+  onDrop: emitDrop,
+});
+
+function moveWithKeyboard(event: KeyboardEvent, item: SortItem, label: string): void {
+  if (!sortingEnabled.value || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key))
+    return;
+  const project = displayProjects.value.find((candidate) => candidate.id === item.projectId);
+  const ids =
+    item.kind === "terminal"
+      ? project?.terminalTabs.map((tab) => tab.id)
+      : project?.commandItems.map(({ command }) => command.id);
+  if (!ids) return;
+  const index = ids.indexOf(item.id);
+  const direction = event.key === "ArrowUp" ? -1 : 1;
+  const target = ids[index + direction];
+  if (!target) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emitDrop(item, { ...item, id: target, placement: direction < 0 ? "before" : "after" });
+  announcement.value = `${label} moved ${direction < 0 ? "up" : "down"}, position ${index + direction + 1} of ${ids.length}`;
+  requestAnimationFrame(focusActiveItem);
 }
 
 defineExpose({ focusActiveItem });
@@ -131,6 +177,21 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
               v-for="tab in project.terminalTabs"
               :key="tab.id"
               :ref="(element) => setActiveItem(element, tab.id)"
+              class="sortable-row"
+              :class="dropClass({ kind: 'terminal', projectId: project.id, id: tab.id })"
+              :data-sort-kind="sortingEnabled ? 'terminal' : undefined"
+              :data-project-id="project.id"
+              :data-sort-id="tab.id"
+              @pointerdown="
+                beginPointerDrag($event, { kind: 'terminal', projectId: project.id, id: tab.id })
+              "
+              @keydown="
+                moveWithKeyboard(
+                  $event,
+                  { kind: 'terminal', projectId: project.id, id: tab.id },
+                  tab.customTitle || tab.title,
+                )
+              "
             >
               <TerminalTreeRow
                 :tab="tab"
@@ -195,6 +256,25 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
               v-for="item in project.commandItems"
               :key="`${project.id}:${item.command.id}`"
               :ref="(element) => setActiveItem(element, `${project.id}:command:${item.command.id}`)"
+              class="sortable-row"
+              :class="dropClass({ kind: 'command', projectId: project.id, id: item.command.id })"
+              :data-sort-kind="sortingEnabled ? 'command' : undefined"
+              :data-project-id="project.id"
+              :data-sort-id="item.command.id"
+              @pointerdown="
+                beginPointerDrag($event, {
+                  kind: 'command',
+                  projectId: project.id,
+                  id: item.command.id,
+                })
+              "
+              @keydown="
+                moveWithKeyboard(
+                  $event,
+                  { kind: 'command', projectId: project.id, id: item.command.id },
+                  item.command.name,
+                )
+              "
             >
               <CommandTreeRow
                 :project-id="project.id"
@@ -213,10 +293,48 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
         </div>
       </div>
     </section>
+    <p class="sr-only" aria-live="polite" aria-atomic="true">{{ announcement }}</p>
   </OverlayScrollArea>
 </template>
 
 <style scoped>
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.sortable-row {
+  position: relative;
+}
+.sortable-row[data-sort-kind] {
+  cursor: grab;
+}
+.sortable-row[data-sort-kind]:active {
+  cursor: grabbing;
+}
+.sortable-row.dragging {
+  opacity: 0.55;
+}
+.sortable-row.drop-before::before,
+.sortable-row.drop-after::after {
+  position: absolute;
+  right: 0;
+  left: var(--tree-item-icon-left);
+  z-index: 2;
+  height: 0.125rem;
+  border-radius: 0.125rem;
+  background: var(--color-focus);
+  content: "";
+}
+.sortable-row.drop-before::before {
+  top: -0.0625rem;
+}
+.sortable-row.drop-after::after {
+  bottom: -0.0625rem;
+}
 button {
   border: 0;
   color: inherit;

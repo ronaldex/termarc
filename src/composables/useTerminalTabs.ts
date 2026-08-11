@@ -9,10 +9,12 @@ import {
 import { createTerminalActivityMonitor } from "../services/terminalActivityMonitor";
 import { applyAgentMarker } from "../utils/terminalActivity";
 import { nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
+import { reorderProjectTerminalTabs, type DropPlacement } from "../utils/terminalOrdering";
+import { createTerminalId } from "../utils/projectTerminals";
 import {
   parseTerminalAgentMarker,
   parseTerminalShellMarker,
-  TERMDECK_AGENT_OSC,
+  TERMARC_AGENT_OSC,
 } from "../utils/terminalAgentStatus";
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
 import { fitTerminalToContainer } from "../terminal/fitTerminal";
@@ -46,21 +48,28 @@ export function useTerminalTabs(configuration: {
   let nextTabNumber = 1;
   let commandKeyPressed = false;
   let lastPointerPosition: { x: number; y: number } | undefined;
-  let defaultProject = { projectId: "project-1", cwd: "." };
+  let defaultProject = { projectId: "home", cwd: "~" };
   const activityMonitor = createTerminalActivityMonitor({ tabs });
 
   async function createTab(
     projectId: string,
     cwd: string,
-    options: { launch?: TerminalLaunch; launchTitle?: string; customTitle?: string } = {},
+    options: {
+      id?: string;
+      launch?: TerminalLaunch;
+      launchTitle?: string;
+      customTitle?: string;
+    } = {},
   ): Promise<TerminalTab | undefined> {
     if (disposed) return undefined;
     await prepareTerminalFonts();
     if (disposed) return undefined;
 
     const number = nextTabNumber++;
+    let id = options.id?.trim() || createTerminalId();
+    while (tabs.some((tab) => tab.id === id)) id = createTerminalId();
     const tab = reactive({
-      id: `terminal-${number}`,
+      id,
       number,
       shortcutNumber: number,
       title: `Terminal ${number}`,
@@ -122,6 +131,23 @@ export function useTerminalTabs(configuration: {
     });
   }
 
+  function reorderProjectTerminals(
+    projectId: string,
+    movedTabId: string,
+    targetTabId: string,
+    placement: DropPlacement,
+  ): void {
+    const orderedTabs = reorderProjectTerminalTabs(
+      tabs,
+      projectId,
+      movedTabId,
+      targetTabId,
+      placement,
+    );
+    if (orderedTabs.every((tab, index) => tab === tabs[index])) return;
+    tabs.splice(0, tabs.length, ...orderedTabs);
+  }
+
   function setTerminalContainer(tab: TerminalTab, element: Element | null): void {
     tab.container = element instanceof HTMLDivElement ? element : undefined;
   }
@@ -134,7 +160,7 @@ export function useTerminalTabs(configuration: {
   }
 
   function installTerminalAgentStatus(tab: TerminalTab): void {
-    tab.terminal.parser.registerOscHandler(TERMDECK_AGENT_OSC, (data) => {
+    tab.terminal.parser.registerOscHandler(TERMARC_AGENT_OSC, (data) => {
       const agentMarker = parseTerminalAgentMarker(data);
       if (agentMarker) {
         const update = applyAgentMarker(tab, agentMarker);
@@ -580,6 +606,7 @@ export function useTerminalTabs(configuration: {
     closeTab,
     setTerminalTitleOverride,
     setTabShortcutOrder,
+    reorderProjectTerminals,
     restartTab,
     stopTab,
     clearActiveTab,

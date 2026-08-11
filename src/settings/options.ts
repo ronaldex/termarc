@@ -1,10 +1,10 @@
 import type { ExternalEditor } from "../types/settings";
 
 export const DEFAULT_TERMINAL_FONT_FAMILY =
-  '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace';
+  '"Termarc JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace';
 
 export const TERMINAL_FONT_OPTIONS = [
-  { label: "Termdeck JetBrains Mono", value: DEFAULT_TERMINAL_FONT_FAMILY },
+  { label: "Termarc JetBrains Mono", value: DEFAULT_TERMINAL_FONT_FAMILY },
   { label: "JetBrains Mono", value: '"JetBrains Mono", monospace' },
   { label: "SF Mono", value: '"SFMono-Regular", "SF Mono", monospace' },
   { label: "Menlo", value: "Menlo, monospace" },

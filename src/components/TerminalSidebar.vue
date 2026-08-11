@@ -4,6 +4,7 @@ import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigatio
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
+import type { DropPlacement } from "../utils/terminalOrdering";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
 import TerminalContextMenu from "./TerminalContextMenu.vue";
@@ -31,6 +32,18 @@ const emit = defineEmits<{
   runCommand: [projectId: string, commandId: string];
   reloadCommand: [projectId: string, commandId: string];
   stopCommand: [projectId: string, commandId: string];
+  reorderTerminal: [
+    projectId: string,
+    movedTabId: string,
+    targetTabId: string,
+    placement: DropPlacement,
+  ];
+  reorderCommand: [
+    projectId: string,
+    movedCommandId: string,
+    targetCommandId: string,
+    placement: DropPlacement,
+  ];
   focus: [selection: SidebarSelection];
   activate: [selection: SidebarSelection];
 }>();
@@ -244,6 +257,14 @@ onBeforeUnmount(() => {
       @run-command="(projectId, commandId) => emit('runCommand', projectId, commandId)"
       @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
       @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
+      @reorder-terminal="
+        (projectId, movedId, targetId, placement) =>
+          emit('reorderTerminal', projectId, movedId, targetId, placement)
+      "
+      @reorder-command="
+        (projectId, movedId, targetId, placement) =>
+          emit('reorderCommand', projectId, movedId, targetId, placement)
+      "
       @focus="choose"
       @activate="activate"
     />

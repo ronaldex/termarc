@@ -10,13 +10,19 @@ export type ProjectCommand = {
   command: string;
   mode: ProjectCommandMode;
   directory?: string;
+  /** Stable display rank shared by app and project-local command stores. */
+  order?: number;
   /** Where this command is saved. Project commands override globals with the same ID. */
   storage?: ProjectCommandStorage;
 };
 
 export type ProjectTerminal = {
+  /** Stable identity used to restore terminal ordering across launches. */
+  id?: string;
   customTitle?: string;
 };
+
+export type ProjectMetadataUpdate = Pick<Project, "id" | "name" | "directory" | "externalEditor">;
 
 export type Project = {
   id: string;
@@ -28,7 +34,7 @@ export type Project = {
   globalCommands?: ProjectCommand[];
   localCommands?: ProjectCommand[];
   localConfigError?: string;
-  /** Shell terminals restored when Termdeck starts. */
+  /** Shell terminals restored when Termarc starts. */
   terminals?: ProjectTerminal[];
 };
 

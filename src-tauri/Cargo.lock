@@ -3783,10 +3783,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "termdeck"
+name = "termarc"
 version = "0.1.0"
 dependencies = [
  "cocoa",
+ "libc",
  "mac-notification-sys",
  "objc",
  "portable-pty",

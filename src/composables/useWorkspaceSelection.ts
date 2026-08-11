@@ -4,9 +4,9 @@ import type { SidebarSelection } from "../types/sidebar";
 
 export function useWorkspaceSelection(projects: Ref<Project[]>) {
   const selection = ref<SidebarSelection>({
-    id: "project-1",
+    id: "home",
     kind: "project",
-    projectId: "project-1",
+    projectId: "home",
   });
   const activeProjectId = computed(() =>
     "projectId" in selection.value ? selection.value.projectId : undefined,

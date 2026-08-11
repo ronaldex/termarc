@@ -4,7 +4,7 @@
  * keeps every glyph inside xterm's cell grid.
  */
 @font-face {
-  font-family: "Termdeck JetBrainsMono Nerd Font";
+  font-family: "Termarc JetBrainsMono Nerd Font";
   src: url("../assets/fonts/JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
   font-display: block;
   font-style: normal;
@@ -12,7 +12,7 @@
 }
 
 @font-face {
-  font-family: "Termdeck JetBrainsMono Nerd Font";
+  font-family: "Termarc JetBrainsMono Nerd Font";
   src: url("../assets/fonts/JetBrainsMonoNerdFontMono-SemiBold.ttf") format("truetype");
   font-display: block;
   font-style: normal;

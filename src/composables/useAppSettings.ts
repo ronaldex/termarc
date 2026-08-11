@@ -11,15 +11,17 @@ import type { AppSettings, ColorTheme } from "../types/settings";
 const DEFAULT_SETTINGS: AppSettings = {
   terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
   terminalFontSize: 13,
-  colorTheme: "termdeck",
+  colorTheme: "termarc",
   externalEditor: "vscodium",
   notifyWhenAgentReady: false,
   playSoundWhenAgentReady: true,
 };
 
-const STORAGE_KEY = "termdeck-settings";
+const STORAGE_KEY = "termarc-settings";
+const LEGACY_STORAGE_KEY = "termdeck-settings";
 const STORAGE_VERSION = 2;
 const LEGACY_FONT_FAMILIES = new Set([
+  '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
   '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
   '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
   '"JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
@@ -71,7 +73,12 @@ function validatedSettings(value: unknown): AppSettings {
     terminalFontSize: isTerminalFontSize(value.terminalFontSize)
       ? value.terminalFontSize
       : DEFAULT_SETTINGS.terminalFontSize,
-    colorTheme: isColorTheme(value.colorTheme) ? value.colorTheme : DEFAULT_SETTINGS.colorTheme,
+    colorTheme:
+      value.colorTheme === "termdeck"
+        ? "termarc"
+        : isColorTheme(value.colorTheme)
+          ? value.colorTheme
+          : DEFAULT_SETTINGS.colorTheme,
     externalEditor: isExternalEditor(value.externalEditor)
       ? value.externalEditor
       : DEFAULT_SETTINGS.externalEditor,
@@ -92,7 +99,9 @@ export function migrateSettings(value: unknown): LoadedSettings {
   if (value.version === STORAGE_VERSION) {
     return {
       settings: validatedSettings(value.settings),
-      needsSaving: !isValidSettings(value.settings),
+      needsSaving:
+        !isValidSettings(value.settings) ||
+        (isRecord(value.settings) && value.settings.colorTheme === "termdeck"),
     };
   }
 
@@ -135,11 +144,16 @@ function load(): void {
   let settingsNeedSaving = false;
 
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    let saved = localStorage.getItem(STORAGE_KEY);
+    let migratedFromLegacyKey = false;
+    if (saved === null) {
+      saved = localStorage.getItem(LEGACY_STORAGE_KEY);
+      migratedFromLegacyKey = saved !== null;
+    }
     if (saved) {
       const migrated = migrateSettings(JSON.parse(saved) as unknown);
       Object.assign(settings, migrated.settings);
-      settingsNeedSaving = migrated.needsSaving;
+      settingsNeedSaving = migrated.needsSaving || migratedFromLegacyKey;
     }
   } catch (error) {
     console.error("Could not load settings", error);

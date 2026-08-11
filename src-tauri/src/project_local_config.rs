@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use crate::projects::{ProjectCommand, atomic_write};
 
-const CONFIG_FILE: &str = ".termdeck.json";
+const CONFIG_FILE: &str = ".termarc.json";
+const LEGACY_CONFIG_FILE: &str = ".termdeck.json";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -14,7 +15,7 @@ struct LocalConfig {
 }
 
 pub(crate) fn load(directory: &str) -> Result<Option<Vec<ProjectCommand>>, String> {
-    let path = config_path(directory);
+    let path = load_path(directory);
     if !path.exists() {
         return Ok(None);
     }
@@ -48,18 +49,39 @@ fn config_path(directory: &str) -> PathBuf {
     crate::paths::expand_user_path(directory).join(CONFIG_FILE)
 }
 
+fn load_path(directory: &str) -> PathBuf {
+    let path = config_path(directory);
+    path.exists()
+        .then_some(path)
+        .unwrap_or_else(|| crate::paths::expand_user_path(directory).join(LEGACY_CONFIG_FILE))
+}
+
 fn validate(commands: &[ProjectCommand]) -> Result<(), String> {
-    let mut ids = HashSet::new();
-    for command in commands {
-        if command.id.trim().is_empty()
-            || command.name.trim().is_empty()
-            || command.command.trim().is_empty()
-        {
-            return Err("local commands require a non-empty id, name, and command".into());
-        }
-        if !ids.insert(&command.id) {
-            return Err(format!("duplicate local command id: {}", command.id));
-        }
+    crate::projects::validate_command_store(commands, "local", false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LocalConfig;
+
+    #[test]
+    fn loads_legacy_commands_without_order() {
+        let config: LocalConfig = serde_json::from_str(
+            r#"{"version":1,"commands":[{"id":"build","name":"Build","command":"npm run build","mode":"single-shot"}]}"#,
+        )
+        .expect("legacy local config should load");
+
+        assert_eq!(config.commands[0].order, None);
     }
-    Ok(())
+
+    #[test]
+    fn round_trips_command_order() {
+        let config: LocalConfig = serde_json::from_str(
+            r#"{"version":1,"commands":[{"id":"build","name":"Build","command":"npm run build","mode":"single-shot","order":3}]}"#,
+        )
+        .expect("ordered local config should load");
+        let serialized = serde_json::to_value(config).expect("local config should serialize");
+
+        assert_eq!(serialized["commands"][0]["order"], 3);
+    }
 }

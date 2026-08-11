@@ -62,7 +62,7 @@ function ensureElementVisible(element: HTMLElement): void {
   handleScroll();
 }
 
-defineExpose({ ensureElementVisible });
+defineExpose({ ensureElementVisible, getViewport: () => viewport.value });
 
 onMounted(() => {
   const element = viewport.value;

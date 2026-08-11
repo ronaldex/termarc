@@ -1,3 +1,4 @@
+mod agent_extensions;
 pub mod cli;
 mod external_editor;
 mod git;
@@ -57,11 +58,18 @@ pub fn run() {
             themes::load_custom_themes,
             external_editor::open_terminal_path,
             cli::install_symlink,
+            cli::is_symlink_installed,
+            cli::remove_symlink,
+            agent_extensions::install_agent_extension,
+            agent_extensions::is_agent_extension_installed,
+            agent_extensions::remove_agent_extension,
             projects::load_projects,
             projects::save_projects,
             projects::load_project_tree_state,
             projects::save_project_tree_state,
+            projects::load_local_project_commands,
             projects::save_local_project_commands,
+            projects::save_project_command_order,
             pty::write_to_pty,
             pty::resize_pty,
             pty::get_pty_status,
@@ -80,7 +88,7 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Termdeck");
+        .expect("error while running Termarc");
 }
 
 fn is_app_navigation(url: &tauri::Url) -> bool {

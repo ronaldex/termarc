@@ -1,11 +1,12 @@
 import { nextTick } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const STORAGE_KEY = "termdeck-settings";
+const STORAGE_KEY = "termarc-settings";
+const LEGACY_STORAGE_KEY = "termdeck-settings";
 
-function mockStorage(saved: string | null = null) {
+function mockStorage(saved: string | null = null, storageKey = STORAGE_KEY) {
   const values = new Map<string, string>();
-  if (saved !== null) values.set(STORAGE_KEY, saved);
+  if (saved !== null) values.set(storageKey, saved);
 
   const storage = {
     getItem: vi.fn((key: string) => values.get(key) ?? null),
@@ -47,7 +48,7 @@ describe("useAppSettings persistence", () => {
       notifyWhenAgentReady: false,
       playSoundWhenAgentReady: false,
     });
-    expect(settings.terminalFontFamily).toContain("Termdeck JetBrainsMono Nerd Font");
+    expect(settings.terminalFontFamily).toContain("Termarc JetBrainsMono Nerd Font");
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toEqual({
       version: 2,
       settings: { ...settings },
@@ -72,8 +73,34 @@ describe("useAppSettings persistence", () => {
     const { settings, load } = useAppSettings();
     load();
 
-    expect(settings.terminalFontFamily).toContain("Termdeck JetBrainsMono Nerd Font");
+    expect(settings.terminalFontFamily).toContain("Termarc JetBrainsMono Nerd Font");
     expect(storage.setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("migrates legacy storage, theme, and branded font to Termarc", async () => {
+    const storage = mockStorage(
+      JSON.stringify({
+        version: 2,
+        settings: {
+          terminalFontFamily:
+            '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
+          terminalFontSize: 16,
+          colorTheme: "termdeck",
+          externalEditor: "vscodium",
+          notifyWhenAgentReady: false,
+          playSoundWhenAgentReady: true,
+        },
+      }),
+      LEGACY_STORAGE_KEY,
+    );
+    const { useAppSettings } = await import("./useAppSettings");
+
+    const { settings, load } = useAppSettings();
+    load();
+
+    expect(settings.colorTheme).toBe("termarc");
+    expect(settings.terminalFontFamily).toContain("Termarc JetBrainsMono Nerd Font");
+    expect(storage.setItem.mock.calls[0]![0]).toBe(STORAGE_KEY);
   });
 
   it("rejects out-of-range font sizes and non-boolean preferences", async () => {
@@ -97,7 +124,7 @@ describe("useAppSettings persistence", () => {
     expect(settings).toEqual({
       terminalFontFamily: "Monaco",
       terminalFontSize: 13,
-      colorTheme: "termdeck",
+      colorTheme: "termarc",
       externalEditor: "vscodium",
       notifyWhenAgentReady: false,
       playSoundWhenAgentReady: true,
@@ -139,7 +166,7 @@ describe("useAppSettings persistence", () => {
         settings: {
           terminalFontFamily: "Monaco",
           terminalFontSize: 16,
-          colorTheme: "termdeck",
+          colorTheme: "termarc",
           externalEditor: "vscodium",
           notifyWhenAgentReady: false,
           playSoundWhenAgentReady: true,

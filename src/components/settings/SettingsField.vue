@@ -75,44 +75,6 @@ withDefaults(
   border-color: var(--color-focus);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-focus) 35%, transparent);
 }
-.settings-field :deep(input[type="checkbox"]) {
-  --toggle-width: 2rem;
-  --toggle-height: 1.125rem;
-  --toggle-padding: 0.125rem;
-  position: relative;
-  width: var(--toggle-width);
-  height: var(--toggle-height);
-  justify-self: start;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--toggle-height);
-  appearance: none;
-  background: var(--color-surface-emphasis);
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background 120ms ease;
-}
-.settings-field :deep(input[type="checkbox"]::after) {
-  position: absolute;
-  top: var(--toggle-padding);
-  left: var(--toggle-padding);
-  width: calc(var(--toggle-height) - var(--toggle-padding) - var(--toggle-padding) - 2px);
-  height: calc(var(--toggle-height) - var(--toggle-padding) - var(--toggle-padding) - 2px);
-  border-radius: 50%;
-  background: var(--color-text-muted);
-  content: "";
-  transition:
-    transform 120ms ease,
-    background 120ms ease;
-}
-.settings-field :deep(input[type="checkbox"]:checked) {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-}
-.settings-field :deep(input[type="checkbox"]:checked::after) {
-  background: var(--color-app-bg);
-  transform: translateX(calc(var(--toggle-width) - var(--toggle-height)));
-}
 @media (max-width: 48rem) {
   .settings-field {
     grid-template-columns: 1fr;
