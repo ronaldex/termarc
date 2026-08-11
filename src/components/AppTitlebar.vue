@@ -13,7 +13,7 @@ const display = computed(() =>
 <template>
   <header class="titlebar" data-tauri-drag-region>
     <span class="app-title">Termarc</span>
-    <div class="active-terminal" data-tauri-drag-region>
+    <div class="active-terminal">
       <TerminalStatusIndicator
         :status="activeTab?.status ?? 'stopped'"
         :busy="display?.busy"
@@ -40,6 +40,9 @@ const display = computed(() =>
   color: var(--color-text);
   background: var(--color-sidebar-bg);
   user-select: none;
+}
+.titlebar * {
+  pointer-events: none;
 }
 .app-title {
   flex: 0 0 auto;
