@@ -1,4 +1,4 @@
-name: Build macOS releases
+name: Build releases
 
 on:
   push:
@@ -15,15 +15,8 @@ concurrency:
 
 jobs:
   macos:
-    name: Build ${{ matrix.arch }} DMG
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            target: aarch64-apple-darwin
-            runner: macos-14
+    name: Build macOS DMG
+    runs-on: macos-14
 
     steps:
       - name: Check out source
@@ -38,7 +31,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
@@ -49,21 +42,21 @@ jobs:
         run: npm ci
 
       - name: Build DMG
-        run: npm run tauri build -- --target "${{ matrix.target }}" --bundles dmg
+        run: npm run tauri build -- --target aarch64-apple-darwin --bundles dmg
 
       - name: Prepare release asset
         shell: bash
         run: |
           set -euo pipefail
-          dmg=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name '*.dmg' -print -quit)
+          dmg=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
           test -n "$dmg"
-          cp "$dmg" "Termarc_${{ matrix.arch }}.dmg"
+          cp "$dmg" Termarc_arm64.dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dmg-${{ matrix.arch }}
-          path: Termarc_${{ matrix.arch }}.dmg
+          name: dmg
+          path: Termarc_arm64.dmg
           if-no-files-found: error
 
   linux:
@@ -128,10 +121,10 @@ jobs:
     needs: [macos, linux]
     runs-on: ubuntu-latest
     steps:
-      - name: Download DMG artifacts
+      - name: Download DMG artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: dmg-*
+          name: dmg
           merge-multiple: true
           path: release-assets
 
@@ -152,4 +145,4 @@ jobs:
             --target "${{ github.sha }}" \
             --title "$TITLE" \
             --prerelease \
-            --notes "Automated macOS build for commit ${{ github.sha }}."
+            --notes "Automated macOS arm64 and Linux build for commit ${{ github.sha }}."
