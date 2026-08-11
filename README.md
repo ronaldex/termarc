@@ -97,27 +97,3 @@ The frontend includes a focused xterm.js 6.0 compatibility shim that encodes
 `Shift+Enter` as Kitty keyboard sequence `CSI 13;2u`, allowing Pi to distinguish
 it from plain Enter. This can be removed once Kitty keyboard support reaches a
 stable xterm.js release.
-
-## Pi status integration
-
-Termarc detects the Pi process automatically. To also show whether Pi is
-processing or waiting for input, open **Settings → Agent integrations** and
-install the Pi extension. For a manual development install, run:
-
-```sh
-mkdir -p ~/.pi/agent/extensions
-cp extensions/pi/termarc-status.ts ~/.pi/agent/extensions/termarc-status.ts
-```
-
-Restart Pi (or run `/reload`) after installing it. The extension emits private
-terminal control sequences on Pi lifecycle events; Termarc consumes them
-without displaying any terminal output.
-
-## Roadmap
-
-- explicit backpressure and output batching for many simultaneous PTYs
-- process-group/job-object cleanup
-- bounded backend log storage
-- session persistence
-- command trust and validation
-- integration tests on macOS, Windows, X11, and Wayland

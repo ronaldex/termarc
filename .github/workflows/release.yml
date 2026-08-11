@@ -50,13 +50,13 @@ jobs:
           set -euo pipefail
           dmg=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
           test -n "$dmg"
-          cp "$dmg" Termarc_arm64.dmg
+          cp "$dmg" Termarc.dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: dmg
-          path: Termarc_arm64.dmg
+          path: Termarc.dmg
           if-no-files-found: error
 
   linux:
