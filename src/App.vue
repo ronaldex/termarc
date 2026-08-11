@@ -374,12 +374,9 @@ onMounted(async () => {
   start(initialProject.id, initialProject.directory);
 
   let firstRestoredTabId: string | undefined;
-  for (const [projectIndex, project] of projects.value.entries()) {
+  for (const project of projects.value) {
     let projectRestoreSucceeded = true;
-    // Legacy project files had no terminal list and opened one shell for the
-    // first project. Preserve that behavior once, then persist explicit lists.
-    const savedTerminals = project.terminals ?? (projectIndex === 0 ? [{}] : []);
-    for (const terminal of savedTerminals) {
+    for (const terminal of project.terminals ?? []) {
       try {
         const tab = await createTab(project.id, project.directory, {
           id: terminal.id,

@@ -58,9 +58,7 @@ export function useProjects() {
       return {} as Record<string, ProjectTreeState>;
     });
     if (saved.length) {
-      const serializedBeforeMigration = JSON.stringify(saved.map(storedProject));
-      const usedTerminalIds = new Set<string>();
-      projects.value = saved.map((project) => normalizeProject(project, usedTerminalIds));
+      projects.value = saved.map(normalizeProject);
       for (const project of saved) {
         const legacy = project as Project & Partial<ProjectTreeState>;
         treeState[project.id] = createProjectTreeState(
@@ -70,9 +68,6 @@ export function useProjects() {
             commandsOpen: legacy.commandsOpen ?? true,
           },
         );
-      }
-      if (JSON.stringify(projects.value.map(storedProject)) !== serializedBeforeMigration) {
-        persistenceDirty.value = true;
       }
     }
     loaded.value = true;
@@ -338,7 +333,7 @@ export function useProjects() {
   };
 }
 
-function normalizeProject(project: Project, usedTerminalIds: Set<string>): Project {
+function normalizeProject(project: Project): Project {
   return {
     id: project.id,
     name: project.name,
@@ -355,7 +350,7 @@ function normalizeProject(project: Project, usedTerminalIds: Set<string>): Proje
     localCommands:
       project.localCommands?.map((command) => ({ ...command })).sort(compareCommandOrder) ?? [],
     localConfigError: project.localConfigError,
-    terminals: normalizeProjectTerminals(project.terminals, undefined, usedTerminalIds),
+    terminals: normalizeProjectTerminals(project.terminals),
   };
 }
 

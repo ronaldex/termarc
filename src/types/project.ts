@@ -18,7 +18,7 @@ export type ProjectCommand = {
 
 export type ProjectTerminal = {
   /** Stable identity used to restore terminal ordering across launches. */
-  id?: string;
+  id: string;
   customTitle?: string;
 };
 

@@ -18,14 +18,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const STORAGE_KEY = "termarc-settings";
-const LEGACY_STORAGE_KEY = "termdeck-settings";
 const STORAGE_VERSION = 2;
-const LEGACY_FONT_FAMILIES = new Set([
-  '"Termdeck JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-  '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-  '"JetBrains Mono", "Symbols Nerd Font Mono", "SFMono-Regular", Consolas, monospace',
-  '"JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-]);
 
 interface PersistedSettings {
   version: typeof STORAGE_VERSION;
@@ -65,20 +58,15 @@ function validatedSettings(value: unknown): AppSettings {
   if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
 
   return {
-    terminalFontFamily:
-      isTerminalFont(value.terminalFontFamily) &&
-      !LEGACY_FONT_FAMILIES.has(value.terminalFontFamily)
-        ? value.terminalFontFamily
-        : DEFAULT_SETTINGS.terminalFontFamily,
+    terminalFontFamily: isTerminalFont(value.terminalFontFamily)
+      ? value.terminalFontFamily
+      : DEFAULT_SETTINGS.terminalFontFamily,
     terminalFontSize: isTerminalFontSize(value.terminalFontSize)
       ? value.terminalFontSize
       : DEFAULT_SETTINGS.terminalFontSize,
-    colorTheme:
-      value.colorTheme === "termdeck"
-        ? "termarc"
-        : isColorTheme(value.colorTheme)
-          ? value.colorTheme
-          : DEFAULT_SETTINGS.colorTheme,
+    colorTheme: isColorTheme(value.colorTheme)
+      ? value.colorTheme
+      : DEFAULT_SETTINGS.colorTheme,
     externalEditor: isExternalEditor(value.externalEditor)
       ? value.externalEditor
       : DEFAULT_SETTINGS.externalEditor,
@@ -99,9 +87,7 @@ export function migrateSettings(value: unknown): LoadedSettings {
   if (value.version === STORAGE_VERSION) {
     return {
       settings: validatedSettings(value.settings),
-      needsSaving:
-        !isValidSettings(value.settings) ||
-        (isRecord(value.settings) && value.settings.colorTheme === "termdeck"),
+      needsSaving: !isValidSettings(value.settings),
     };
   }
 
@@ -144,16 +130,11 @@ function load(): void {
   let settingsNeedSaving = false;
 
   try {
-    let saved = localStorage.getItem(STORAGE_KEY);
-    let migratedFromLegacyKey = false;
-    if (saved === null) {
-      saved = localStorage.getItem(LEGACY_STORAGE_KEY);
-      migratedFromLegacyKey = saved !== null;
-    }
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const migrated = migrateSettings(JSON.parse(saved) as unknown);
       Object.assign(settings, migrated.settings);
-      settingsNeedSaving = migrated.needsSaving || migratedFromLegacyKey;
+      settingsNeedSaving = migrated.needsSaving;
     }
   } catch (error) {
     console.error("Could not load settings", error);

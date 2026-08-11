@@ -48,16 +48,15 @@ describe("project terminal persistence", () => {
   });
 
   it("normalizes blank custom names", () => {
-    let id = 0;
     expect(
-      normalizeProjectTerminals(
-        [{ customTitle: "   " }, { customTitle: " Logs " }],
-        () => `id-${++id}`,
-      ),
-    ).toEqual([{ id: "id-1" }, { id: "id-2", customTitle: "Logs" }]);
+      normalizeProjectTerminals([
+        { id: "one", customTitle: "   " },
+        { id: "two", customTitle: " Logs " },
+      ]),
+    ).toEqual([{ id: "one" }, { id: "two", customTitle: "Logs" }]);
   });
 
-  it("distinguishes legacy missing state from an explicit matching list", () => {
+  it("distinguishes missing state from an explicit matching list", () => {
     expect(projectTerminalsEqual(undefined, [])).toBe(false);
     expect(projectTerminalsEqual([], [])).toBe(true);
     expect(

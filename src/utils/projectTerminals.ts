@@ -1,6 +1,5 @@
 import type { ProjectTerminal } from "../types/project";
 import type { TerminalTabState } from "../types/terminal";
-import { normalizeTerminalOrdering } from "./terminalOrdering";
 import { normalizeTerminalTitle } from "./terminalTitles";
 
 export function createTerminalId(): string {
@@ -12,14 +11,11 @@ export function createTerminalId(): string {
 
 export function normalizeProjectTerminals(
   terminals: readonly ProjectTerminal[] | undefined,
-  createId: () => string = createTerminalId,
-  usedIds?: Set<string>,
 ): ProjectTerminal[] | undefined {
-  const cleaned = terminals?.map((terminal) => {
+  return terminals?.map((terminal) => {
     const customTitle = normalizeTerminalTitle(terminal.customTitle ?? "");
     return customTitle ? { id: terminal.id, customTitle } : { id: terminal.id };
   });
-  return normalizeTerminalOrdering(cleaned, createId, usedIds).terminals;
 }
 
 export function projectTerminalsFromTabs(

@@ -13,10 +13,6 @@ describe("parseTerminalAgentMarker", () => {
     });
   });
 
-  it("continues parsing legacy Termdeck markers", () => {
-    expect(parseTerminalAgentMarker("termdeck;pi;stopped")).toEqual({ agent: "pi" });
-  });
-
   it("rejects malformed and unknown-owner markers", () => {
     expect(parseTerminalAgentMarker("termarc;pi;unknown")).toBeUndefined();
     expect(parseTerminalAgentMarker("other;pi;processing")).toBeUndefined();
@@ -25,9 +21,8 @@ describe("parseTerminalAgentMarker", () => {
 });
 
 describe("parseTerminalShellMarker", () => {
-  it("parses Termarc and legacy Termdeck command exit statuses", () => {
+  it("parses Termarc command exit statuses", () => {
     expect(parseTerminalShellMarker("termarc;shell;2")).toEqual({ exitCode: 2 });
-    expect(parseTerminalShellMarker("termdeck;shell;0")).toEqual({ exitCode: 0 });
   });
 
   it("rejects malformed statuses", () => {

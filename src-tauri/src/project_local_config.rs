@@ -4,7 +4,6 @@ use std::{fs, path::PathBuf};
 use crate::projects::{ProjectCommand, atomic_write};
 
 const CONFIG_FILE: &str = ".termarc.json";
-const LEGACY_CONFIG_FILE: &str = ".termdeck.json";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -15,7 +14,7 @@ struct LocalConfig {
 }
 
 pub(crate) fn load(directory: &str) -> Result<Option<Vec<ProjectCommand>>, String> {
-    let path = load_path(directory);
+    let path = config_path(directory);
     if !path.exists() {
         return Ok(None);
     }
@@ -49,13 +48,6 @@ fn config_path(directory: &str) -> PathBuf {
     crate::paths::expand_user_path(directory).join(CONFIG_FILE)
 }
 
-fn load_path(directory: &str) -> PathBuf {
-    let path = config_path(directory);
-    path.exists()
-        .then_some(path)
-        .unwrap_or_else(|| crate::paths::expand_user_path(directory).join(LEGACY_CONFIG_FILE))
-}
-
 fn validate(commands: &[ProjectCommand]) -> Result<(), String> {
     crate::projects::validate_command_store(commands, "local", false)
 }
@@ -63,16 +55,6 @@ fn validate(commands: &[ProjectCommand]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::LocalConfig;
-
-    #[test]
-    fn loads_legacy_commands_without_order() {
-        let config: LocalConfig = serde_json::from_str(
-            r#"{"version":1,"commands":[{"id":"build","name":"Build","command":"npm run build","mode":"single-shot"}]}"#,
-        )
-        .expect("legacy local config should load");
-
-        assert_eq!(config.commands[0].order, None);
-    }
 
     #[test]
     fn round_trips_command_order() {

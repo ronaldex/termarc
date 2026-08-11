@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,20 +71,11 @@ pub(crate) fn themes_directory() -> PathBuf {
     config_directory().join("themes")
 }
 
-/// Returns the Termarc data directory, moving the legacy directory when possible.
-/// If the move fails, continue using the legacy directory so existing data remains usable.
 pub(crate) fn config_directory() -> PathBuf {
-    let config_root = home_directory()
+    home_directory()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config");
-    let directory = config_root.join("termarc");
-    let legacy_directory = config_root.join("termdeck");
-
-    if directory.exists() || !legacy_directory.exists() {
-        return directory;
-    }
-
-    fs::rename(&legacy_directory, &directory).map_or(legacy_directory, |_| directory)
+        .join(".config")
+        .join("termarc")
 }
 
 fn home_directory() -> Option<PathBuf> {

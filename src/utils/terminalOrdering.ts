@@ -3,36 +3,6 @@ import type { TerminalTabState } from "../types/terminal";
 
 export type DropPlacement = "before" | "after";
 
-export type TerminalMigration = {
-  terminals: ProjectTerminal[] | undefined;
-  migrated: boolean;
-};
-
-export function isStableId(id: unknown): id is string {
-  return typeof id === "string" && id.trim().length > 0;
-}
-
-/** Adds stable IDs to legacy terminal records and repairs duplicate/invalid IDs. */
-export function normalizeTerminalOrdering(
-  terminals: readonly ProjectTerminal[] | undefined,
-  createId: () => string,
-  used: Set<string> = new Set<string>(),
-): TerminalMigration {
-  if (!terminals) return { terminals: undefined, migrated: false };
-  let migrated = false;
-  const normalized = terminals.map((terminal) => {
-    let id = terminal.id;
-    if (!isStableId(id) || used.has(id)) {
-      do id = createId();
-      while (!isStableId(id) || used.has(id));
-      migrated = true;
-    }
-    used.add(id);
-    return terminal.customTitle ? { id, customTitle: terminal.customTitle } : { id };
-  });
-  return { terminals: normalized, migrated };
-}
-
 export function moveId(
   ids: readonly string[],
   movedId: string,

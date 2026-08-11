@@ -79,8 +79,7 @@ pub(crate) struct ProjectConfig {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProjectTerminal {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    id: Option<String>,
+    id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     custom_title: Option<String>,
 }
@@ -150,7 +149,7 @@ pub(crate) fn load_projects() -> Result<Vec<LoadedProjectConfig>, String> {
         .map_err(|error| format!("could not read {}: {error}", path.display()))?;
     let projects: Vec<ProjectConfig> = serde_json::from_str(&contents)
         .map_err(|error| format!("could not parse {}: {error}", path.display()))?;
-    validate_projects(&projects, false)?;
+    validate_projects(&projects)?;
 
     Ok(projects.into_iter().map(load_project).collect())
 }
@@ -224,7 +223,7 @@ pub(crate) fn save_project_tree_state(
 #[tauri::command]
 pub(crate) fn save_projects(projects: Vec<ProjectConfig>) -> Result<(), String> {
     let _guard = project_config_write_lock()?;
-    validate_projects(&projects, true)?;
+    validate_projects(&projects)?;
     let path = projects_path();
     let parent = path
         .parent()
@@ -337,10 +336,7 @@ pub(crate) fn save_project_command_order(
     Ok(())
 }
 
-fn validate_projects(
-    projects: &[ProjectConfig],
-    require_unique_terminal_ids: bool,
-) -> Result<(), String> {
+fn validate_projects(projects: &[ProjectConfig]) -> Result<(), String> {
     let mut project_ids = HashSet::new();
     let mut terminal_ids = HashSet::new();
     for project in projects {
@@ -350,12 +346,9 @@ fn validate_projects(
         if let Some(commands) = &project.commands {
             validate_command_store(commands, "global", false)?;
         }
-        if require_unique_terminal_ids && let Some(terminals) = &project.terminals {
+        if let Some(terminals) = &project.terminals {
             for terminal in terminals {
-                let Some(id) = &terminal.id else {
-                    return Err(format!("missing terminal id in project {}", project.id));
-                };
-                if id.trim().is_empty() || !terminal_ids.insert(id) {
+                if terminal.id.trim().is_empty() || !terminal_ids.insert(&terminal.id) {
                     return Err(format!(
                         "invalid or duplicate terminal id in project {}",
                         project.id
@@ -555,8 +548,7 @@ mod tests {
         )
         .expect("projects should parse");
 
-        assert!(validate_projects(&projects, false).is_ok());
-        assert!(validate_projects(&projects, true).is_err());
+        assert!(validate_projects(&projects).is_err());
     }
 
     #[test]
