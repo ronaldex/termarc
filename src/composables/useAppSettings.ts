@@ -3,10 +3,12 @@ import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   isExternalEditor,
   isTerminalFont,
+  SHORTCUT_MODIFIER_OPTIONS,
   isTerminalFontSize,
 } from "../settings/options";
 import { THEME_CATALOG } from "../themes/themeCatalog";
-import type { AppSettings, ColorTheme } from "../types/settings";
+import type { AppSettings, ColorTheme, ShortcutModifier } from "../types/settings";
+import { defaultShortcutModifier } from "../utils/platform";
 
 const DEFAULT_SETTINGS: AppSettings = {
   terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
@@ -15,6 +17,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   externalEditor: "vscodium",
   notifyWhenAgentReady: false,
   playSoundWhenAgentReady: true,
+  shortcutModifier: defaultShortcutModifier(),
 };
 
 const STORAGE_KEY = "termarc-settings";
@@ -50,7 +53,9 @@ function isValidSettings(value: unknown): value is AppSettings {
     isColorTheme(value.colorTheme) &&
     isExternalEditor(value.externalEditor) &&
     typeof value.notifyWhenAgentReady === "boolean" &&
-    typeof value.playSoundWhenAgentReady === "boolean"
+    typeof value.playSoundWhenAgentReady === "boolean" &&
+    (value.shortcutModifier === undefined ||
+      SHORTCUT_MODIFIER_OPTIONS.some((option) => option.value === value.shortcutModifier))
   );
 }
 
@@ -64,9 +69,7 @@ function validatedSettings(value: unknown): AppSettings {
     terminalFontSize: isTerminalFontSize(value.terminalFontSize)
       ? value.terminalFontSize
       : DEFAULT_SETTINGS.terminalFontSize,
-    colorTheme: isColorTheme(value.colorTheme)
-      ? value.colorTheme
-      : DEFAULT_SETTINGS.colorTheme,
+    colorTheme: isColorTheme(value.colorTheme) ? value.colorTheme : DEFAULT_SETTINGS.colorTheme,
     externalEditor: isExternalEditor(value.externalEditor)
       ? value.externalEditor
       : DEFAULT_SETTINGS.externalEditor,
@@ -78,6 +81,11 @@ function validatedSettings(value: unknown): AppSettings {
       typeof value.playSoundWhenAgentReady === "boolean"
         ? value.playSoundWhenAgentReady
         : DEFAULT_SETTINGS.playSoundWhenAgentReady,
+    shortcutModifier: SHORTCUT_MODIFIER_OPTIONS.some(
+      (option) => option.value === value.shortcutModifier,
+    )
+      ? (value.shortcutModifier as ShortcutModifier)
+      : DEFAULT_SETTINGS.shortcutModifier,
   };
 }
 

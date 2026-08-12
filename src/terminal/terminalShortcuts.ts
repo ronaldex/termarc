@@ -7,6 +7,7 @@ export type TerminalShortcutDependencies = {
   orderedTabIds: readonly string[];
   activeTabId?: string;
   fontSize: number;
+  shortcutModifier?: "meta" | "ctrl";
   selectTab: (id: string) => void;
   setFontSize: (size: number) => void;
 };
@@ -15,15 +16,18 @@ export function handleTerminalShortcut(
   event: KeyboardEvent,
   dependencies: TerminalShortcutDependencies,
 ): boolean {
-  const shortcut = event.metaKey || (event.ctrlKey && event.shiftKey);
+  const modifierPressed = dependencies.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
+  const otherModifierPressed =
+    dependencies.shortcutModifier === "ctrl" ? event.metaKey : event.ctrlKey;
+  const shortcut = modifierPressed || (event.ctrlKey && event.shiftKey);
   if (!shortcut) return false;
 
   if (
     dependencies.terminalFocused &&
-    event.metaKey &&
+    modifierPressed &&
     !event.shiftKey &&
     !event.altKey &&
-    !event.ctrlKey &&
+    !otherModifierPressed &&
     (event.key === "ArrowUp" || event.key === "ArrowDown") &&
     dependencies.orderedTabIds.length > 1
   ) {

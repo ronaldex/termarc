@@ -5,8 +5,9 @@ import {
   playAgentReadySound,
   requestNotificationAccess,
   sendDesktopNotification,
-  sendMacAgentReadyNotification,
+  sendNativeAgentReadyNotification,
 } from "../api/notifications";
+import { isLinux, isMacOS } from "../utils/platform";
 
 const NOTIFICATION_CLICKED_EVENT = "agent-ready-notification-clicked";
 
@@ -33,17 +34,27 @@ export async function sendAgentReadyNotification({
     if (!permissionGranted) permissionGranted = (await requestNotificationAccess()) === "granted";
     if (!permissionGranted) return;
 
-    if (navigator.userAgent.includes("Mac")) {
-      const clickable = await sendMacAgentReadyNotification(tabId ?? "", body, sound);
+    if (isMacOS()) {
+      const clickable = await sendNativeAgentReadyNotification(tabId ?? "", body, sound);
       if (!clickable) await sendClickableWebNotification(tabId, body, sound);
       return;
     }
 
-    sendDesktopNotification({
-      title: "Pi is ready",
-      body,
-      sound: sound ? "default" : undefined,
-    });
+    if (isLinux()) {
+      // GNOME's notification daemon is most reliably reached through its
+      // notify-send client. The plugin remains the fallback for minimal setups.
+      const delivered = await sendNativeAgentReadyNotification(tabId ?? "", body, false);
+      const played = sound && (await playAgentReadySound());
+      if (delivered) return;
+      sendDesktopNotification({
+        title: "Pi is ready",
+        body,
+        sound: sound && !played ? "message-new-instant" : undefined,
+      });
+      return;
+    }
+
+    sendDesktopNotification({ title: "Pi is ready", body, sound: sound ? "default" : undefined });
   } catch (error) {
     console.error("Could not send agent ready notification", error);
   }

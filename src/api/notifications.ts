@@ -23,8 +23,8 @@ export function sendDesktopNotification(notification: DesktopNotification): void
   sendNotification(notification);
 }
 
-/** Returns whether the backend could send a notification with a native click callback. */
-export function sendMacAgentReadyNotification(
+/** Returns whether the platform's native notification transport accepted the notification. */
+export function sendNativeAgentReadyNotification(
   tabId: string,
   body: string,
   sound: boolean,

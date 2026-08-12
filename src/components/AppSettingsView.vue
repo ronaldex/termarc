@@ -11,6 +11,7 @@ import { installCliSymlink, isCliSymlinkInstalled, removeCliSymlink } from "../a
 import { useAppSettings } from "../composables/useAppSettings";
 import {
   EXTERNAL_EDITOR_OPTIONS,
+  SHORTCUT_MODIFIER_OPTIONS,
   TERMINAL_FONT_OPTIONS,
   TERMINAL_FONT_SIZE_OPTIONS,
 } from "../settings/options";
@@ -140,6 +141,20 @@ function testAgentReadyNotification(): void {
                 :value="editor.value"
               >
                 {{ editor.label }}
+              </option>
+            </select>
+          </SettingsField>
+          <SettingsField
+            title="Keyboard shortcut modifier"
+            description="The modifier used for workspace shortcuts. Defaults to Command on macOS and Control on Linux."
+          >
+            <select v-model="settings.shortcutModifier">
+              <option
+                v-for="modifier in SHORTCUT_MODIFIER_OPTIONS"
+                :key="modifier.value"
+                :value="modifier.value"
+              >
+                {{ modifier.label }}
               </option>
             </select>
           </SettingsField>

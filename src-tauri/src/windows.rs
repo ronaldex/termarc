@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, WebviewWindowBuilder};
 
 static NEXT_WINDOW_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(target_os = "macos")]
 const NEW_WINDOW_MENU_ID: &str = "new_window";
 
 #[tauri::command]

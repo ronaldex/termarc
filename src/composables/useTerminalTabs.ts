@@ -199,12 +199,15 @@ export function useTerminalTabs(configuration: {
 
   function installTerminalInput(tab: TerminalTab): void {
     tab.terminal.attachCustomKeyEventHandler((event) => {
+      const modifierPressed = settings.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
+      const otherModifierPressed =
+        settings.shortcutModifier === "ctrl" ? event.metaKey : event.ctrlKey;
       const isCommandArrow =
         event.type === "keydown" &&
-        event.metaKey &&
+        modifierPressed &&
         !event.shiftKey &&
         !event.altKey &&
-        !event.ctrlKey &&
+        !otherModifierPressed &&
         (event.key === "ArrowLeft" || event.key === "ArrowRight");
       if (isCommandArrow) {
         event.preventDefault();
@@ -509,7 +512,8 @@ export function useTerminalTabs(configuration: {
 
   function handleKeyboard(event: KeyboardEvent): void {
     if (configuration.isShortcutScopeActive?.()) return;
-    setCommandKeyPressed(event.metaKey);
+    const modifierPressed = settings.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
+    setCommandKeyPressed(modifierPressed);
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
       tabIdsByNumber: new Map(
@@ -521,6 +525,7 @@ export function useTerminalTabs(configuration: {
       orderedTabIds: projectTerminalIds(tabs, activeTab.value?.projectId),
       activeTabId: activeTabId.value,
       fontSize: settings.terminalFontSize,
+      shortcutModifier: settings.shortcutModifier,
       selectTab,
       setFontSize: (fontSize) => {
         settings.terminalFontSize = fontSize;

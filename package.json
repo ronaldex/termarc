@@ -32,5 +32,8 @@
     "typescript": "7.0.2",
     "vite": "8.1.4",
     "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "@cloudworxx/tauri-plugin-mac-rounded-corners@1.1.1": true
   }
 }

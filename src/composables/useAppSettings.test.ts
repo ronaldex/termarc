@@ -101,6 +101,7 @@ describe("useAppSettings persistence", () => {
       externalEditor: "vscodium",
       notifyWhenAgentReady: false,
       playSoundWhenAgentReady: true,
+      shortcutModifier: "ctrl",
     });
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toEqual({
       version: 2,

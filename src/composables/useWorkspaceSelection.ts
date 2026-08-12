@@ -64,6 +64,10 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     focus({ id: "app-settings", kind: "app-settings" });
   }
 
+  function openKeyboardShortcuts(): void {
+    focus({ id: "keyboard-shortcuts", kind: "keyboard-shortcuts" });
+  }
+
   watch(
     projects,
     (value) => {
@@ -89,5 +93,6 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     selectEditCommand,
     selectProjectManagement,
     openSettings,
+    openKeyboardShortcuts,
   };
 }

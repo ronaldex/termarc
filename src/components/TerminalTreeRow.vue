@@ -14,6 +14,7 @@ export type TerminalContextMenuRequest = {
 
 const props = defineProps<{
   tab: TerminalTabState;
+  shortcutModifier: "meta" | "ctrl";
   active: boolean;
   collapsed?: boolean;
 }>();
@@ -28,6 +29,8 @@ const terminalButton = ref<HTMLButtonElement>();
 const display = computed(() => terminalDisplayModel(props.tab));
 const shortcutNumber = computed(() => props.tab.shortcutNumber ?? props.tab.number);
 const showsShortcut = computed(() => shortcutNumber.value <= 9);
+const shortcutGlyph = computed(() => (props.shortcutModifier === "ctrl" ? "⌃" : "⌘"));
+const shortcutName = computed(() => (props.shortcutModifier === "ctrl" ? "Ctrl" : "Command"));
 
 function focus(): void {
   emit("focus", {
@@ -64,7 +67,7 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
       :title="collapsed ? display.tooltip : undefined"
       :aria-label="
         collapsed
-          ? `${showsShortcut ? `Terminal ${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
+          ? `${showsShortcut ? `${shortcutName}+${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
           : undefined
       "
       @click="focus"
@@ -93,7 +96,9 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
           {{ display.secondaryLabel }}
         </small>
       </span>
-      <span v-if="showsShortcut && !collapsed" class="shortcut">⌘{{ shortcutNumber }}</span>
+      <span v-if="showsShortcut && !collapsed" class="shortcut"
+        >{{ shortcutGlyph }}{{ shortcutNumber }}</span
+      >
     </button>
     <button
       v-if="!collapsed"
@@ -118,6 +123,8 @@ button {
 .process-row {
   position: relative;
   display: flex;
+  width: 100%;
+  box-sizing: border-box;
   height: 2.3125rem;
   min-height: 2.3125rem;
   align-items: center;
@@ -178,9 +185,14 @@ button {
 .close {
   position: absolute;
   right: 0;
-  width: 1.25rem;
+  display: grid;
+  width: var(--tree-action-column);
+  height: 1.5rem;
+  padding: 0;
+  justify-items: end;
   color: var(--color-text-subtle);
   font-size: 0.9375rem;
+  line-height: 1;
   opacity: 0;
 }
 .process-row:hover .close {
