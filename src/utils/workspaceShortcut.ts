@@ -8,6 +8,7 @@ export type WorkspaceShortcutAction =
   | { type: "focus-workspace-from-right" }
   | { type: "escape" }
   | { type: "open-settings" }
+  | { type: "open-keyboard-shortcuts" }
   | { type: "create-terminal" }
   | { type: "close-terminal" }
   | { type: "toggle-left-sidebar" }
@@ -22,6 +23,7 @@ export type WorkspaceShortcutInput = {
   shiftKey: boolean;
   altKey: boolean;
   ctrlKey: boolean;
+  shortcutModifier?: "meta" | "ctrl";
   editableTarget: boolean;
   focusRegion: WorkspaceFocusRegion;
   terminalSelected: boolean;
@@ -39,11 +41,14 @@ export function workspaceContentFocusTarget(
 export function workspaceShortcutAction(
   input: WorkspaceShortcutInput,
 ): WorkspaceShortcutAction | undefined {
-  const commandArrow = input.metaKey && !input.shiftKey && !input.altKey && !input.ctrlKey;
+  const modifierPressed = input.shortcutModifier === "ctrl" ? input.ctrlKey : input.metaKey;
+  const otherModifierPressed = input.shortcutModifier === "ctrl" ? input.metaKey : input.ctrlKey;
+  const commandModifier =
+    modifierPressed && !input.shiftKey && !input.altKey && !otherModifierPressed;
 
   if (
     !input.editableTarget &&
-    commandArrow &&
+    commandModifier &&
     input.focusRegion === "left-sidebar" &&
     input.terminalSelected &&
     (input.key === "ArrowUp" || input.key === "ArrowDown")
@@ -51,7 +56,7 @@ export function workspaceShortcutAction(
     return { type: "cycle-terminal", direction: input.key === "ArrowDown" ? 1 : -1 };
   }
 
-  if (!input.editableTarget && commandArrow) {
+  if (!input.editableTarget && commandModifier) {
     if (input.key === "ArrowLeft" && input.focusRegion === "workspace") {
       return { type: "focus-left-sidebar" };
     }
@@ -71,27 +76,36 @@ export function workspaceShortcutAction(
   }
 
   if (input.key === "Escape") return { type: "escape" };
-  if (input.metaKey && input.key === ",") return { type: "open-settings" };
-  if (input.metaKey && (input.key.toLowerCase() === "t" || input.code === "KeyT")) {
+  if (modifierPressed && input.key === ",") return { type: "open-settings" };
+  if (
+    modifierPressed &&
+    !input.shiftKey &&
+    !input.altKey &&
+    !otherModifierPressed &&
+    (input.key === "/" || input.code === "Slash")
+  ) {
+    return { type: "open-keyboard-shortcuts" };
+  }
+  if (modifierPressed && (input.key.toLowerCase() === "t" || input.code === "KeyT")) {
     return { type: "create-terminal" };
   }
   if (
-    input.metaKey &&
+    modifierPressed &&
     input.activeTerminalAvailable &&
     (input.key.toLowerCase() === "w" || input.code === "KeyW")
   ) {
     return { type: "close-terminal" };
   }
   if (
-    input.metaKey &&
+    modifierPressed &&
     !input.shiftKey &&
     !input.altKey &&
-    !input.ctrlKey &&
+    !otherModifierPressed &&
     (input.key.toLowerCase() === "p" || input.code === "KeyP")
   ) {
     return { type: "toggle-left-sidebar" };
   }
-  if (input.metaKey && input.key.toLowerCase() === "d" && input.gitSidebarAvailable) {
+  if (modifierPressed && input.key.toLowerCase() === "d" && input.gitSidebarAvailable) {
     return { type: "toggle-right-sidebar" };
   }
 }

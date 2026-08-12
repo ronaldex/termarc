@@ -1,4 +1,4 @@
-import type { ExternalEditor } from "../types/settings";
+import type { ExternalEditor, ShortcutModifier } from "../types/settings";
 
 export const DEFAULT_TERMINAL_FONT_FAMILY =
   '"Termarc JetBrainsMono Nerd Font", "JetBrains Mono", "SFMono-Regular", Consolas, monospace';
@@ -16,6 +16,11 @@ export const TERMINAL_FONT_OPTIONS = [
 export const TERMINAL_FONT_SIZE_OPTIONS = [
   10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32,
 ] as const;
+
+export const SHORTCUT_MODIFIER_OPTIONS = [
+  { value: "meta", label: "Command (⌘)" },
+  { value: "ctrl", label: "Control (Ctrl)" },
+] as const satisfies ReadonlyArray<{ value: ShortcutModifier; label: string }>;
 
 export const EXTERNAL_EDITOR_OPTIONS = [
   { value: "vscode", label: "Visual Studio Code" },

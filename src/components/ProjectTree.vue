@@ -16,6 +16,7 @@ import TerminalTreeRow, { type TerminalContextMenuRequest } from "./TerminalTree
 const props = defineProps<{
   projects: ProjectTreeProject[];
   tabs: TerminalTabState[];
+  shortcutModifier: "meta" | "ctrl";
   filter: string;
   selection: SidebarSelection;
   collapsed?: boolean;
@@ -195,6 +196,7 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             >
               <TerminalTreeRow
                 :tab="tab"
+                :shortcut-modifier="shortcutModifier"
                 :active="isTreeActive(tab.id)"
                 :collapsed="collapsed"
                 @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"

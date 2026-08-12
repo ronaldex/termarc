@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   playAgentReadySound: vi.fn(),
   requestNotificationAccess: vi.fn(),
   sendDesktopNotification: vi.fn(),
-  sendMacAgentReadyNotification: vi.fn(),
+  sendNativeAgentReadyNotification: vi.fn(),
   emit: vi.fn(),
   listen: vi.fn(),
   show: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("../api/notifications", () => ({
   playAgentReadySound: mocks.playAgentReadySound,
   requestNotificationAccess: mocks.requestNotificationAccess,
   sendDesktopNotification: mocks.sendDesktopNotification,
-  sendMacAgentReadyNotification: mocks.sendMacAgentReadyNotification,
+  sendNativeAgentReadyNotification: mocks.sendNativeAgentReadyNotification,
 }));
 vi.mock("@tauri-apps/api/event", () => ({ emit: mocks.emit, listen: mocks.listen }));
 vi.mock("@tauri-apps/api/window", () => ({
@@ -62,7 +62,7 @@ beforeEach(() => {
 describe("agent notifications", () => {
   it("uses the native clickable macOS transport when available", async () => {
     vi.stubGlobal("navigator", { userAgent: "Macintosh" });
-    mocks.sendMacAgentReadyNotification.mockResolvedValue(true);
+    mocks.sendNativeAgentReadyNotification.mockResolvedValue(true);
 
     await sendAgentReadyNotification({
       tabId: "terminal-2",
@@ -71,14 +71,18 @@ describe("agent notifications", () => {
       sound: true,
     });
 
-    expect(mocks.sendMacAgentReadyNotification).toHaveBeenCalledWith("terminal-2", "Ready", true);
+    expect(mocks.sendNativeAgentReadyNotification).toHaveBeenCalledWith(
+      "terminal-2",
+      "Ready",
+      true,
+    );
     expect(FakeNotification.instances).toHaveLength(0);
   });
 
   it("preserves the terminal id in the clickable development fallback", async () => {
     vi.stubGlobal("navigator", { userAgent: "Macintosh" });
     vi.stubGlobal("window", { Notification: FakeNotification });
-    mocks.sendMacAgentReadyNotification.mockResolvedValue(false);
+    mocks.sendNativeAgentReadyNotification.mockResolvedValue(false);
 
     await sendAgentReadyNotification({
       tabId: "terminal-3",
@@ -101,8 +105,10 @@ describe("agent notifications", () => {
     expect(mocks.notificationPermissionGranted).not.toHaveBeenCalled();
   });
 
-  it("uses the desktop transport on other platforms", async () => {
+  it("falls back to the desktop transport when the GNOME client is unavailable", async () => {
     vi.stubGlobal("navigator", { userAgent: "Linux" });
+    mocks.sendNativeAgentReadyNotification.mockResolvedValue(false);
+    mocks.playAgentReadySound.mockResolvedValue(true);
 
     await sendAgentReadyNotification({
       tabId: "terminal-1",
@@ -111,10 +117,16 @@ describe("agent notifications", () => {
       sound: true,
     });
 
+    expect(mocks.sendNativeAgentReadyNotification).toHaveBeenCalledWith(
+      "terminal-1",
+      "Ready",
+      false,
+    );
     expect(mocks.sendDesktopNotification).toHaveBeenCalledWith({
       title: "Pi is ready",
       body: "Ready",
-      sound: "default",
+      sound: undefined,
     });
+    expect(mocks.playAgentReadySound).toHaveBeenCalledOnce();
   });
 });

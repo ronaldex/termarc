@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { enableModernWindowStyle } from "@cloudworxx/tauri-plugin-mac-rounded-corners";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import AppTitlebar from "./components/AppTitlebar.vue";
+import KeyboardShortcutsView from "./components/KeyboardShortcutsView.vue";
 import GitDiffViewer from "./components/GitDiffViewer.vue";
 import TerminalSidebar from "./components/TerminalSidebar.vue";
 import WorkspaceMain from "./components/WorkspaceMain.vue";
@@ -18,17 +18,19 @@ import { useCommandRuns } from "./composables/useCommandRuns";
 import { loadCustomThemes } from "./api/themes";
 import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
+import { configurePlatformWindowStyle } from "./services/platformWindowStyle";
+import { isMacOS } from "./utils/platform";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
 const TITLEBAR_HEIGHT = 32;
-// Traffic-light offsets are visually tuned for this titlebar height.
-const MAC_WINDOW_STYLE = { cornerRadius: 14, offsetX: -8, offsetY: -9 };
+const macOS = isMacOS();
 
 const { settings, load: loadAppSettings } = useAppSettings();
 const renameModalOpen = ref(false);
+const keyboardShortcutsOpen = ref(false);
 const {
   projects,
   treeProjects,
@@ -227,6 +229,14 @@ function saveProjectMetadata(project: Project): void {
     console.error("Could not update project settings", error),
   );
 }
+function openKeyboardShortcutsModal(): void {
+  keyboardShortcutsOpen.value = true;
+}
+
+function closeKeyboardShortcuts(): void {
+  keyboardShortcutsOpen.value = false;
+}
+
 function manageProjects(projectId?: string): void {
   const project = projects.value.find((item) => item.id === projectId);
   if (project) selectProject(project);
@@ -330,11 +340,15 @@ useWorkspaceShortcuts({
     );
   },
   activateSidebar,
+  openSettings,
+  openKeyboardShortcuts: openKeyboardShortcutsModal,
   shortcutScopeActive: renameModalOpen,
+
+  shortcutModifier: computed(() => settings.shortcutModifier),
 });
 
 onMounted(async () => {
-  void enableModernWindowStyle(MAC_WINDOW_STYLE);
+  configurePlatformWindowStyle();
   void getCurrentWindow()
     .onCloseRequested(async (event) => {
       event.preventDefault();
@@ -457,6 +471,7 @@ onBeforeUnmount(() => {
       'without-git-sidebar': !gitSidebarAvailable,
       'left-sidebar-overlay': leftSidebarPresentation === 'overlay',
       'right-sidebar-overlay': rightSidebarPresentation === 'overlay',
+      linux: !macOS,
     }"
     :style="{
       '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
@@ -464,7 +479,7 @@ onBeforeUnmount(() => {
       '--right-sidebar-width': `${rightSidebarWidth}px`,
     }"
   >
-    <AppTitlebar :active-tab="activeTab" />
+    <AppTitlebar :active-tab="activeTab" :macos="macOS" />
     <span v-if="persistenceSaving" class="app-sr-only" role="status">
       Saving workspace configuration
     </span>
@@ -485,6 +500,7 @@ onBeforeUnmount(() => {
       }"
       :collapsed="!leftSidebarOpen"
       :tabs="tabs"
+      :shortcut-modifier="settings.shortcutModifier"
       :projects="treeProjects"
       :selection="sidebarSelection"
       :is-terminal-focused="isTerminalFocused"
@@ -492,6 +508,8 @@ onBeforeUnmount(() => {
       @activate="activateSidebar"
       @add-project="addProject"
       @manage="manageProjects"
+      @open-settings="openSettings"
+      @open-keyboard-shortcuts="openKeyboardShortcutsModal"
       @toggle-project="toggleProject"
       @toggle-terminals="toggleTerminals"
       @toggle-commands="toggleCommands"
@@ -544,6 +562,7 @@ onBeforeUnmount(() => {
       title="Resize Git changes sidebar"
       @pointerdown="startResize('right', $event)"
     />
+    <KeyboardShortcutsView v-if="keyboardShortcutsOpen" @close="closeKeyboardShortcuts" />
     <GitDiffViewer
       v-if="gitSidebarAvailable"
       ref="gitSidebar"
@@ -566,7 +585,7 @@ onBeforeUnmount(() => {
 <style>
 :root {
   color: var(--color-text);
-  background: var(--color-app-bg);
+  background: transparent;
   font-family:
     Inter,
     ui-sans-serif,
@@ -649,6 +668,12 @@ button {
   grid-template-rows: minmax(var(--titlebar-height), auto) minmax(0, 1fr);
   background: var(--color-app-bg);
   overflow: hidden;
+}
+/* Linux uses a transparent undecorated window so the compositor can show
+   rounded corners around the application surface. */
+.app-shell.linux {
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 12px;
 }
 .app-shell
   :not(

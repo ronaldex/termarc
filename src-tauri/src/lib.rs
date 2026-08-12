@@ -11,6 +11,7 @@ mod pty;
 mod themes;
 mod windows;
 
+#[cfg(target_os = "macos")]
 use plugins::mac_rounded_corners;
 use pty::AppState;
 use std::{
@@ -77,8 +78,11 @@ pub fn run() {
             git::get_git_diff_directory,
             git::get_git_diff_summary,
             pty::stop_pty,
+            #[cfg(target_os = "macos")]
             mac_rounded_corners::enable_rounded_corners,
+            #[cfg(target_os = "macos")]
             mac_rounded_corners::enable_modern_window_style,
+            #[cfg(target_os = "macos")]
             mac_rounded_corners::reposition_traffic_lights,
             windows::create_window
         ])

@@ -13,6 +13,7 @@ import type { TerminalContextMenuRequest } from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
   tabs: TerminalTabState[];
+  shortcutModifier: "meta" | "ctrl";
   collapsed?: boolean;
   projects: ProjectTreeProject[];
   selection: SidebarSelection;
@@ -20,6 +21,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   manage: [projectId?: string];
+  openSettings: [];
+  openKeyboardShortcuts: [];
   close: [id: string];
   setTerminalTitleOverride: [id: string, title: string];
   renameModalChange: [open: boolean];
@@ -55,6 +58,7 @@ const searchInput = ref<HTMLInputElement>();
 const { projects, tabs, selection, collapsed } = toRefs(props);
 const treeFilter = computed(() => (collapsed.value ? "" : filter.value));
 const contextMenu = ref<TerminalContextMenuRequest>();
+const sidebarMenuOpen = ref(false);
 const renameTabId = ref<string>();
 const renameTrigger = ref<HTMLButtonElement>();
 const overlayActive = computed(() => Boolean(contextMenu.value || renameTabId.value));
@@ -88,6 +92,26 @@ function closeTerminal(id: string): void {
 
 function dismissContextMenu(): void {
   contextMenu.value = undefined;
+}
+
+function toggleSidebarMenu(event: MouseEvent): void {
+  event.stopPropagation();
+  sidebarMenuOpen.value = !sidebarMenuOpen.value;
+}
+
+function openSidebarSettings(): void {
+  sidebarMenuOpen.value = false;
+  emit("openSettings");
+}
+
+function manageProjects(): void {
+  sidebarMenuOpen.value = false;
+  emit("manage");
+}
+
+function openKeyboardShortcuts(): void {
+  sidebarMenuOpen.value = false;
+  emit("openKeyboardShortcuts");
 }
 
 async function openContextMenu(request: TerminalContextMenuRequest): Promise<void> {
@@ -191,8 +215,17 @@ function dismissMenuOnPointerDown(event: PointerEvent): void {
   ) {
     dismissContextMenu();
   }
+  if (!(event.target instanceof Node) || !sidebarElement.value?.contains(event.target)) {
+    sidebarMenuOpen.value = false;
+  }
 }
 watch(() => props.selection.id, dismissContextMenu);
+watch(
+  () => props.collapsed,
+  () => {
+    sidebarMenuOpen.value = false;
+  },
+);
 watch(() => props.collapsed, dismissContextMenu);
 onMounted(() => {
   document.addEventListener("pointerdown", dismissMenuOnPointerDown, true);
@@ -238,13 +271,31 @@ onBeforeUnmount(() => {
         placeholder="Filter processes..."
         aria-label="Filter processes"
       />
-      <button v-if="!collapsed" title="Manage projects" @click="emit('manage')">⋮</button>
+      <button
+        v-if="!collapsed"
+        class="sidebar-menu-button"
+        type="button"
+        title="Sidebar menu"
+        aria-label="Sidebar menu"
+        :aria-expanded="sidebarMenuOpen"
+        @click="toggleSidebarMenu"
+      >
+        ⋮
+      </button>
+      <div v-if="sidebarMenuOpen" class="sidebar-menu" role="menu" @click.stop>
+        <button type="button" role="menuitem" @click="openSidebarSettings">App settings</button>
+        <button type="button" role="menuitem" @click="manageProjects">Manage projects</button>
+        <button type="button" role="menuitem" @click="openKeyboardShortcuts">
+          Keyboard shortcuts
+        </button>
+      </div>
     </div>
 
     <ProjectTree
       ref="projectTree"
       :projects="projects"
       :tabs="tabs"
+      :shortcut-modifier="shortcutModifier"
       :filter="treeFilter"
       :selection="selection"
       :collapsed="collapsed"
@@ -330,6 +381,7 @@ button {
   cursor: pointer;
 }
 .filter-row {
+  position: relative;
   display: flex;
   height: 2.5rem;
   flex: 0 0 2.5rem;
@@ -387,11 +439,45 @@ button {
 .filter-row input::-webkit-search-cancel-button {
   display: none;
 }
-.filter-row > button:not(.search-button) {
-  padding: 0.25rem 0.5rem;
+.sidebar-menu-button {
+  position: absolute;
+  right: 0.25rem;
+  width: 1.5rem;
+  height: 1.75rem;
+  padding: 0;
   color: var(--color-text-faint);
-  font-size: 0.875rem;
+  font-size: 1rem;
+  line-height: 1;
+  text-align: right;
 }
+.sidebar-menu-button:hover {
+  color: var(--color-text);
+}
+.sidebar-menu {
+  position: absolute;
+  top: 2.25rem;
+  right: var(--tree-inline-end);
+  z-index: 40;
+  display: flex;
+  min-width: 10rem;
+  flex-direction: column;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.5rem;
+  background: var(--color-surface-raised);
+  box-shadow: 0 0.5rem 1.25rem rgb(0 0 0 / 25%);
+}
+.sidebar-menu button {
+  padding: 0.45rem 0.625rem;
+  border-radius: 0.3rem;
+  color: var(--color-text);
+  text-align: left;
+  font-size: 0.75rem;
+}
+.sidebar-menu button:hover {
+  background: var(--color-surface-emphasis);
+}
+
 .search-button:hover .search-icon {
   border-color: var(--color-text);
 }

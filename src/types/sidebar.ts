@@ -5,6 +5,7 @@ export type SidebarSelection =
   | { id: string; kind: ProjectSelectionKind; projectId: string }
   | { id: string; kind: "terminal"; projectId: string; tabId: string }
   | { id: string; kind: "command" | "edit-command"; projectId: string; commandId: string }
-  | { id: string; kind: "app-settings" };
+  | { id: string; kind: "app-settings" }
+  | { id: string; kind: "keyboard-shortcuts" };
 
 export type SidebarSelectionKind = SidebarSelection["kind"];

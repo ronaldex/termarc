@@ -42,6 +42,7 @@ export function useWorkspaceShortcuts(options: {
   focusActiveTerminal: () => void;
   selectProject: (project: Project) => void;
   openSettings: () => void;
+  openKeyboardShortcuts: () => void;
   cycleTerminal: (direction: -1 | 1) => void;
   activeTerminalAvailable: () => boolean;
   createTerminal: () => void;
@@ -50,6 +51,7 @@ export function useWorkspaceShortcuts(options: {
   activateSidebar: (selection: SidebarSelection) => void;
   /** True while a modal owns keyboard input. */
   shortcutScopeActive?: Ref<boolean>;
+  shortcutModifier: Ref<"meta" | "ctrl">;
 }): void {
   function currentFocusRegion(): WorkspaceFocusRegion {
     if (options.sidebar.value?.hasTreeFocus()) return "left-sidebar";
@@ -68,6 +70,7 @@ export function useWorkspaceShortcuts(options: {
       shiftKey: event.shiftKey,
       altKey: event.altKey,
       ctrlKey: event.ctrlKey,
+      shortcutModifier: options.shortcutModifier.value,
       editableTarget: isEditableTarget(event.target) && !options.isTerminalFocused(),
       focusRegion,
       terminalSelected: options.selection.value.kind === "terminal",
@@ -134,6 +137,11 @@ export function useWorkspaceShortcuts(options: {
     } else if (action.type === "open-settings") {
       event.preventDefault();
       options.openSettings();
+      options.restoreLeftSidebar();
+      requestAnimationFrame(() => options.workspace.value?.focusContent());
+    } else if (action.type === "open-keyboard-shortcuts") {
+      event.preventDefault();
+      options.openKeyboardShortcuts();
       options.restoreLeftSidebar();
       requestAnimationFrame(() => options.workspace.value?.focusContent());
     } else if (action.type === "toggle-left-sidebar") {
