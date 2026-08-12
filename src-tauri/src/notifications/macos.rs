@@ -61,7 +61,9 @@ fn show_fallback_notification(window: &Window, body: &str, sound: bool) {
 }
 
 pub(super) fn play_agent_ready_sound() -> bool {
-    spawn_and_reap(Command::new("afplay").arg("/System/Library/Sounds/Ping.aiff"))
+    let mut command = Command::new("afplay");
+    command.arg("/System/Library/Sounds/Ping.aiff");
+    spawn_and_reap(command)
 }
 
 pub(super) fn notify_agent_ready(

@@ -6,6 +6,11 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [vue()],
   clearScreen: false,
+  build: {
+    // The Git diff renderer is intentionally lazy-loaded and produces a large
+    // standalone chunk; keep this known chunk from masking other warnings.
+    chunkSizeWarningLimit: 1100,
+  },
   server: {
     port: 1420,
     strictPort: true,

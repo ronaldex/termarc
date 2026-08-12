@@ -1,5 +1,7 @@
 // Uses Cocoa APIs that Tauri exposes only on macOS.
 #![allow(deprecated)]
+// The legacy objc macros emit this cfg internally.
+#![allow(unexpected_cfgs)]
 
 use cocoa::{
     appkit::{NSView, NSWindow, NSWindowStyleMask, NSWindowTitleVisibility},
