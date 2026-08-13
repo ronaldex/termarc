@@ -68,6 +68,7 @@ export type TerminalRuntime = {
   fitAddon: FitAddon;
   webglAddon?: WebglAddon;
   linkDisposable?: IDisposable;
+  copyDisposable?: IDisposable;
   webglFailed: boolean;
   container?: HTMLDivElement;
   session?: PtyStarted;

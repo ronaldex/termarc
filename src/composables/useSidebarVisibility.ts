@@ -7,35 +7,78 @@ export function useSidebarVisibility(
   compactMode: Readonly<Ref<boolean>>,
   initiallyPreferredOpen = false,
 ) {
-  const intent = ref<SidebarIntent>(initiallyPreferredOpen ? "preferred" : "closed");
+  const preferredOpen = ref(initiallyPreferredOpen);
+  const temporaryOpen = ref(false);
+  // A preferred sidebar that becomes an overlay because of a resize should
+  // behave like an automatic overlay when focus moves back to the workspace.
+  const dismissPreferredOverlayOnFocus = ref(compactMode.value && initiallyPreferredOpen);
+  const preferredOverlayDismissed = ref(false);
+  const intent = computed<SidebarIntent>(() => {
+    if (temporaryOpen.value) return "temporary";
+    if (preferredOpen.value) return "preferred";
+    return "closed";
+  });
   const presentation = computed<SidebarPresentation>(() => {
-    if (intent.value === "closed") return "collapsed";
+    if (
+      intent.value === "closed" ||
+      (preferredOverlayDismissed.value && intent.value !== "temporary")
+    )
+      return "collapsed";
     if (intent.value === "temporary" || compactMode.value) return "overlay";
     return "docked";
   });
-  const open = computed(() => intent.value !== "closed");
+  const open = computed(() => presentation.value !== "collapsed");
 
   function openTemporarily(): void {
-    if (intent.value === "closed") intent.value = "temporary";
+    if (preferredOpen.value && !preferredOverlayDismissed.value) return;
+    temporaryOpen.value = true;
   }
 
   function openPreferred(): void {
-    intent.value = "preferred";
+    temporaryOpen.value = false;
+    preferredOpen.value = true;
+    preferredOverlayDismissed.value = false;
+    dismissPreferredOverlayOnFocus.value = false;
   }
 
   function restorePreference(): void {
-    if (intent.value === "temporary") intent.value = "closed";
+    temporaryOpen.value = false;
+    if (compactMode.value && dismissPreferredOverlayOnFocus.value && preferredOpen.value) {
+      preferredOverlayDismissed.value = true;
+    }
   }
 
   function toggle(): void {
-    intent.value = intent.value === "closed" ? "preferred" : "closed";
+    if (open.value) {
+      temporaryOpen.value = false;
+      preferredOpen.value = false;
+      preferredOverlayDismissed.value = false;
+      dismissPreferredOverlayOnFocus.value = false;
+      return;
+    }
+    openPreferred();
   }
 
   function close(): void {
-    intent.value = "closed";
+    temporaryOpen.value = false;
+    preferredOpen.value = false;
+    preferredOverlayDismissed.value = false;
+    dismissPreferredOverlayOnFocus.value = false;
   }
 
-  watch(compactMode, () => restorePreference(), { flush: "sync" });
+  watch(
+    compactMode,
+    (isCompact) => {
+      if (isCompact) {
+        temporaryOpen.value = false;
+        dismissPreferredOverlayOnFocus.value = preferredOpen.value;
+      } else {
+        preferredOverlayDismissed.value = false;
+        dismissPreferredOverlayOnFocus.value = false;
+      }
+    },
+    { flush: "sync" },
+  );
 
   return {
     intent,

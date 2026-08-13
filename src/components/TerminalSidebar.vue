@@ -441,7 +441,7 @@ button {
 }
 .sidebar-menu-button {
   position: absolute;
-  right: 0.25rem;
+  right: var(--tree-inline-end);
   width: 1.5rem;
   height: 1.75rem;
   padding: 0;

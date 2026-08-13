@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { IDisposable, ILink, IMarker } from "@xterm/xterm";
 import { resolveTerminalPath, type TerminalPath } from "../api/paths";
+import type { ShortcutModifier } from "../types/settings";
 import type { TerminalTab } from "../types/terminal";
 
 type PendingLink = {
@@ -19,7 +20,8 @@ const MAX_PENDING_PROVIDER_REQUESTS = 32;
 
 export function installTerminalLinks(
   tab: TerminalTab,
-  commandKeyPressed: () => boolean,
+  modifierPressed: () => boolean,
+  activationModifierPressed: (event: MouseEvent) => boolean,
   openPath: (path: string) => Promise<void>,
 ): IDisposable {
   const capturedLinks: CapturedLink[] = [];
@@ -45,7 +47,7 @@ export function installTerminalLinks(
   }
 
   // Handle OSC 8 ourselves. xterm renders OSC 8 links with a dotted underline
-  // unconditionally, while Termarc only reveals links while Command is held.
+  // unconditionally, while Termarc only reveals links while the configured modifier is held.
   const oscHandler = tab.terminal.parser.registerOscHandler(8, (data) => {
     const separator = data.indexOf(";");
     const uri = separator >= 0 ? data.slice(separator + 1) : "";
@@ -85,7 +87,7 @@ export function installTerminalLinks(
   const pathPattern = /(?:~|\/|\.\.?\/)[^\s"'<>]+|(?:[\w@.+-]+\/)+(?:[\w@.+:-]+)?/g;
   const linkProvider = tab.terminal.registerLinkProvider({
     provideLinks(lineNumber, callback) {
-      if (!commandKeyPressed()) {
+      if (!modifierPressed()) {
         callback(undefined);
         return;
       }
@@ -106,7 +108,7 @@ export function installTerminalLinks(
             },
           },
           activate: (event) => {
-            if (event.metaKey) openTerminalUri(tab.cwd, link.uri, openPath);
+            if (activationModifierPressed(event)) openTerminalUri(tab.cwd, link.uri, openPath);
           },
         }));
       const line = tab.terminal.buffer.active.getLine(lineNumber - 1)?.translateToString(true);
@@ -125,7 +127,7 @@ export function installTerminalLinks(
             end: { x: match.index + text.length, y: lineNumber },
           },
           activate: (event) => {
-            if (event.metaKey) openTerminalUri(tab.cwd, text, openPath);
+            if (activationModifierPressed(event)) openTerminalUri(tab.cwd, text, openPath);
           },
         };
       });
@@ -150,7 +152,7 @@ export function installTerminalLinks(
               end: { x: match.index + text.length, y: lineNumber },
             },
             activate: (event) => {
-              if (!event.metaKey) return;
+              if (!activationModifierPressed(event)) return;
               void openPath(resolved.path).catch((error) =>
                 console.error("Could not open terminal path", error),
               );
@@ -184,6 +186,13 @@ export function installTerminalLinks(
       pendingPathResolutions.clear();
     },
   };
+}
+
+export function isTerminalLinkModifierPressed(
+  event: Pick<MouseEvent, "ctrlKey" | "metaKey">,
+  modifier: ShortcutModifier,
+): boolean {
+  return modifier === "ctrl" ? event.ctrlKey : event.metaKey;
 }
 
 function openTerminalUri(

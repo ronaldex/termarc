@@ -99,7 +99,10 @@ jobs:
         run: npm ci
 
       - name: Build AppImage
-        run: npm run tauri build -- --bundles appimage
+        # Tauri's quiet mode captures all linuxdeploy output. The AppImage toolchain
+        # can fail while doing so without exposing its actual stderr; verbose mode
+        # streams the subprocess output and avoids that failure mode.
+        run: npm run tauri build -- --verbose --bundles appimage
 
       - name: Prepare release asset
         shell: bash

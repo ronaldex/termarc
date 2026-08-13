@@ -31,6 +31,24 @@ const macOS = isMacOS();
 const { settings, load: loadAppSettings } = useAppSettings();
 const renameModalOpen = ref(false);
 const keyboardShortcutsOpen = ref(false);
+const toast = ref<{ message: string; kind: "success" | "error" }>();
+let toastTimeout: number | undefined;
+
+function showToast(message: string, kind: "success" | "error"): void {
+  toast.value = { message, kind };
+  if (toastTimeout !== undefined) window.clearTimeout(toastTimeout);
+  toastTimeout = window.setTimeout(() => {
+    toast.value = undefined;
+    toastTimeout = undefined;
+  }, 2200);
+}
+
+function notifyTerminalCopy(result: "copied" | "failed"): void {
+  showToast(
+    result === "copied" ? "Copied to clipboard" : "Could not copy terminal selection",
+    result === "copied" ? "success" : "error",
+  );
+}
 const {
   projects,
   treeProjects,
@@ -80,6 +98,7 @@ const {
 } = useTerminalTabs({
   isShortcutScopeActive: () => renameModalOpen.value,
   externalEditorForProject: editorForProject,
+  onCopy: notifyTerminalCopy,
 });
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const terminalSidebar = ref<InstanceType<typeof TerminalSidebar>>();
@@ -456,6 +475,7 @@ watch(activeTabId, (id) => {
 watch([leftSidebarOpen, rightSidebarOpen], fitActiveTerminalAfterLayout, { flush: "post" });
 onBeforeUnmount(() => {
   appDisposed = true;
+  if (toastTimeout !== undefined) window.clearTimeout(toastTimeout);
   unlistenCloseRequested?.();
   unlistenCloseRequested = undefined;
   persistOpenTerminals();
@@ -488,6 +508,9 @@ onBeforeUnmount(() => {
       <button type="button" :disabled="persistenceSaving" @click="retryOrDismissPersistenceError">
         {{ persistenceSaving ? "Retrying…" : persistenceDirty ? "Retry" : "Dismiss" }}
       </button>
+    </div>
+    <div v-if="toast" class="app-toast" :class="`app-toast-${toast.kind}`" role="status">
+      {{ toast.message }}
     </div>
     <TerminalSidebar
       ref="terminalSidebar"
@@ -631,6 +654,30 @@ onBeforeUnmount(() => {
   color: inherit;
   background: var(--color-surface-emphasis);
   cursor: pointer;
+}
+.app-toast {
+  position: relative;
+  z-index: 1000;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  grid-column: 3;
+  grid-row: 2;
+  align-self: end;
+  justify-self: center;
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.5rem;
+  color: var(--color-text-strong);
+  background: var(--color-surface-raised);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 30%);
+  font-size: 0.75rem;
+}
+.app-toast-success {
+  border-color: var(--color-border);
+}
+.app-toast-error {
+  border-color: var(--color-status-error);
 }
 * {
   box-sizing: border-box;
