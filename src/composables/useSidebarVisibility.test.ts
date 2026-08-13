@@ -71,6 +71,35 @@ describe("useSidebarVisibility", () => {
     expect(visibility.presentation.value).toBe("docked");
   });
 
+  it("dismisses a preferred overlay when focus returns to the workspace", () => {
+    const compactMode = ref(false);
+    const visibility = useSidebarVisibility(compactMode, true);
+
+    compactMode.value = true;
+    visibility.restorePreference();
+
+    expect(visibility.intent.value).toBe("preferred");
+    expect(visibility.presentation.value).toBe("collapsed");
+
+    compactMode.value = false;
+    expect(visibility.presentation.value).toBe("docked");
+  });
+
+  it("can preview a dismissed preferred sidebar without losing its preference", () => {
+    const compactMode = ref(false);
+    const visibility = useSidebarVisibility(compactMode, true);
+
+    compactMode.value = true;
+    visibility.restorePreference();
+    visibility.openTemporarily();
+
+    expect(visibility.intent.value).toBe("temporary");
+    expect(visibility.presentation.value).toBe("overlay");
+    visibility.restorePreference();
+    expect(visibility.intent.value).toBe("preferred");
+    expect(visibility.presentation.value).toBe("collapsed");
+  });
+
   it("toggles and closes either presentation", () => {
     const visibility = useSidebarVisibility(ref(false));
 

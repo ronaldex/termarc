@@ -158,12 +158,26 @@ export function useWorkspaceShortcuts(options: {
     if (!options.gitSidebar.value?.hasPanelFocus()) options.restoreRightSidebar();
   }
 
+  let resizeFocusFrame: number | undefined;
+  function handleResize(): void {
+    if (resizeFocusFrame !== undefined) cancelAnimationFrame(resizeFocusFrame);
+    resizeFocusFrame = requestAnimationFrame(() => {
+      resizeFocusFrame = undefined;
+      // Resizing does not emit focusin when the terminal already has focus.
+      // Reuse the focus policy after the compact media query has updated.
+      handleFocusIn();
+    });
+  }
+
   onMounted(() => {
     window.addEventListener("keydown", handleKeydown, { capture: true });
     window.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("resize", handleResize);
   });
   onBeforeUnmount(() => {
     window.removeEventListener("keydown", handleKeydown, { capture: true });
     window.removeEventListener("focusin", handleFocusIn);
+    window.removeEventListener("resize", handleResize);
+    if (resizeFocusFrame !== undefined) cancelAnimationFrame(resizeFocusFrame);
   });
 }

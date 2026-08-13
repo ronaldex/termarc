@@ -19,7 +19,12 @@ import {
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
 import { fitTerminalToContainer } from "../terminal/fitTerminal";
 import { openPath } from "../services/externalEditor";
-import { installTerminalLinks } from "../terminal/terminalLinks";
+import { isTerminalLinkModifierPressed, installTerminalLinks } from "../terminal/terminalLinks";
+import {
+  copyTerminalSelection,
+  installTerminalCopy,
+  type TerminalCopyResult,
+} from "../terminal/terminalCopy";
 import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
 import { terminalTheme } from "../terminal/terminalThemes";
 import { normalizeTerminalTitle, updateTerminalTitleOverride } from "../utils/terminalTitles";
@@ -33,6 +38,7 @@ const MAX_PENDING_WRITE_COUNT = 256;
 export function useTerminalTabs(configuration: {
   isShortcutScopeActive?: () => boolean;
   externalEditorForProject: (projectId: string) => ExternalEditor;
+  onCopy?: (result: Exclude<TerminalCopyResult, "empty">) => void;
 }) {
   const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
@@ -46,7 +52,7 @@ export function useTerminalTabs(configuration: {
   let started = false;
   let disposed = false;
   let nextTabNumber = 1;
-  let commandKeyPressed = false;
+  let linkModifierPressed = false;
   let lastPointerPosition: { x: number; y: number } | undefined;
   let defaultProject = { projectId: "home", cwd: "~" };
   const activityMonitor = createTerminalActivityMonitor({ tabs });
@@ -103,10 +109,14 @@ export function useTerminalTabs(configuration: {
     if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
     tab.terminal.open(tab.container);
+    tab.copyDisposable = markRaw(
+      installTerminalCopy(tab.container, tab.terminal, (result) => configuration.onCopy?.(result)),
+    );
     tab.linkDisposable = markRaw(
       installTerminalLinks(
         tab,
-        () => commandKeyPressed,
+        () => linkModifierPressed,
+        (event) => isTerminalLinkModifierPressed(event, settings.shortcutModifier),
         (path) => openPath(path, configuration.externalEditorForProject(tab.projectId)),
       ),
     );
@@ -454,6 +464,8 @@ export function useTerminalTabs(configuration: {
     tab.session = undefined;
     tab.linkDisposable?.dispose();
     tab.linkDisposable = undefined;
+    tab.copyDisposable?.dispose();
+    tab.copyDisposable = undefined;
     tab.terminal.dispose();
     tabs.splice(index, 1);
     if (session) void stopTerminal(session.id).catch(console.error);
@@ -495,9 +507,9 @@ export function useTerminalTabs(configuration: {
     },
   );
 
-  function setCommandKeyPressed(pressed: boolean): void {
-    if (commandKeyPressed === pressed) return;
-    commandKeyPressed = pressed;
+  function setLinkModifierPressed(pressed: boolean): void {
+    if (linkModifierPressed === pressed) return;
+    linkModifierPressed = pressed;
     const position = lastPointerPosition;
     if (!position) return;
     document.elementFromPoint(position.x, position.y)?.dispatchEvent(
@@ -505,7 +517,8 @@ export function useTerminalTabs(configuration: {
         bubbles: true,
         clientX: position.x,
         clientY: position.y,
-        metaKey: pressed,
+        ctrlKey: settings.shortcutModifier === "ctrl" && pressed,
+        metaKey: settings.shortcutModifier === "meta" && pressed,
       }),
     );
   }
@@ -513,7 +526,27 @@ export function useTerminalTabs(configuration: {
   function handleKeyboard(event: KeyboardEvent): void {
     if (configuration.isShortcutScopeActive?.()) return;
     const modifierPressed = settings.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
-    setCommandKeyPressed(modifierPressed);
+    setLinkModifierPressed(modifierPressed);
+
+    const terminal = activeTab.value?.terminal;
+    const isCopyShortcut =
+      isTerminalFocused() &&
+      terminal?.hasSelection() &&
+      event.key.toLowerCase() === "c" &&
+      modifierPressed &&
+      !event.altKey &&
+      !event.isComposing &&
+      !(settings.shortcutModifier === "ctrl" ? event.metaKey : event.ctrlKey) &&
+      (settings.shortcutModifier === "ctrl" ? event.shiftKey : !event.shiftKey);
+    if (isCopyShortcut && terminal) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void copyTerminalSelection(terminal).then((result) => {
+        if (result !== "empty") configuration.onCopy?.(result);
+      });
+      return;
+    }
+
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
       tabIdsByNumber: new Map(
@@ -537,13 +570,13 @@ export function useTerminalTabs(configuration: {
     }
   }
   function handleKeyUp(event: KeyboardEvent): void {
-    setCommandKeyPressed(event.metaKey);
+    setLinkModifierPressed(settings.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey);
   }
   function handlePointerMove(event: PointerEvent): void {
     lastPointerPosition = { x: event.clientX, y: event.clientY };
   }
   function handleWindowBlur(): void {
-    setCommandKeyPressed(false);
+    setLinkModifierPressed(false);
   }
   function attachHost(host: HTMLElement): void {
     terminalHost?.removeEventListener("pointermove", handlePointerMove);
@@ -596,6 +629,8 @@ export function useTerminalTabs(configuration: {
       tab.disposed = true;
       tab.linkDisposable?.dispose();
       tab.linkDisposable = undefined;
+      tab.copyDisposable?.dispose();
+      tab.copyDisposable = undefined;
       tab.terminal.dispose();
       if (tab.session) void stopTerminal(tab.session.id);
     }

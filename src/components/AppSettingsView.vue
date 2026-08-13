@@ -146,7 +146,7 @@ function testAgentReadyNotification(): void {
           </SettingsField>
           <SettingsField
             title="Keyboard shortcut modifier"
-            description="The modifier used for workspace shortcuts. Defaults to Command on macOS and Control on Linux."
+            description="The modifier used for workspace shortcuts and terminal links. Defaults to Command on macOS and Control on Linux."
           >
             <select v-model="settings.shortcutModifier">
               <option
