@@ -1,4 +1,5 @@
 import type { IDisposable, Terminal } from "@xterm/xterm";
+import { writeClipboardText } from "../api/clipboard";
 
 export type TerminalCopyResult = "copied" | "failed" | "empty";
 
@@ -10,7 +11,7 @@ export type TerminalCopyResult = "copied" | "failed" | "empty";
 export async function copyTerminalSelection(terminal: Terminal): Promise<TerminalCopyResult> {
   if (!terminal.hasSelection()) return "empty";
 
-  return (await writeClipboardText(terminal.getSelection())) ? "copied" : "failed";
+  return (await tryWriteClipboardText(terminal.getSelection())) ? "copied" : "failed";
 }
 
 /** Install copy handling for both keyboard/native-menu and mouse initiated copies. */
@@ -31,7 +32,7 @@ export function installTerminalCopy(
       // Some webviews expose a read-only DataTransfer for native menu copies.
     }
     event.preventDefault();
-    void writeClipboardText(text).then((copied) => onCopy(copied ? "copied" : "failed"));
+    void tryWriteClipboardText(text).then((copied) => onCopy(copied ? "copied" : "failed"));
   };
 
   element.addEventListener("copy", handleCopy);
@@ -42,12 +43,10 @@ export function installTerminalCopy(
   };
 }
 
-async function writeClipboardText(text: string): Promise<boolean> {
+async function tryWriteClipboardText(text: string): Promise<boolean> {
   try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
+    await writeClipboardText(text);
+    return true;
   } catch {
     // Fall back to the synchronous browser API below.
   }

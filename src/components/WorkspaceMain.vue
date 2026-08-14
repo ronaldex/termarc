@@ -8,6 +8,7 @@ import ProjectSettingsView from "./ProjectSettingsView.vue";
 import AppSettingsView from "./AppSettingsView.vue";
 import CommandRunView from "./CommandRunView.vue";
 import CommandSettingsView from "./CommandSettingsView.vue";
+import TerminalStoppedView from "./TerminalStoppedView.vue";
 import TerminalSurface from "./TerminalSurface.vue";
 
 const props = defineProps<{
@@ -34,6 +35,10 @@ const emit = defineEmits<{
   runCommand: [projectId: string, commandId: string];
   reloadCommand: [projectId: string, commandId: string];
   stopCommand: [projectId: string, commandId: string];
+  startTerminal: [tabId: string];
+  copyTerminal: [tabId: string];
+  pasteTerminal: [tabId: string];
+  closeTerminal: [tabId: string];
 }>();
 
 const selectedCommand = computed(() => {
@@ -41,6 +46,14 @@ const selectedCommand = computed(() => {
   return props.selectedProject?.commands?.find(
     (command) => command.id === props.selection.commandId,
   );
+});
+const selectedTerminal = computed(() => {
+  if (props.selection.kind !== "terminal") return;
+  return props.tabs.find((tab) => tab.id === props.selection.tabId);
+});
+const stoppedTerminal = computed(() => {
+  const tab = selectedTerminal.value;
+  return tab?.launch.kind === "shell" && tab.status === "stopped" ? tab : undefined;
 });
 const commandTab = computed(() => {
   if (props.selection.kind !== "command") return;
@@ -76,16 +89,27 @@ defineExpose({ focusContent, hasContentFocus });
 <template>
   <main ref="mainPanel" class="main-panel" tabindex="-1" aria-label="Workspace content">
     <TerminalSurface
-      v-show="selection.kind === 'terminal' || (selection.kind === 'command' && commandTab)"
+      v-show="
+        (selection.kind === 'terminal' && !stoppedTerminal) ||
+        (selection.kind === 'command' && commandTab)
+      "
       :tabs="tabs"
       :active-tab-id="activeTabId"
       :is-empty="isEmpty"
       :set-terminal-container="setTerminalContainer"
       @create="createTerminal"
       @host="emit('host', $event)"
+      @copy="emit('copyTerminal', $event)"
+      @paste="emit('pasteTerminal', $event)"
+      @close="emit('closeTerminal', $event)"
+    />
+    <TerminalStoppedView
+      v-if="stoppedTerminal && selectedProject"
+      :project="selectedProject"
+      @start="emit('startTerminal', stoppedTerminal.id)"
     />
     <ProjectManagementView
-      v-if="selection.kind === 'projects'"
+      v-else-if="selection.kind === 'projects'"
       :projects="projects"
       @select="emit('selectProject', $event)"
       @add="emit('addProject')"

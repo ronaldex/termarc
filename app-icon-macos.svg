@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Sized and padded to match the macOS app-icon proportions of Solo.png. -->
-  <rect x="102" y="102" width="820" height="820" rx="100" fill="#292524"/>
+  <!-- Full-bleed artwork: macOS supplies the icon mask/frame itself. -->
+  <rect width="1024" height="1024" rx="124" fill="#292524"/>
 
   <!-- Five nested terminal arcs with continuous semicircular crowns. -->
-  <g fill="none" stroke-linecap="round" stroke-width="24" transform="translate(61.44 61.44) scale(.88)">
+  <g fill="none" stroke-linecap="round" stroke-width="24" transform="translate(512 512) scale(1.248) translate(-512 -512) translate(61.44 61.44) scale(.88)">
     <path d="M177 851V512a335 335 0 0 1 670 0v339" stroke="#9bb7fa"/>
     <path d="M220 851V542a292 292 0 0 1 584 0v309" stroke="#8aaaf8"/>
     <path d="M263 851V580a249 249 0 0 1 498 0v271" stroke="#7aa2f7"/>

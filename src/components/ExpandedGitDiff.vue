@@ -24,7 +24,8 @@ const emit = defineEmits<{
   collapse: [];
   refresh: [];
   toggleFile: [key: string];
-  toggleAll: [];
+  expandAll: [];
+  collapseAll: [];
   openFile: [path: string];
 }>();
 
@@ -66,9 +67,31 @@ defineExpose({ focusActiveFile });
     <template v-else>
       <div class="files-toolbar">
         <span>{{ files.length }} changed {{ files.length === 1 ? "file" : "files" }}</span>
-        <button type="button" @click="emit('toggleAll')">
-          {{ allFilesExpanded ? "Collapse all" : "Expand all" }}
-        </button>
+        <span class="files-actions" aria-label="Diff expansion controls">
+          <button
+            type="button"
+            title="Expand all"
+            aria-label="Expand all"
+            :disabled="allFilesExpanded"
+            @click="emit('expandAll')"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2 6V2h4M2 2l4 4M14 6V2h-4M14 2l-4 4M2 10v4h4M2 14l4-4M14 10v4h-4M14 14l-4-4" />
+            </svg>
+          </button>
+          <span class="files-action-separator" aria-hidden="true">/</span>
+          <button
+            type="button"
+            title="Collapse all"
+            aria-label="Collapse all"
+            :disabled="!expandedFiles.size"
+            @click="emit('collapseAll')"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2 6h4V2M6 6 2 2M14 6h-4V2M10 6l4-4M2 10h4v4M6 10l-4 4M14 10h-4v4M10 10l4 4" />
+            </svg>
+          </button>
+        </span>
       </div>
       <div ref="diffContentElement" class="diff-content">
         <section
@@ -195,8 +218,37 @@ defineExpose({ focusActiveFile });
   font: inherit;
   cursor: pointer;
 }
-.files-toolbar button:hover {
+.files-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.files-actions button {
+  display: grid;
+  width: 1.25rem;
+  height: 1.5rem;
+  place-items: center;
+}
+.files-actions svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+}
+.files-action-separator {
+  color: var(--color-text-subtle);
+  opacity: 0.6;
+}
+.files-toolbar button:hover:not(:disabled) {
   color: var(--color-text-strong);
+}
+.files-toolbar button:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+  opacity: 0.5;
 }
 .diff-content {
   min-height: 0;

@@ -21,10 +21,12 @@ export function useDiffExpansion(
     expandedFiles.value = next;
   }
 
-  function toggleAllFiles(): void {
-    expandedFiles.value = allFilesExpanded.value
-      ? new Set()
-      : new Set(files.value.map((file) => file.key));
+  function expandAllFiles(): void {
+    expandedFiles.value = new Set(files.value.map((file) => file.key));
+  }
+
+  function collapseAllFiles(): void {
+    expandedFiles.value = new Set();
   }
 
   watch(
@@ -44,5 +46,5 @@ export function useDiffExpansion(
     { immediate: true },
   );
 
-  return { expandedFiles, allFilesExpanded, toggleFile, toggleAllFiles };
+  return { expandedFiles, allFilesExpanded, toggleFile, expandAllFiles, collapseAllFiles };
 }

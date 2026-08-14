@@ -15,6 +15,7 @@ function setup(tabs: TerminalTab[] = []) {
   const selectTerminal = vi.fn();
   const selectTab = vi.fn();
   const runCommand = vi.fn();
+  const startTerminal = vi.fn();
   const createProjectTerminal = vi.fn();
   const activation = useSidebarActivation({
     projects: ref([project]),
@@ -33,9 +34,10 @@ function setup(tabs: TerminalTab[] = []) {
     selectTerminal,
     selectTab,
     runCommand,
+    startTerminal,
     createProjectTerminal,
   });
-  return { ...activation, selectTerminal, selectTab, runCommand, createProjectTerminal };
+  return { ...activation, selectTerminal, selectTab, runCommand, startTerminal, createProjectTerminal };
 }
 
 describe("useSidebarActivation", () => {
@@ -52,6 +54,26 @@ describe("useSidebarActivation", () => {
     expect(result.selectTerminal).toHaveBeenCalledWith(project.id, tab.id);
     expect(result.selectTab).toHaveBeenCalledWith(tab.id);
     expect(result.createProjectTerminal).not.toHaveBeenCalled();
+  });
+
+  it("starts a stopped terminal when it is activated", () => {
+    const tab = {
+      id: "terminal-1",
+      projectId: project.id,
+      status: "stopped",
+      launch: { kind: "shell" },
+    } as TerminalTab;
+    const result = setup([tab]);
+
+    result.activateSidebar({
+      id: tab.id,
+      kind: "terminal",
+      projectId: project.id,
+      tabId: tab.id,
+    });
+
+    expect(result.startTerminal).toHaveBeenCalledWith(tab.id);
+    expect(result.selectTab).not.toHaveBeenCalled();
   });
 
   it("runs a command that does not already have an active tab", () => {

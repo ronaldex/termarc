@@ -8,4 +8,10 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
 
+// Production uses only Termarc's contextual actions. Keep the WebView menu in
+// development so `tauri dev` still exposes Reload and Inspect Element.
+if (!import.meta.env.DEV) {
+  document.addEventListener("contextmenu", (event) => event.preventDefault(), { capture: true });
+}
+
 createApp(App).mount("#app");

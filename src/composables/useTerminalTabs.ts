@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
+import { readClipboardText } from "../api/clipboard";
 import { resizeTerminal, startTerminal, stopTerminal, writeTerminal } from "../api/terminals";
 import {
   listenForAgentNotificationClicks,
@@ -38,6 +39,7 @@ const MAX_PENDING_WRITE_COUNT = 256;
 export function useTerminalTabs(configuration: {
   isShortcutScopeActive?: () => boolean;
   externalEditorForProject: (projectId: string) => ExternalEditor;
+  activateNumberedShortcut?: (number: number) => boolean;
   onCopy?: (result: Exclude<TerminalCopyResult, "empty">) => void;
 }) {
   const { settings } = useAppSettings();
@@ -65,6 +67,7 @@ export function useTerminalTabs(configuration: {
       launch?: TerminalLaunch;
       launchTitle?: string;
       customTitle?: string;
+      start?: boolean;
     } = {},
   ): Promise<TerminalTab | undefined> {
     if (disposed) return undefined;
@@ -72,6 +75,8 @@ export function useTerminalTabs(configuration: {
     if (disposed) return undefined;
 
     const number = nextTabNumber++;
+    const startImmediately = options.start !== false;
+    const launch = options.launch ?? { kind: "shell" as const };
     let id = options.id?.trim() || createTerminalId();
     while (tabs.some((tab) => tab.id === id)) id = createTerminalId();
     const tab = reactive({
@@ -82,11 +87,15 @@ export function useTerminalTabs(configuration: {
       customTitle: normalizeTerminalTitle(options.customTitle ?? ""),
       launchTitle: normalizeTerminalTitle(options.launchTitle ?? ""),
       currentCwd: cwd,
-      detail: "Starting shell…",
+      detail: startImmediately
+        ? launch.kind === "command"
+          ? "Starting command…"
+          : "Starting shell…"
+        : "Terminal stopped",
       projectId,
       cwd,
-      launch: options.launch ?? { kind: "shell" },
-      status: "starting" as TerminalStatus,
+      launch,
+      status: (startImmediately ? "starting" : "stopped") as TerminalStatus,
       terminal: markRaw(
         createTerminal({
           fontFamily: settings.terminalFontFamily,
@@ -125,7 +134,7 @@ export function useTerminalTabs(configuration: {
     installTerminalInput(tab);
     enableWebgl(tab);
     fitTab(tab);
-    void startTab(tab);
+    if (startImmediately) void startTab(tab);
     return tab;
   }
 
@@ -356,18 +365,40 @@ export function useTerminalTabs(configuration: {
     if (tab) updateTerminalTitleOverride(tab, title);
   }
 
+  async function copyTerminal(id: string): Promise<TerminalCopyResult> {
+    const tab = tabs.find((item) => item.id === id);
+    if (!tab) return "empty";
+    return copyTerminalSelection(tab.terminal);
+  }
+
+  async function pasteTerminal(id: string): Promise<"pasted" | "failed" | "empty"> {
+    const tab = tabs.find((item) => item.id === id);
+    if (!tab?.session || tab.status !== "running") return "failed";
+    try {
+      const text = await readClipboardText();
+      if (!text) return "empty";
+      tab.terminal.paste(text);
+      tab.terminal.focus();
+      return "pasted";
+    } catch {
+      return "failed";
+    }
+  }
+
   async function startTab(tab: TerminalTab): Promise<void> {
     const generation = ++tab.startGeneration;
     tab.session = undefined;
     tab.terminalTitle = undefined;
     tab.agent = undefined;
     tab.agentState = undefined;
+    tab.terminalExitCode = undefined;
     tab.lastCommandExitCode = undefined;
     tab.stopRequested = false;
     const isCommand = tab.launch.kind === "command";
     let processExited = false;
     setTabStatus(tab, "starting", isCommand ? "Starting command…" : "Starting shell…");
     tab.terminal.reset();
+    await nextTick();
     fitTab(tab);
     try {
       const started = await startTerminal({
@@ -398,6 +429,7 @@ export function useTerminalTabs(configuration: {
               void closeTab(tab.id);
             } else {
               tab.session = undefined;
+              tab.terminalExitCode = exitCode;
               setTabStatus(tab, "error", `Process exited with status ${exitCode}`);
             }
           } else {
@@ -547,14 +579,30 @@ export function useTerminalTabs(configuration: {
       return;
     }
 
+    const otherModifierPressed =
+      settings.shortcutModifier === "ctrl" ? event.metaKey : event.ctrlKey;
+    const isNumberedShortcut =
+      modifierPressed &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !otherModifierPressed &&
+      /^[1-9]$/.test(event.key);
+    if (isNumberedShortcut && configuration.activateNumberedShortcut?.(Number(event.key))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const handled = handleTerminalShortcut(event, {
       terminalFocused: isTerminalFocused(),
-      tabIdsByNumber: new Map(
-        tabs.flatMap((tab) => {
-          const shortcutNumber = tab.shortcutNumber ?? tab.number;
-          return shortcutNumber <= 9 ? [[shortcutNumber, tab.id]] : [];
-        }),
-      ),
+      tabIdsByNumber: configuration.activateNumberedShortcut
+        ? new Map()
+        : new Map(
+            tabs.flatMap((tab) => {
+              const shortcutNumber = tab.shortcutNumber ?? tab.number;
+              return shortcutNumber <= 9 ? [[shortcutNumber, tab.id]] : [];
+            }),
+          ),
       orderedTabIds: projectTerminalIds(tabs, activeTab.value?.projectId),
       activeTabId: activeTabId.value,
       fontSize: settings.terminalFontSize,
@@ -642,8 +690,11 @@ export function useTerminalTabs(configuration: {
     activeTab,
     isEmpty,
     createTab,
+    startTab,
     selectTab,
     closeTab,
+    copyTerminal,
+    pasteTerminal,
     setTerminalTitleOverride,
     setTabShortcutOrder,
     reorderProjectTerminals,

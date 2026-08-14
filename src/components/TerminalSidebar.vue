@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRefs, watch } from "vue";
 import { useProjectTreeNavigation } from "../composables/useProjectTreeNavigation";
+import type { SidebarContextMenuRequest } from "../types/contextMenu";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import type { DropPlacement } from "../utils/terminalOrdering";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
-import TerminalContextMenu from "./TerminalContextMenu.vue";
 import TerminalRenameModal from "./TerminalRenameModal.vue";
-import type { TerminalContextMenuRequest } from "./TerminalTreeRow.vue";
+import WorkspaceContextMenu, { type ContextMenuItem } from "./WorkspaceContextMenu.vue";
 
 const props = defineProps<{
   tabs: TerminalTabState[];
@@ -23,6 +23,9 @@ const emit = defineEmits<{
   manage: [projectId?: string];
   openSettings: [];
   openKeyboardShortcuts: [];
+  startTerminal: [id: string];
+  editCommand: [projectId: string, commandId: string];
+  deleteCommand: [projectId: string, commandId: string];
   close: [id: string];
   setTerminalTitleOverride: [id: string, title: string];
   renameModalChange: [open: boolean];
@@ -57,13 +60,32 @@ const projectTree = ref<InstanceType<typeof ProjectTree>>();
 const searchInput = ref<HTMLInputElement>();
 const { projects, tabs, selection, collapsed } = toRefs(props);
 const treeFilter = computed(() => (collapsed.value ? "" : filter.value));
-const contextMenu = ref<TerminalContextMenuRequest>();
+const contextMenu = ref<SidebarContextMenuRequest>();
 const sidebarMenuOpen = ref(false);
 const renameTabId = ref<string>();
-const renameTrigger = ref<HTMLButtonElement>();
+const renameTrigger = ref<HTMLElement>();
 const overlayActive = computed(() => Boolean(contextMenu.value || renameTabId.value));
-const contextMenuTab = computed(() =>
-  contextMenu.value ? props.tabs.find((tab) => tab.id === contextMenu.value?.tabId) : undefined,
+const contextMenuTab = computed(() => {
+  const request = contextMenu.value;
+  return request?.kind === "terminal"
+    ? props.tabs.find((tab) => tab.id === request.tabId)
+    : undefined;
+});
+const contextMenuItems = computed<ContextMenuItem[]>(() =>
+  contextMenu.value?.kind === "command"
+    ? [
+        { id: "edit", label: "Edit command" },
+        { id: "delete", label: "Delete command", danger: true, separatorBefore: true },
+      ]
+    : [
+        { id: "rename", label: "Change terminal name…" },
+        {
+          id: "reset",
+          label: "Use automatic title",
+          disabled: !contextMenuTab.value?.customTitle,
+        },
+        { id: "close", label: "Close terminal", danger: true, separatorBefore: true },
+      ],
 );
 const renameTab = computed(() =>
   renameTabId.value ? props.tabs.find((tab) => tab.id === renameTabId.value) : undefined,
@@ -114,19 +136,43 @@ function openKeyboardShortcuts(): void {
   emit("openKeyboardShortcuts");
 }
 
-async function openContextMenu(request: TerminalContextMenuRequest): Promise<void> {
-  emit("focus", {
-    id: request.tabId,
-    kind: "terminal",
-    projectId: props.tabs.find((tab) => tab.id === request.tabId)?.projectId ?? "",
-    tabId: request.tabId,
-  });
+async function openContextMenu(request: SidebarContextMenuRequest): Promise<void> {
+  if (request.kind === "terminal") {
+    emit("focus", {
+      id: request.tabId,
+      kind: "terminal",
+      projectId: props.tabs.find((tab) => tab.id === request.tabId)?.projectId ?? "",
+      tabId: request.tabId,
+    });
+  } else {
+    emit("focus", {
+      id: `${request.projectId}:command:${request.commandId}`,
+      kind: "command",
+      projectId: request.projectId,
+      commandId: request.commandId,
+    });
+  }
   await nextTick();
   contextMenu.value = request;
 }
 
-function openRename(id: string): void {
-  renameTrigger.value = contextMenu.value?.trigger;
+function selectContextMenuItem(id: string): void {
+  const request = contextMenu.value;
+  if (!request) return;
+  dismissContextMenu();
+  if (request.kind === "terminal") {
+    if (id === "rename") openRename(request.tabId, request.trigger);
+    else if (id === "reset") emit("setTerminalTitleOverride", request.tabId, "");
+    else if (id === "close") closeTerminal(request.tabId);
+  } else if (id === "edit") {
+    emit("editCommand", request.projectId, request.commandId);
+  } else if (id === "delete") {
+    emit("deleteCommand", request.projectId, request.commandId);
+  }
+}
+
+function openRename(id: string, trigger?: HTMLElement): void {
+  renameTrigger.value = trigger ?? contextMenu.value?.trigger;
   dismissContextMenu();
   renameTabId.value = id;
   emit("renameModalChange", true);
@@ -147,12 +193,6 @@ function saveRename(title: string): void {
   const id = renameTabId.value;
   closeRename();
   if (id) emit("setTerminalTitleOverride", id, title);
-}
-
-function resetTitle(): void {
-  const id = contextMenu.value?.tabId;
-  dismissContextMenu();
-  if (id) emit("setTerminalTitleOverride", id, "");
 }
 
 function choose(node: SidebarSelection): void {
@@ -182,7 +222,7 @@ function preview(): void {
   if (props.collapsed) emit("preview");
 }
 
-defineExpose({ focusTree, hasTreeFocus });
+defineExpose({ focusTree, focusSearch, hasTreeFocus });
 
 useProjectTreeNavigation({
   projects,
@@ -200,18 +240,10 @@ useProjectTreeNavigation({
   },
 });
 
-function dismissMenuOnKeydown(event: KeyboardEvent): void {
-  if (!contextMenu.value) return;
-  if (["Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(event.key)) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    dismissContextMenu();
-  }
-}
 function dismissMenuOnPointerDown(event: PointerEvent): void {
   if (
     !(event.target instanceof Node) ||
-    !document.querySelector(".terminal-context-menu")?.contains(event.target)
+    !document.querySelector(".workspace-context-menu")?.contains(event.target)
   ) {
     dismissContextMenu();
   }
@@ -229,14 +261,12 @@ watch(
 watch(() => props.collapsed, dismissContextMenu);
 onMounted(() => {
   document.addEventListener("pointerdown", dismissMenuOnPointerDown, true);
-  window.addEventListener("keydown", dismissMenuOnKeydown, { capture: true });
   window.addEventListener("blur", dismissContextMenu);
   window.addEventListener("resize", dismissContextMenu);
   document.addEventListener("scroll", dismissContextMenu, true);
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", dismissMenuOnPointerDown, true);
-  window.removeEventListener("keydown", dismissMenuOnKeydown, { capture: true });
   window.removeEventListener("blur", dismissContextMenu);
   window.removeEventListener("resize", dismissContextMenu);
   document.removeEventListener("scroll", dismissContextMenu, true);
@@ -299,7 +329,6 @@ onBeforeUnmount(() => {
       :filter="treeFilter"
       :selection="selection"
       :collapsed="collapsed"
-      @close="closeTerminal"
       @rename="openRename"
       @context-menu="openContextMenu"
       @toggle-project="emit('toggleProject', $event)"
@@ -308,6 +337,7 @@ onBeforeUnmount(() => {
       @run-command="(projectId, commandId) => emit('runCommand', projectId, commandId)"
       @reload-command="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
       @stop-command="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
+      @start-terminal="emit('startTerminal', $event)"
       @reorder-terminal="
         (projectId, movedId, targetId, placement) =>
           emit('reorderTerminal', projectId, movedId, targetId, placement)
@@ -322,14 +352,13 @@ onBeforeUnmount(() => {
 
     <SidebarFooter :collapsed="collapsed" @toggle="emit('toggle')" @add="emit('addProject')" />
 
-    <TerminalContextMenu
-      v-if="contextMenu && contextMenuTab"
+    <WorkspaceContextMenu
+      v-if="contextMenu"
       :x="contextMenu.x"
       :y="contextMenu.y"
-      :has-custom-name="Boolean(contextMenuTab.customTitle)"
-      @rename="openRename(contextMenu.tabId)"
-      @reset="resetTitle"
-      @close-terminal="closeTerminal(contextMenu.tabId)"
+      :label="contextMenu.kind === 'command' ? 'Command actions' : 'Terminal actions'"
+      :items="contextMenuItems"
+      @select="selectContextMenuItem"
       @dismiss="dismissContextMenu"
     />
     <TerminalRenameModal

@@ -20,6 +20,7 @@ import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
 import { configurePlatformWindowStyle } from "./services/platformWindowStyle";
 import { isMacOS } from "./utils/platform";
+import { numberedSidebarShortcuts } from "./utils/sidebarShortcuts";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
 import type { Project } from "./types/project";
@@ -80,8 +81,11 @@ const {
   activeTab,
   isEmpty,
   createTab,
+  startTab,
   selectTab,
   closeTab,
+  copyTerminal,
+  pasteTerminal,
   setTerminalTitleOverride,
   setTabShortcutOrder,
   reorderProjectTerminals: reorderTerminalTabs,
@@ -98,6 +102,20 @@ const {
 } = useTerminalTabs({
   isShortcutScopeActive: () => renameModalOpen.value,
   externalEditorForProject: editorForProject,
+  activateNumberedShortcut(number) {
+    const shortcut = numberedSidebarShortcuts(treeProjects.value, tabs).find(
+      (item) => item.number === number,
+    );
+    if (!shortcut) return false;
+    if (shortcut.selection.kind === "command") {
+      selectCommandSelection(shortcut.selection.projectId, shortcut.selection.commandId);
+      restoreLeftPreference();
+      requestAnimationFrame(() => workspaceMain.value?.focusContent());
+    } else {
+      activateSidebar(shortcut.selection);
+    }
+    return true;
+  },
   onCopy: notifyTerminalCopy,
 });
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
@@ -220,6 +238,7 @@ const { focusSidebar, activateSidebar: activateSidebarSelection } = useSidebarAc
   selectTerminal,
   selectTab,
   runCommand: (projectId, commandId) => void runCommand(projectId, commandId),
+  startTerminal: (tabId) => void startProjectTerminal(tabId),
   createProjectTerminal: (projectId, directory) => void createProjectTerminal(projectId, directory),
 });
 function activateSidebar(selection: SidebarSelection): void {
@@ -242,6 +261,18 @@ async function createProjectTerminal(projectId: string, cwd: string): Promise<vo
   terminalPersistenceEligible.add(projectId);
   selectTerminal(projectId, tab.id);
   selectTab(tab.id);
+}
+
+async function startProjectTerminal(tabId: string): Promise<void> {
+  const tab = tabs.find((item) => item.id === tabId && item.launch.kind === "shell");
+  const canStart = tab?.status === "stopped" || tab?.status === "error";
+  if (!tab || !canStart) return;
+  selectTerminal(tab.projectId, tab.id);
+  selectTab(tab.id);
+  restoreLeftPreference();
+  if (tab.status === "error" && tab.session) await restartTab(tab);
+  else await startTab(tab);
+  focusActiveTerminal();
 }
 function saveProjectMetadata(project: Project): void {
   void updateProject(project).catch((error) =>
@@ -270,6 +301,24 @@ async function closeProjectTerminal(id: string): Promise<void> {
   const projectId = tabs.find((tab) => tab.id === id && tab.launch.kind === "shell")?.projectId;
   if (projectId) terminalPersistenceEligible.add(projectId);
   await closeTerminal(id);
+}
+
+async function copyProjectTerminal(id: string): Promise<void> {
+  const result = await copyTerminal(id);
+  showToast(
+    result === "copied"
+      ? "Copied to clipboard"
+      : result === "empty"
+        ? "No terminal selection"
+        : "Could not copy terminal selection",
+    result === "copied" ? "success" : "error",
+  );
+}
+
+async function pasteProjectTerminal(id: string): Promise<void> {
+  const result = await pasteTerminal(id);
+  if (result === "pasted") return;
+  showToast(result === "empty" ? "Clipboard is empty" : "Could not paste into terminal", "error");
 }
 function setProjectTerminalTitle(id: string, title: string): void {
   const projectId = tabs.find((tab) => tab.id === id && tab.launch.kind === "shell")?.projectId;
@@ -320,6 +369,11 @@ async function removeCommand(project: Project, commandId: string): Promise<void>
   showCommands(project.id);
 }
 
+function deleteCommandFromMenu(projectId: string, commandId: string): void {
+  const project = projects.value.find((item) => item.id === projectId);
+  if (project) void removeCommand(project, commandId);
+}
+
 useWorkspaceShortcuts({
   sidebar: terminalSidebar,
   workspace: workspaceMain,
@@ -339,6 +393,13 @@ useWorkspaceShortcuts({
   focusActiveTerminal,
   selectProject,
   openSettings,
+  focusProjectByNumber(number) {
+    const project = treeProjects.value[number - 1];
+    if (!project) return;
+    focusSidebar({ id: project.id, kind: "project", projectId: project.id });
+    openLeftTemporarily();
+    requestAnimationFrame(() => terminalSidebar.value?.focusTree());
+  },
   cycleTerminal: cycleSidebarTerminal,
   activeTerminalAvailable: () => Boolean(activeTab.value),
   createTerminal: () => {
@@ -414,6 +475,7 @@ onMounted(async () => {
         const tab = await createTab(project.id, project.directory, {
           id: terminal.id,
           customTitle: terminal.customTitle,
+          start: false,
         });
         if (!tab) {
           projectRestoreSucceeded = false;
@@ -541,6 +603,9 @@ onBeforeUnmount(() => {
       @stop-command="stopCommand"
       @reorder-terminal="reorderProjectTerminals"
       @reorder-command="reorderCommands"
+      @start-terminal="startProjectTerminal"
+      @edit-command="editCommand"
+      @delete-command="deleteCommandFromMenu"
       @close="closeProjectTerminal"
       @set-terminal-title-override="setProjectTerminalTitle"
       @rename-modal-change="renameModalOpen = $event"
@@ -564,6 +629,10 @@ onBeforeUnmount(() => {
       :is-empty="isEmpty"
       :set-terminal-container="setTerminalContainer"
       @create="createProjectTerminal"
+      @start-terminal="startProjectTerminal"
+      @copy-terminal="copyProjectTerminal"
+      @paste-terminal="pasteProjectTerminal"
+      @close-terminal="closeProjectTerminal"
       @host="attachHost"
       @select-project="selectProject"
       @add-project="addProject"
