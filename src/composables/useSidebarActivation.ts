@@ -14,6 +14,7 @@ export function useSidebarActivation(options: {
   selectTerminal: (projectId: string, tabId: string) => void;
   selectTab: (tabId: string) => void;
   runCommand: (projectId: string, commandId: string) => void;
+  startTerminal: (tabId: string) => void;
   createProjectTerminal: (projectId: string, directory: string) => void;
 }) {
   function focusSidebar(selection: SidebarSelection): void {
@@ -31,7 +32,12 @@ export function useSidebarActivation(options: {
   function activateSidebar(selection: SidebarSelection): void {
     focusSidebar(selection);
     if (selection.kind === "terminal") {
-      options.selectTab(selection.tabId);
+      const tab = options.tabs.find((item) => item.id === selection.tabId);
+      if (tab?.status === "stopped" || tab?.status === "error") {
+        options.startTerminal(tab.id);
+      } else {
+        options.selectTab(selection.tabId);
+      }
       return;
     }
     if (selection.kind === "command") {

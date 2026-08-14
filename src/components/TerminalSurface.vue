@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import BaseButton from "./BaseButton.vue";
+import WorkspaceContextMenu, { type ContextMenuItem } from "./WorkspaceContextMenu.vue";
 import type { TerminalTab } from "../types/terminal";
 
 const props = defineProps<{
@@ -9,11 +10,66 @@ const props = defineProps<{
   isEmpty: boolean;
   setTerminalContainer: (tab: TerminalTab, element: Element | null) => void;
 }>();
-const emit = defineEmits<{ create: []; host: [element: HTMLElement] }>();
+const emit = defineEmits<{
+  create: [];
+  host: [element: HTMLElement];
+  copy: [tabId: string];
+  paste: [tabId: string];
+  close: [tabId: string];
+}>();
 const host = ref<HTMLElement>();
+const contextMenu = ref<{ tabId: string; x: number; y: number }>();
+const contextTab = computed(() => props.tabs.find((tab) => tab.id === contextMenu.value?.tabId));
+const contextMenuItems = computed<ContextMenuItem[]>(() => [
+  { id: "copy", label: "Copy", disabled: !contextTab.value?.terminal.hasSelection() },
+  {
+    id: "paste",
+    label: "Paste",
+    disabled: !contextTab.value?.session || contextTab.value.status !== "running",
+  },
+  { id: "close", label: "Close terminal", danger: true, separatorBefore: true },
+]);
+
+function openContextMenu(tabId: string, event: MouseEvent): void {
+  event.preventDefault();
+  contextMenu.value = { tabId, x: event.clientX, y: event.clientY };
+}
+function openContextMenuFromKeyboard(event: KeyboardEvent): void {
+  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+  const tabId = props.activeTabId;
+  const element = event.currentTarget;
+  if (!tabId || !(element instanceof HTMLElement)) return;
+  event.preventDefault();
+  const bounds = element.getBoundingClientRect();
+  contextMenu.value = { tabId, x: bounds.left + 16, y: bounds.top + 16 };
+}
+function selectContextMenuItem(id: string): void {
+  const tabId = contextMenu.value?.tabId;
+  contextMenu.value = undefined;
+  if (!tabId) return;
+  if (id === "copy") emit("copy", tabId);
+  else if (id === "paste") emit("paste", tabId);
+  else if (id === "close") emit("close", tabId);
+}
+function dismissContextMenu(event?: PointerEvent): void {
+  if (
+    event?.target instanceof Node &&
+    document.querySelector(".workspace-context-menu")?.contains(event.target)
+  )
+    return;
+  contextMenu.value = undefined;
+}
 
 onMounted(() => {
   if (host.value) emit("host", host.value);
+  document.addEventListener("pointerdown", dismissContextMenu, true);
+  window.addEventListener("blur", dismissContextMenu);
+  window.addEventListener("resize", dismissContextMenu);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", dismissContextMenu, true);
+  window.removeEventListener("blur", dismissContextMenu);
+  window.removeEventListener("resize", dismissContextMenu);
 });
 </script>
 
@@ -26,8 +82,19 @@ onMounted(() => {
         class="terminal-instance"
         :class="{ active: tab.id === activeTabId }"
         :ref="(element) => props.setTerminalContainer(tab, element)"
+        @contextmenu="openContextMenu(tab.id, $event)"
+        @keydown="openContextMenuFromKeyboard"
       />
     </div>
+    <WorkspaceContextMenu
+      v-if="contextMenu"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      label="Terminal actions"
+      :items="contextMenuItems"
+      @select="selectContextMenuItem"
+      @dismiss="contextMenu = undefined"
+    />
     <div class="empty-state" :hidden="!isEmpty">
       <span class="empty-state-icon">›_</span><strong>No open terminals</strong>
       <p>Start a local shell in a new tab.</p>

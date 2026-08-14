@@ -39,6 +39,8 @@ export type TerminalActivity = {
   processName?: string;
   agent?: AgentKind;
   agentState?: AgentState;
+  /** Exit code of the shell process itself, distinct from a command run inside the shell. */
+  terminalExitCode?: number;
   lastCommandExitCode?: number;
   currentCwd?: string;
 };

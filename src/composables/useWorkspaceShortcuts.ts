@@ -10,6 +10,7 @@ import {
 
 export type SidebarFocusController = {
   focusTree: () => void;
+  focusSearch: () => void;
   hasTreeFocus: () => boolean;
 };
 
@@ -43,6 +44,7 @@ export function useWorkspaceShortcuts(options: {
   selectProject: (project: Project) => void;
   openSettings: () => void;
   openKeyboardShortcuts: () => void;
+  focusProjectByNumber: (number: number) => void;
   cycleTerminal: (direction: -1 | 1) => void;
   activeTerminalAvailable: () => boolean;
   createTerminal: () => void;
@@ -85,6 +87,8 @@ export function useWorkspaceShortcuts(options: {
       action.type === "focus-workspace-from-left" ||
       action.type === "focus-right-sidebar" ||
       action.type === "focus-workspace-from-right" ||
+      action.type === "focus-process-filter" ||
+      action.type === "focus-project" ||
       action.type === "create-terminal" ||
       action.type === "close-terminal"
     ) {
@@ -107,6 +111,10 @@ export function useWorkspaceShortcuts(options: {
         if (project) options.selectProject(project);
       }
       requestAnimationFrame(() => options.sidebar.value?.focusTree());
+    } else if (action.type === "focus-process-filter") {
+      options.sidebar.value?.focusSearch();
+    } else if (action.type === "focus-project") {
+      options.focusProjectByNumber(action.number);
     } else if (action.type === "focus-workspace-from-left") {
       if (options.shouldActivateSidebar(options.selection.value)) {
         options.activateSidebar(options.selection.value);

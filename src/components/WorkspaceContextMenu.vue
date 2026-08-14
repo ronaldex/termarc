@@ -1,15 +1,22 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from "vue";
 
+export type ContextMenuItem = {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+  separatorBefore?: boolean;
+};
+
 const props = defineProps<{
   x: number;
   y: number;
-  hasCustomName: boolean;
+  label: string;
+  items: ContextMenuItem[];
 }>();
 const emit = defineEmits<{
-  rename: [];
-  reset: [];
-  closeTerminal: [];
+  select: [id: string];
   dismiss: [];
 }>();
 
@@ -27,7 +34,31 @@ async function positionMenu(): Promise<void> {
   };
 }
 
-watch(() => [props.x, props.y], positionMenu, { flush: "post" });
+function moveFocus(direction: -1 | 1): void {
+  const buttons = [
+    ...(menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []),
+  ];
+  if (!buttons.length) return;
+  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  const next = (current + direction + buttons.length) % buttons.length;
+  buttons[next]?.focus();
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    emit("dismiss");
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveFocus(event.key === "ArrowDown" ? 1 : -1);
+  } else if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    const buttons = menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+    buttons?.[event.key === "Home" ? 0 : buttons.length - 1]?.focus();
+  }
+}
+
+watch(() => [props.x, props.y, props.items], positionMenu, { flush: "post", deep: true });
 onMounted(async () => {
   await positionMenu();
   menu.value?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -38,31 +69,36 @@ onMounted(async () => {
   <Teleport to="body">
     <div
       ref="menu"
-      class="terminal-context-menu"
+      class="workspace-context-menu"
       role="menu"
-      aria-label="Terminal actions"
+      :aria-label="label"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
       @contextmenu.prevent.stop
+      @keydown="handleKeydown"
     >
-      <button type="button" role="menuitem" @click="emit('rename')">Change terminal name…</button>
-      <button type="button" role="menuitem" :disabled="!hasCustomName" @click="emit('reset')">
-        Use automatic title
-      </button>
-      <span class="separator" role="separator"></span>
-      <button type="button" role="menuitem" class="danger" @click="emit('closeTerminal')">
-        Close terminal
-      </button>
+      <template v-for="item in items" :key="item.id">
+        <span v-if="item.separatorBefore" class="separator" role="separator"></span>
+        <button
+          type="button"
+          role="menuitem"
+          :class="{ danger: item.danger }"
+          :disabled="item.disabled"
+          @click="emit('select', item.id)"
+        >
+          {{ item.label }}
+        </button>
+      </template>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.terminal-context-menu {
+.workspace-context-menu {
   position: fixed;
   z-index: 1000;
   display: flex;
   width: max-content;
-  min-width: 12.5rem;
+  min-width: 11rem;
   flex-direction: column;
   padding: 0.375rem;
   border: 1px solid color-mix(in srgb, var(--color-border-strong) 75%, transparent);
@@ -85,8 +121,6 @@ button {
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 500;
-  letter-spacing: -0.01em;
-  line-height: 1;
   text-align: left;
   cursor: pointer;
 }

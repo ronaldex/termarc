@@ -9,6 +9,8 @@ export type WorkspaceShortcutAction =
   | { type: "escape" }
   | { type: "open-settings" }
   | { type: "open-keyboard-shortcuts" }
+  | { type: "focus-process-filter" }
+  | { type: "focus-project"; number: number }
   | { type: "create-terminal" }
   | { type: "close-terminal" }
   | { type: "toggle-left-sidebar" }
@@ -75,6 +77,19 @@ export function workspaceShortcutAction(
     }
   }
 
+  const projectShortcutNumber = /^[1-9]$/.test(input.key)
+    ? Number(input.key)
+    : /^Digit([1-9])$/.exec(input.code)?.[1];
+  if (
+    input.altKey &&
+    !input.metaKey &&
+    !input.ctrlKey &&
+    !input.shiftKey &&
+    projectShortcutNumber
+  ) {
+    return { type: "focus-project", number: Number(projectShortcutNumber) };
+  }
+
   if (input.key === "Escape") return { type: "escape" };
   if (modifierPressed && input.key === ",") return { type: "open-settings" };
   if (
@@ -85,6 +100,15 @@ export function workspaceShortcutAction(
     (input.key === "/" || input.code === "Slash")
   ) {
     return { type: "open-keyboard-shortcuts" };
+  }
+  if (
+    modifierPressed &&
+    input.shiftKey &&
+    !input.altKey &&
+    !otherModifierPressed &&
+    (input.key.toLowerCase() === "f" || input.code === "KeyF")
+  ) {
+    return { type: "focus-process-filter" };
   }
   if (modifierPressed && (input.key.toLowerCase() === "t" || input.code === "KeyT")) {
     return { type: "create-terminal" };

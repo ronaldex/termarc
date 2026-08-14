@@ -49,10 +49,8 @@ const files = computed(() => {
 const repository = computed(() => state.value?.repository);
 const diffTheme = computed(() => themeDefinition(settings.colorTheme).colorScheme);
 const editorName = computed(() => externalEditorLabel(props.externalEditor));
-const { expandedFiles, allFilesExpanded, toggleFile, toggleAllFiles } = useDiffExpansion(
-  repository,
-  files,
-);
+const { expandedFiles, allFilesExpanded, toggleFile, expandAllFiles, collapseAllFiles } =
+  useDiffExpansion(repository, files);
 
 async function openFile(path: string): Promise<void> {
   const repositoryPath = state.value?.repository;
@@ -143,7 +141,8 @@ watch(state, (result) => {
       @collapse="emit('collapse')"
       @refresh="refresh"
       @toggle-file="toggleFile"
-      @toggle-all="toggleAllFiles"
+      @expand-all="expandAllFiles"
+      @collapse-all="collapseAllFiles"
       @open-file="openFile"
     />
   </aside>

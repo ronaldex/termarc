@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useScrollActiveItem } from "../composables/useScrollActiveItem";
 import { useProjectTreeSorting, type SortItem } from "../composables/useProjectTreeSorting";
+import type { SidebarContextMenuRequest } from "../types/contextMenu";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { projectTreeModel } from "../utils/projectTreeModel";
+import { numberedSidebarShortcuts, sidebarShortcutKey } from "../utils/sidebarShortcuts";
 import type { DropPlacement } from "../utils/terminalOrdering";
 import CommandTreeRow from "./CommandTreeRow.vue";
 import OverlayScrollArea from "./OverlayScrollArea.vue";
 import ProjectBadge from "./ProjectBadge.vue";
 import SidebarChevron from "./SidebarChevron.vue";
-import TerminalTreeRow, { type TerminalContextMenuRequest } from "./TerminalTreeRow.vue";
+import TerminalTreeRow from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
   projects: ProjectTreeProject[];
@@ -24,13 +26,40 @@ const props = defineProps<{
 const projectList = ref<InstanceType<typeof OverlayScrollArea>>();
 const activeItem = ref<HTMLElement>();
 const displayProjects = computed(() => projectTreeModel(props.projects, props.tabs, props.filter));
+const shortcutNumbers = computed(
+  () =>
+    new Map(
+      numberedSidebarShortcuts(props.projects, props.tabs).map(({ number, selection }) => [
+        sidebarShortcutKey(selection),
+        number,
+      ]),
+    ),
+);
 const sortingEnabled = computed(() => !props.collapsed && !props.filter);
 const announcement = ref("");
+const modifierPressed = ref(false);
+const altPressed = ref(false);
+
+function isConfiguredModifier(event: KeyboardEvent): boolean {
+  return props.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
+}
+function handleKeydown(event: KeyboardEvent): void {
+  if (isConfiguredModifier(event)) modifierPressed.value = true;
+  if (event.altKey) altPressed.value = true;
+}
+function handleKeyup(event: KeyboardEvent): void {
+  modifierPressed.value = isConfiguredModifier(event);
+  altPressed.value = event.altKey;
+}
+function handleWindowBlur(): void {
+  modifierPressed.value = false;
+  altPressed.value = false;
+}
 
 const emit = defineEmits<{
-  close: [id: string];
+  startTerminal: [id: string];
   rename: [id: string];
-  contextMenu: [request: TerminalContextMenuRequest];
+  contextMenu: [request: SidebarContextMenuRequest];
   toggleProject: [id: string];
   toggleTerminals: [id: string];
   toggleCommands: [id: string];
@@ -53,6 +82,9 @@ const emit = defineEmits<{
   activate: [selection: SidebarSelection];
 }>();
 
+function isActive(tab: TerminalTabState | undefined): boolean {
+  return tab?.status === "starting" || tab?.status === "running";
+}
 function isTreeActive(id: string): boolean {
   return props.selection.id === id;
 }
@@ -76,7 +108,7 @@ function focusActiveItem(): boolean {
     activeElement instanceof HTMLButtonElement
       ? activeElement
       : activeElement?.querySelector<HTMLButtonElement>(
-          ".project-toggle, .group-select, .process-select, .command-select, .add-row",
+          ".project-toggle, .group-select, .tree-item-select, .add-row",
         );
   button?.focus();
   return document.activeElement === button;
@@ -115,12 +147,23 @@ function moveWithKeyboard(event: KeyboardEvent, item: SortItem, label: string): 
 defineExpose({ focusActiveItem });
 
 useScrollActiveItem(() => props.selection.id, activeItem, projectList);
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown);
+  window.addEventListener("keyup", handleKeyup);
+  window.addEventListener("blur", handleWindowBlur);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleKeydown);
+  window.removeEventListener("keyup", handleKeyup);
+  window.removeEventListener("blur", handleWindowBlur);
+});
 </script>
 
 <template>
   <OverlayScrollArea ref="projectList" class="project-list" :class="{ compact: collapsed }">
     <section
-      v-for="project in displayProjects"
+      v-for="(project, projectIndex) in displayProjects"
       :key="project.id"
       class="project"
       :class="{ collapsed: !project.projectOpen }"
@@ -145,6 +188,9 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
         >
           <ProjectBadge :name="project.name" />
           <strong v-if="!collapsed">{{ project.name }}</strong>
+          <span v-if="altPressed && !collapsed && projectIndex < 9" class="project-shortcut">
+            ⌥{{ projectIndex + 1 }}
+          </span>
         </button>
       </div>
 
@@ -164,13 +210,23 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             />
             <button
               class="group-select"
-              :title="collapsed ? `Terminals (${project.terminalTabs.length})` : undefined"
-              :aria-label="collapsed ? `Terminals (${project.terminalTabs.length})` : undefined"
+              :title="
+                collapsed
+                  ? `Terminals (${project.terminalTabs.filter(isActive).length} / ${project.terminalTabs.length})`
+                  : undefined
+              "
+              :aria-label="
+                collapsed
+                  ? `Terminals (${project.terminalTabs.filter(isActive).length} / ${project.terminalTabs.length})`
+                  : undefined
+              "
               @click="focusGroup(project.id, 'terminals')"
             >
               <span class="group-icon terminal-icon">▣</span>
               <span v-if="!collapsed">TERMINALS</span><i></i>
-              <small v-if="!collapsed">{{ project.terminalTabs.length }}</small>
+              <small v-if="!collapsed">
+                {{ project.terminalTabs.filter(isActive).length }} / {{ project.terminalTabs.length }}
+              </small>
             </button>
           </div>
           <template v-if="project.terminalOpen">
@@ -196,13 +252,15 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             >
               <TerminalTreeRow
                 :tab="tab"
+                :shortcut-number="shortcutNumbers.get(`terminal:${tab.id}`)"
                 :shortcut-modifier="shortcutModifier"
+                :modifier-pressed="modifierPressed"
                 :active="isTreeActive(tab.id)"
                 :collapsed="collapsed"
                 @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"
                 @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
-                @close="emit('close', $event)"
+                @start="emit('startTerminal', $event)"
               />
             </div>
             <button
@@ -244,13 +302,24 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
             />
             <button
               class="group-select"
-              :title="collapsed ? `Commands (${project.commandItems.length})` : undefined"
-              :aria-label="collapsed ? `Commands (${project.commandItems.length})` : undefined"
+              :title="
+                collapsed
+                  ? `Commands (${project.commandItems.filter((item) => isActive(item.tab)).length} / ${project.commandItems.length})`
+                  : undefined
+              "
+              :aria-label="
+                collapsed
+                  ? `Commands (${project.commandItems.filter((item) => isActive(item.tab)).length} / ${project.commandItems.length})`
+                  : undefined
+              "
               @click="focusGroup(project.id, 'commands')"
             >
               <span class="group-icon">▱</span>
               <span v-if="!collapsed">COMMANDS</span><i></i>
-              <small v-if="!collapsed">{{ project.commandItems.length }}</small>
+              <small v-if="!collapsed">
+                {{ project.commandItems.filter((item) => isActive(item.tab)).length }} /
+                {{ project.commandItems.length }}
+              </small>
             </button>
           </div>
           <template v-if="project.commandsOpen">
@@ -282,10 +351,14 @@ useScrollActiveItem(() => props.selection.id, activeItem, projectList);
                 :project-id="project.id"
                 :command="item.command"
                 :tab="item.tab"
+                :shortcut-modifier="shortcutModifier"
+                :modifier-pressed="modifierPressed"
+                :shortcut-number="shortcutNumbers.get(`command:${project.id}:${item.command.id}`)"
                 :active="isTreeActive(`${project.id}:command:${item.command.id}`)"
                 :collapsed="collapsed"
                 @focus="emit('focus', $event)"
                 @activate="emit('activate', $event)"
+                @context-menu="emit('contextMenu', $event)"
                 @run="(projectId, commandId) => emit('runCommand', projectId, commandId)"
                 @reload="(projectId, commandId) => emit('reloadCommand', projectId, commandId)"
                 @stop="(projectId, commandId) => emit('stopCommand', projectId, commandId)"
@@ -395,7 +468,7 @@ button {
 .project-toggle {
   display: grid;
   min-width: 0;
-  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr);
+  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr) var(--tree-action-column);
   align-items: center;
   column-gap: var(--tree-column-gap);
   padding: 0;
@@ -409,6 +482,11 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.project-shortcut {
+  color: var(--color-text-faint);
+  font-size: 0.625rem;
+  text-align: right;
+}
 .project-content {
   padding: 0 var(--tree-inline-end) 0.75rem var(--tree-inline-start);
 }
@@ -418,12 +496,14 @@ button {
 .group-heading {
   position: relative;
   display: grid;
-  width: 100%;
+  width: calc(100% + var(--tree-inline-start) + var(--tree-inline-end));
   min-height: 2rem;
+  box-sizing: border-box;
   grid-template-columns: var(--tree-toggle-column) minmax(0, 1fr);
   align-items: center;
   column-gap: var(--tree-column-gap);
-  padding: 0.25rem 0;
+  padding: 0.25rem var(--tree-inline-end) 0.25rem var(--tree-inline-start);
+  margin-left: calc(-1 * var(--tree-inline-start));
   color: var(--color-text-subtle);
   font-size: 0.625rem;
   font-weight: 650;
@@ -432,7 +512,7 @@ button {
 .group-heading.tree-active::before {
   top: 0.25rem;
   bottom: 0.25rem;
-  left: -0.875rem;
+  left: 0;
 }
 .group-select {
   display: grid;
@@ -468,11 +548,14 @@ button {
 .add-row {
   position: relative;
   display: flex;
+  width: calc(100% + var(--tree-inline-start) + var(--tree-inline-end));
   min-height: 1.75rem;
+  box-sizing: border-box;
   align-items: center;
   gap: 0.5rem;
-  margin-left: var(--tree-item-icon-left);
-  padding: 0.25rem 0;
+  padding: 0.25rem var(--tree-inline-end) 0.25rem
+    calc(var(--tree-inline-start) + var(--tree-item-icon-left));
+  margin-left: calc(-1 * var(--tree-inline-start));
   color: var(--color-text-subtle);
   font-size: 0.6875rem;
 }
@@ -488,7 +571,7 @@ button {
   position: absolute;
   top: 0.25rem;
   bottom: 0.25rem;
-  left: calc(-1 * var(--tree-item-icon-left) - 0.875rem);
+  left: 0;
   width: 0.25rem;
   border-radius: 0 0.125rem 0.125rem 0;
   background: var(--color-focus);
@@ -536,10 +619,12 @@ button {
 }
 .project-list.compact .group-heading {
   display: flex;
+  width: 100%;
   justify-content: center;
   gap: 0;
   padding-right: 0;
   padding-left: 0;
+  margin-left: 0;
 }
 .project-list.compact .add-row {
   box-sizing: border-box;

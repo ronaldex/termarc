@@ -1,36 +1,40 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import type { TerminalContextMenuRequest } from "../types/contextMenu";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
 import { terminalDisplayModel } from "../utils/terminalLabels";
+import SidebarTreeActionButton from "./SidebarTreeActionButton.vue";
+import SidebarTreeItemRow from "./SidebarTreeItemRow.vue";
 import TerminalStatusIndicator from "./TerminalStatusIndicator.vue";
-
-export type TerminalContextMenuRequest = {
-  tabId: string;
-  x: number;
-  y: number;
-  trigger: HTMLButtonElement;
-};
 
 const props = defineProps<{
   tab: TerminalTabState;
+  shortcutNumber?: number;
   shortcutModifier: "meta" | "ctrl";
+  modifierPressed: boolean;
   active: boolean;
   collapsed?: boolean;
 }>();
 const emit = defineEmits<{
-  close: [id: string];
+  start: [id: string];
   rename: [id: string];
   contextMenu: [request: TerminalContextMenuRequest];
   focus: [selection: SidebarSelection];
 }>();
 
-const terminalButton = ref<HTMLButtonElement>();
+const treeItemRow = ref<InstanceType<typeof SidebarTreeItemRow>>();
 const display = computed(() => terminalDisplayModel(props.tab));
-const shortcutNumber = computed(() => props.tab.shortcutNumber ?? props.tab.number);
-const showsShortcut = computed(() => shortcutNumber.value <= 9);
+const shortcutNumber = computed(() => props.shortcutNumber);
+const showsShortcut = computed(
+  () => shortcutNumber.value !== undefined && shortcutNumber.value <= 9,
+);
 const shortcutGlyph = computed(() => (props.shortcutModifier === "ctrl" ? "⌃" : "⌘"));
 const shortcutName = computed(() => (props.shortcutModifier === "ctrl" ? "Ctrl" : "Command"));
+const shortcutVisible = computed(
+  () => showsShortcut.value && props.modifierPressed && !props.collapsed,
+);
+const canRestart = computed(() => props.tab.status === "error");
 
 function focus(): void {
   emit("focus", {
@@ -41,8 +45,8 @@ function focus(): void {
   });
 }
 function requestContextMenu(x: number, y: number): void {
-  const trigger = terminalButton.value;
-  if (trigger) emit("contextMenu", { tabId: props.tab.id, x, y, trigger });
+  const trigger = treeItemRow.value?.getSelectButton();
+  if (trigger) emit("contextMenu", { kind: "terminal", tabId: props.tab.id, x, y, trigger });
 }
 function openContextMenu(event: MouseEvent): void {
   requestContextMenu(event.clientX, event.clientY);
@@ -50,37 +54,39 @@ function openContextMenu(event: MouseEvent): void {
 function openContextMenuFromKeyboard(event: KeyboardEvent): void {
   if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
   event.preventDefault();
-  const bounds = terminalButton.value?.getBoundingClientRect();
+  const bounds = treeItemRow.value?.getSelectButton()?.getBoundingClientRect();
   if (bounds) requestContextMenu(bounds.left + 12, bounds.bottom - 4);
 }
 </script>
 
 <template>
-  <div
-    class="process-row"
-    :class="{ 'tree-active': active, compact: collapsed }"
-    @contextmenu.prevent="openContextMenu"
+  <SidebarTreeItemRow
+    ref="treeItemRow"
+    :active="active"
+    :collapsed="collapsed"
+    :shortcut-visible="shortcutVisible"
+    custom-context-menu
+    :title="collapsed ? display.tooltip : undefined"
+    :aria-label="
+      collapsed
+        ? `${showsShortcut ? `${shortcutName}+${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
+        : undefined
+    "
+    @select="focus"
+    @double-click="emit('rename', tab.id)"
+    @keydown="openContextMenuFromKeyboard"
+    @context-menu="openContextMenu"
   >
-    <button
-      ref="terminalButton"
-      class="process-select"
-      :title="collapsed ? display.tooltip : undefined"
-      :aria-label="
-        collapsed
-          ? `${showsShortcut ? `${shortcutName}+${shortcutNumber}` : 'Terminal'}: ${display.primaryLabel}`
-          : undefined
-      "
-      @click="focus"
-      @dblclick.stop="emit('rename', tab.id)"
-      @keydown="openContextMenuFromKeyboard"
-    >
+    <template #icon>
       <TerminalStatusIndicator
         :status="tab.status"
         :busy="display.busy"
         :running="display.running"
         :title="display.tooltip"
       />
-      <span v-if="!collapsed" class="process-labels">
+    </template>
+    <template #content>
+      <span class="process-labels">
         <span
           class="process-title"
           :class="{ 'path-label': display.primaryIsPath }"
@@ -96,20 +102,24 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
           {{ display.secondaryLabel }}
         </small>
       </span>
-      <span v-if="showsShortcut && !collapsed" class="shortcut"
-        >{{ shortcutGlyph }}{{ shortcutNumber }}</span
+    </template>
+    <template #shortcut>{{ shortcutGlyph }}{{ shortcutNumber }}</template>
+    <template #actions>
+      <SidebarTreeActionButton
+        v-if="tab.status === 'stopped' || canRestart"
+        :title="canRestart ? 'Restart terminal' : 'Start terminal'"
+        @click.stop="emit('start', tab.id)"
       >
-    </button>
-    <button
-      v-if="!collapsed"
-      class="close"
-      title="Close terminal"
-      aria-label="Close terminal"
-      @click.stop="emit('close', tab.id)"
-    >
-      ×
-    </button>
-  </div>
+        <svg v-if="canRestart" viewBox="0 0 16 16" aria-hidden="true">
+          <path class="stroke-icon" d="M13 5V2.5L11.2 4.3A5 5 0 1 0 13 8" />
+          <path class="stroke-icon" d="M10.5 2.5H13V5" />
+        </svg>
+        <svg v-else viewBox="0 0 16 16" aria-hidden="true">
+          <path class="fill-icon" d="M5 3.5v9l7-4.5z" />
+        </svg>
+      </SidebarTreeActionButton>
+    </template>
+  </SidebarTreeItemRow>
 </template>
 
 <style scoped>
@@ -119,37 +129,6 @@ button {
   background: transparent;
   cursor: pointer;
   font: inherit;
-}
-.process-row {
-  position: relative;
-  display: flex;
-  width: 100%;
-  box-sizing: border-box;
-  height: 2.3125rem;
-  min-height: 2.3125rem;
-  align-items: center;
-  padding: 0.25rem 0 0.25rem var(--tree-item-icon-left, 1.25rem);
-  border-radius: 0.25rem;
-}
-.process-row.tree-active::before {
-  position: absolute;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  left: -0.875rem;
-  width: 0.25rem;
-  border-radius: 0 0.125rem 0.125rem 0;
-  background: var(--color-focus);
-  content: "";
-}
-.process-select {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  grid-template-columns: var(--tree-icon-column) minmax(0, 1fr) var(--tree-action-column);
-  align-items: center;
-  column-gap: var(--tree-column-gap);
-  padding: 0;
-  text-align: left;
 }
 .process-labels {
   display: flex;
@@ -164,7 +143,7 @@ button {
   white-space: nowrap;
 }
 .process-title {
-  color: var(--color-text-strong);
+  color: var(--tree-row-primary-color);
   font-size: 0.75rem;
 }
 .process-labels small {
@@ -175,42 +154,5 @@ button {
 .path-label {
   direction: rtl;
   text-align: left;
-}
-.shortcut {
-  width: 100%;
-  color: var(--color-text-faint);
-  font-size: 0.625rem;
-  text-align: right;
-}
-.close {
-  position: absolute;
-  right: 0;
-  display: grid;
-  width: var(--tree-action-column);
-  height: 1.5rem;
-  padding: 0;
-  justify-items: end;
-  color: var(--color-text-subtle);
-  font-size: 0.9375rem;
-  line-height: 1;
-  opacity: 0;
-}
-.process-row:hover .close {
-  opacity: 1;
-}
-.process-row:not(.compact):hover .shortcut {
-  opacity: 0;
-}
-.process-row.compact {
-  justify-content: center;
-  padding-right: 0;
-  padding-left: 0;
-}
-.process-row.compact .process-select {
-  display: flex;
-  flex: 0 0 auto;
-}
-.process-row.compact.tree-active::before {
-  left: 0;
 }
 </style>

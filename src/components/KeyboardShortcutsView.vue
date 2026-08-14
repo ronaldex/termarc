@@ -12,6 +12,7 @@ const shortcuts = [
   ["Close terminal", "W"],
   ["Toggle left sidebar", "P"],
   ["Toggle Git sidebar", "D"],
+  ["Focus process filter", "Shift F"],
   ["Open and close sidebar panels", "← / →"],
   ["Cycle terminals", "↑ / ↓"],
   ["Switch to terminal 1–9", "1–9"],
@@ -59,6 +60,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
         <div class="shortcut-row">
           <span>Show keyboard shortcuts</span><kbd>{{ modifier }} /</kbd>
         </div>
+        <div class="shortcut-row"><span>Focus project 1–9</span><kbd>Alt 1–9</kbd></div>
         <div class="shortcut-row"><span>Dismiss / cancel</span><kbd>Esc</kbd></div>
       </div>
       <h2>Panel navigation</h2>

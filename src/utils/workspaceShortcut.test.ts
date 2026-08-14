@@ -110,6 +110,13 @@ describe("workspaceShortcutAction", () => {
     expect(workspaceShortcutAction(shortcut({ key: ",", metaKey: true }))).toEqual({
       type: "open-settings",
     });
+    expect(
+      workspaceShortcutAction(shortcut({ key: "F", code: "KeyF", metaKey: true, shiftKey: true })),
+    ).toEqual({ type: "focus-process-filter" });
+    expect(workspaceShortcutAction(shortcut({ key: "¡", code: "Digit1", altKey: true }))).toEqual({
+      type: "focus-project",
+      number: 1,
+    });
     expect(workspaceShortcutAction(shortcut({ key: "p", code: "KeyP", metaKey: true }))).toEqual({
       type: "toggle-left-sidebar",
     });
