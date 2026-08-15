@@ -225,7 +225,8 @@ onBeforeUnmount(() => {
               <span class="group-icon terminal-icon">▣</span>
               <span v-if="!collapsed">TERMINALS</span><i></i>
               <small v-if="!collapsed">
-                {{ project.terminalTabs.filter(isActive).length }} / {{ project.terminalTabs.length }}
+                {{ project.terminalTabs.filter(isActive).length }} /
+                {{ project.terminalTabs.length }}
               </small>
             </button>
           </div>
