@@ -17,7 +17,6 @@ describe("terminalOrdering", () => {
           kind: "command" as const,
           commandId: "x",
           commandLine: "x",
-          mode: "single-shot" as const,
         },
       },
       shell("other", "b"),

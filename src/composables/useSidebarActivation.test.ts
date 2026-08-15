@@ -37,7 +37,14 @@ function setup(tabs: TerminalTab[] = []) {
     startTerminal,
     createProjectTerminal,
   });
-  return { ...activation, selectTerminal, selectTab, runCommand, startTerminal, createProjectTerminal };
+  return {
+    ...activation,
+    selectTerminal,
+    selectTab,
+    runCommand,
+    startTerminal,
+    createProjectTerminal,
+  };
 }
 
 describe("useSidebarActivation", () => {

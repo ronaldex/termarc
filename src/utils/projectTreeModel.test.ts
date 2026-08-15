@@ -7,7 +7,7 @@ const project: ProjectTreeProject = {
   id: "project",
   name: "Project",
   directory: "/project",
-  commands: [{ id: "build", name: "Build", command: "npm run build", mode: "single-shot" }],
+  commands: [{ id: "build", name: "Build", command: "npm run build" }],
   projectOpen: true,
   terminalOpen: true,
   commandsOpen: true,
@@ -35,7 +35,6 @@ describe("projectTreeModel", () => {
         kind: "command",
         commandId: "build",
         commandLine: "npm run build",
-        mode: "single-shot",
       },
     });
     const [model] = projectTreeModel([project], [tab({}), commandTab]);

@@ -89,6 +89,7 @@ describe("useAppSettings persistence", () => {
         },
       }),
     );
+    vi.stubGlobal("navigator", { userAgent: "Linux", platform: "Linux x86_64" });
     const { useAppSettings } = await import("./useAppSettings");
 
     const { settings, load } = useAppSettings();

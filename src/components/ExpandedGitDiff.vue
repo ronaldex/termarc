@@ -76,7 +76,9 @@ defineExpose({ focusActiveFile });
             @click="emit('expandAll')"
           >
             <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M2 6V2h4M2 2l4 4M14 6V2h-4M14 2l-4 4M2 10v4h4M2 14l4-4M14 10v4h-4M14 14l-4-4" />
+              <path
+                d="M2 6V2h4M2 2l4 4M14 6V2h-4M14 2l-4 4M2 10v4h4M2 14l4-4M14 10v4h-4M14 14l-4-4"
+              />
             </svg>
           </button>
           <span class="files-action-separator" aria-hidden="true">/</span>
@@ -88,7 +90,9 @@ defineExpose({ focusActiveFile });
             @click="emit('collapseAll')"
           >
             <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M2 6h4V2M6 6 2 2M14 6h-4V2M10 6l4-4M2 10h4v4M6 10l-4 4M14 10h-4v4M10 10l4 4" />
+              <path
+                d="M2 6h4V2M6 6 2 2M14 6h-4V2M10 6l4-4M2 10h4v4M6 10l-4 4M14 10h-4v4M10 10l4 4"
+              />
             </svg>
           </button>
         </span>

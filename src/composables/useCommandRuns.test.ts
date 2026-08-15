@@ -12,7 +12,6 @@ const command: ProjectCommand = {
   id: "build",
   name: "Build",
   command: "npm run build",
-  mode: "single-shot",
 };
 
 function commandTab(projectId = project.id): TerminalTab {
@@ -27,7 +26,6 @@ function commandTab(projectId = project.id): TerminalTab {
       kind: "command",
       commandId: command.id,
       commandLine: "old command",
-      mode: "single-shot",
     },
   } as TerminalTab;
 }
@@ -71,7 +69,6 @@ describe("useCommandRuns", () => {
         kind: "command",
         commandId: updated.id,
         commandLine: updated.command,
-        mode: updated.mode,
       },
     });
     expect(restartTab).toHaveBeenCalledWith(tab);

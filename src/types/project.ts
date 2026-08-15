@@ -1,14 +1,11 @@
 import type { ExternalEditor } from "./settings";
 
-export type ProjectCommandMode = "single-shot" | "persistent";
-
 export type ProjectCommandStorage = "global" | "project";
 
 export type ProjectCommand = {
   id: string;
   name: string;
   command: string;
-  mode: ProjectCommandMode;
   directory?: string;
   /** Stable display rank shared by app and project-local command stores. */
   order?: number;

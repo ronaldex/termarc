@@ -90,20 +90,12 @@ pub(crate) struct ProjectCommand {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) command: String,
-    pub(crate) mode: ProjectCommandMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) order: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) storage: Option<CommandStorage>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum ProjectCommandMode {
-    SingleShot,
-    Persistent,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -483,7 +475,7 @@ fn temporary_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::{
-        ProjectCommand, ProjectCommandMode, ProjectConfig, validate_mixed_command_order,
+        ProjectCommand, ProjectConfig, validate_mixed_command_order,
         validate_projects,
     };
 
@@ -492,7 +484,6 @@ mod tests {
             id: id.into(),
             name: id.into(),
             command: id.into(),
-            mode: ProjectCommandMode::SingleShot,
             directory: None,
             order,
             storage: None,
@@ -554,7 +545,7 @@ mod tests {
     #[test]
     fn round_trips_command_order() {
         let project: ProjectConfig = serde_json::from_str(
-            r#"{"id":"project-1","name":"Project","directory":".","commands":[{"id":"build","name":"Build","command":"npm run build","mode":"single-shot","order":2}]}"#,
+            r#"{"id":"project-1","name":"Project","directory":".","commands":[{"id":"build","name":"Build","command":"npm run build","order":2}]}"#,
         )
         .expect("ordered command should load");
         let serialized = serde_json::to_value(project).expect("project should serialize");

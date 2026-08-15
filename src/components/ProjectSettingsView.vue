@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { selectDirectory } from "../api/dialog";
 import { useAppSettings } from "../composables/useAppSettings";
 import { EXTERNAL_EDITOR_OPTIONS, externalEditorLabel } from "../settings/options";
 import type { Project } from "../types/project";
@@ -50,13 +51,27 @@ function copyProject(project: Project): Project {
 }
 
 function save(): void {
+  if (!draft.value.directory.trim()) return;
   emit("save", copyProject(draft.value));
   saved.value = true;
 }
 
-function commandModeLabel(mode: string): string {
-  return mode === "single-shot" ? "One shot" : "Continuous";
+async function browseDirectory(): Promise<void> {
+  const current = draft.value.directory.trim();
+  const selected = await selectDirectory({
+    title: "Select project directory",
+    // Legacy placeholder directories have no usable location for the picker.
+    defaultPath: current && current !== "." ? current : undefined,
+  }).catch((error) => {
+    console.error("Could not open directory picker", error);
+    return null;
+  });
+  if (selected) {
+    draft.value.directory = selected;
+    saved.value = false;
+  }
 }
+
 </script>
 
 <template>
@@ -71,7 +86,15 @@ function commandModeLabel(mode: string): string {
             title="Project directory"
             description="Terminals and commands run from this directory by default."
           >
-            <input v-model="draft.directory" required spellcheck="false" />
+            <div class="directory-picker">
+              <input
+                :value="draft.directory"
+                readonly
+                spellcheck="false"
+                aria-label="Project directory path"
+              />
+              <SettingsButton type="button" @click="browseDirectory">Browse…</SettingsButton>
+            </div>
           </SettingsField>
           <SettingsField
             title="Editor"
@@ -111,7 +134,6 @@ function commandModeLabel(mode: string): string {
             <span class="command-storage">{{
               command.storage === "project" ? "Project" : "Global"
             }}</span>
-            <span class="command-mode">{{ commandModeLabel(command.mode) }}</span>
             <SettingsButton
               type="button"
               variant="danger"
@@ -154,6 +176,14 @@ function commandModeLabel(mode: string): string {
 form {
   display: flex;
   flex-direction: column;
+}
+.directory-picker {
+  display: flex;
+  gap: 0.5rem;
+}
+.directory-picker input {
+  flex: 1;
+  min-width: 0;
 }
 .command-row {
   display: flex;
@@ -209,8 +239,7 @@ form {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
-.command-storage,
-.command-mode {
+.command-storage {
   padding: 0.25rem 0.5rem;
   border-radius: 0.625rem;
   color: var(--color-text-muted);

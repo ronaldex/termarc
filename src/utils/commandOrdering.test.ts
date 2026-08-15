@@ -6,7 +6,6 @@ const command = (id: string, order?: number): ProjectCommand => ({
   id,
   name: id,
   command: id,
-  mode: "single-shot",
   order,
 });
 

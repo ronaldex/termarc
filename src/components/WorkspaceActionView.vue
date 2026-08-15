@@ -51,12 +51,12 @@ const emit = defineEmits<{ action: [] }>();
   font-family: "JetBrains Mono", monospace;
 }
 h2 {
-  margin: 0 0 0.625rem;
+  margin: 0 0 0.25rem;
   color: var(--color-text-strong);
   font-size: 1.0625rem;
 }
 p {
-  margin: 0.75rem 0 1.125rem;
+  margin: 0.25rem 0 1.5rem;
   color: var(--color-text-subtle);
   font-size: 0.625rem;
 }

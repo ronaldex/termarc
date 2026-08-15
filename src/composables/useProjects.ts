@@ -74,11 +74,11 @@ export function useProjects() {
     if (persistenceDirty.value) await flushPersistence();
   }
 
-  function add(): Project {
+  function add(overrides: Partial<Pick<Project, "name" | "directory">> = {}): Project {
     const project: Project = {
       id: `project-${Date.now()}`,
-      name: "New project",
-      directory: ".",
+      name: overrides.name ?? "New project",
+      directory: overrides.directory ?? ".",
       commands: [],
       terminals: [],
     };
