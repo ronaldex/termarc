@@ -9,7 +9,9 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-start-dragging",
+    "core:path:allow-resolve-directory",
     "opener:default",
+    "dialog:allow-open",
     "notification:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text"
