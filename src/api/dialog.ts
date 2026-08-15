@@ -1,5 +1,6 @@
 import { homeDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
+import { expandHomePath } from "../utils/homePath";
 
 export interface DirectoryPickerOptions {
   title?: string;
@@ -17,14 +18,9 @@ export async function selectDirectory(
   const selected = await open({
     directory: true,
     title: options.title,
-    defaultPath: options.defaultPath ? await expandHomePath(options.defaultPath) : undefined,
+    defaultPath: options.defaultPath
+      ? expandHomePath(options.defaultPath, await homeDir())
+      : undefined,
   });
   return typeof selected === "string" ? selected : null;
-}
-
-async function expandHomePath(path: string): Promise<string> {
-  if (path !== "~" && !path.startsWith("~/")) return path;
-  const home = (await homeDir()).replace(/\/$/, "");
-  const relative = path.slice(path === "~" ? 1 : 2);
-  return relative ? `${home}/${relative}` : home;
 }
