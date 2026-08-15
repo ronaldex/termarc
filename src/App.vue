@@ -15,11 +15,13 @@ import { useWorkspaceShortcuts } from "./composables/useWorkspaceShortcuts";
 import { useWorkspaceTerminalNavigation } from "./composables/useWorkspaceTerminalNavigation";
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
+import { selectDirectory } from "./api/dialog";
 import { loadCustomThemes } from "./api/themes";
 import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
 import { configurePlatformWindowStyle } from "./services/platformWindowStyle";
 import { isMacOS } from "./utils/platform";
+import { projectNameFromDirectory } from "./utils/projectName";
 import { numberedSidebarShortcuts } from "./utils/sidebarShortcuts";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
@@ -292,8 +294,17 @@ function manageProjects(projectId?: string): void {
   if (project) selectProject(project);
   else selectProjectManagement(selectedProject.value?.id ?? projects.value[0].id);
 }
-function addProject(): void {
-  const project = addProjectState();
+async function addProject(): Promise<void> {
+  let directory: string | null;
+  try {
+    directory = await selectDirectory({ title: "Select project directory" });
+  } catch (error) {
+    console.error("Could not open directory picker", error);
+    showToast("Could not open directory picker", "error");
+    return;
+  }
+  if (!directory) return;
+  const project = addProjectState({ directory, name: projectNameFromDirectory(directory) });
   terminalPersistenceEligible.add(project.id);
   selectProject(project);
 }
