@@ -57,14 +57,19 @@ function save(): void {
 }
 
 async function browseDirectory(): Promise<void> {
+  const current = draft.value.directory.trim();
   const selected = await selectDirectory({
     title: "Select project directory",
-    defaultPath: draft.value.directory,
+    // Legacy placeholder directories have no usable location for the picker.
+    defaultPath: current && current !== "." ? current : undefined,
   }).catch((error) => {
     console.error("Could not open directory picker", error);
     return null;
   });
-  if (selected) draft.value.directory = selected;
+  if (selected) {
+    draft.value.directory = selected;
+    saved.value = false;
+  }
 }
 
 function commandModeLabel(mode: string): string {
