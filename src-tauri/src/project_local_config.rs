@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn round_trips_command_order() {
         let config: LocalConfig = serde_json::from_str(
-            r#"{"version":1,"commands":[{"id":"build","name":"Build","command":"npm run build","mode":"single-shot","order":3}]}"#,
+            r#"{"version":1,"commands":[{"id":"build","name":"Build","command":"npm run build","order":3}]}"#,
         )
         .expect("ordered local config should load");
         let serialized = serde_json::to_value(config).expect("local config should serialize");

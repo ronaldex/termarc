@@ -26,7 +26,7 @@ describe("numberedSidebarShortcuts", () => {
         projectOpen: true,
         terminalOpen: true,
         commandsOpen: true,
-        commands: [{ id: "build", name: "Build", command: "npm run build", mode: "single-shot" }],
+        commands: [{ id: "build", name: "Build", command: "npm run build" }],
       },
       {
         id: "two",
@@ -35,7 +35,7 @@ describe("numberedSidebarShortcuts", () => {
         projectOpen: true,
         terminalOpen: true,
         commandsOpen: true,
-        commands: [{ id: "test", name: "Test", command: "npm test", mode: "single-shot" }],
+        commands: [{ id: "test", name: "Test", command: "npm test" }],
       },
     ];
     const shortcuts = numberedSidebarShortcuts(projects, [

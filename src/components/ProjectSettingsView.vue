@@ -72,9 +72,6 @@ async function browseDirectory(): Promise<void> {
   }
 }
 
-function commandModeLabel(mode: string): string {
-  return mode === "single-shot" ? "One shot" : "Continuous";
-}
 </script>
 
 <template>
@@ -137,7 +134,6 @@ function commandModeLabel(mode: string): string {
             <span class="command-storage">{{
               command.storage === "project" ? "Project" : "Global"
             }}</span>
-            <span class="command-mode">{{ commandModeLabel(command.mode) }}</span>
             <SettingsButton
               type="button"
               variant="danger"
@@ -243,8 +239,7 @@ form {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.5625rem;
 }
-.command-storage,
-.command-mode {
+.command-storage {
   padding: 0.25rem 0.5rem;
   border-radius: 0.625rem;
   color: var(--color-text-muted);

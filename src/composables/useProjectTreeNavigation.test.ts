@@ -13,7 +13,6 @@ const project: ProjectTreeProject = {
       id: "command-1",
       name: "Build",
       command: "npm run build",
-      mode: "single-shot",
     },
   ],
   projectOpen: true,

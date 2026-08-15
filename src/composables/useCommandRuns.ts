@@ -12,7 +12,6 @@ export type CommandRunDependencies = {
         kind: "command";
         commandId: string;
         commandLine: string;
-        mode: ProjectCommand["mode"];
       };
     },
   ) => Promise<TerminalTab | undefined>;
@@ -50,7 +49,6 @@ export function useCommandRuns({
       kind: "command" as const,
       commandId: command.id,
       commandLine: command.command,
-      mode: command.mode,
     };
     const existing = find(project.id, command.id);
     if (!existing) return createTab(project.id, cwd, { launchTitle: command.name, launch });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { Project, ProjectCommand, ProjectCommandMode } from "../types/project";
+import { selectDirectory } from "../api/dialog";
+import type { Project, ProjectCommand } from "../types/project";
 import SettingsActionRow from "./settings/SettingsActionRow.vue";
 import SettingsButton from "./settings/SettingsButton.vue";
 import SettingsCard from "./settings/SettingsCard.vue";
@@ -34,16 +35,26 @@ function createDraft(): ProjectCommand {
         id: `command-${Date.now()}`,
         name: "",
         command: "",
-        mode: "single-shot",
       };
-}
-
-function selectMode(mode: ProjectCommandMode): void {
-  draft.value.mode = mode;
 }
 
 function selectStorage(storage: "global" | "project"): void {
   draft.value.storage = storage;
+}
+
+async function browseDirectory(): Promise<void> {
+  const current = draft.value.directory?.trim() ?? "";
+  const selected = await selectDirectory({
+    title: "Select working directory",
+    defaultPath: current || (props.project.directory !== "." ? props.project.directory : undefined),
+  }).catch((error) => {
+    console.error("Could not open directory picker", error);
+    return null;
+  });
+  if (selected) {
+    draft.value.directory = selected;
+    saved.value = false;
+  }
 }
 
 function save(): void {
@@ -53,6 +64,7 @@ function save(): void {
     order: props.command?.order ?? draft.value.order,
     name: draft.value.name.trim(),
     command: draft.value.command.trim(),
+    directory: draft.value.directory?.trim() || undefined,
   };
   const commands = [...(props.project.commands ?? [])];
   const index = commands.findIndex((item) => item.id === command.id);
@@ -99,10 +111,10 @@ function remove(): void {
           </SettingsField>
 
           <SettingsField title="Storage" description="Choose where this command is saved." group>
-            <div class="mode-options">
+            <div class="storage-options">
               <button
                 type="button"
-                class="mode-option"
+                class="storage-option"
                 :class="{ selected: (draft.storage ?? 'global') === 'global' }"
                 @click="selectStorage('global')"
               >
@@ -111,7 +123,7 @@ function remove(): void {
               </button>
               <button
                 type="button"
-                class="mode-option"
+                class="storage-option"
                 :class="{ selected: draft.storage === 'project' }"
                 @click="selectStorage('project')"
               >
@@ -125,31 +137,17 @@ function remove(): void {
           </SettingsField>
 
           <SettingsField
-            title="Run mode"
-            description="Choose whether the command exits or keeps running."
-            group
+            title="Working directory"
+            description="The directory the command runs from. Leave empty to use the project directory."
           >
-            <div class="mode-options">
-              <button
-                type="button"
-                class="mode-option"
-                :class="{ selected: draft.mode === 'single-shot' }"
-                @click="selectMode('single-shot')"
-              >
-                <span class="radio"></span>
-                <span
-                  ><strong>One shot</strong><small>Run once and exit when complete.</small></span
-                >
-              </button>
-              <button
-                type="button"
-                class="mode-option"
-                :class="{ selected: draft.mode === 'persistent' }"
-                @click="selectMode('persistent')"
-              >
-                <span class="radio"></span>
-                <span><strong>Continuous</strong><small>Keep running until stopped.</small></span>
-              </button>
+            <div class="directory-picker">
+              <input
+                v-model="draft.directory"
+                spellcheck="false"
+                aria-label="Working directory path"
+                placeholder="Use project directory"
+              />
+              <SettingsButton type="button" @click="browseDirectory">Browse…</SettingsButton>
             </div>
           </SettingsField>
         </SettingsCard>
@@ -187,11 +185,19 @@ form {
 .command-input {
   font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
-.mode-options {
+.directory-picker {
+  display: flex;
+  gap: 0.5rem;
+}
+.directory-picker input {
+  flex: 1;
+  min-width: 0;
+}
+.storage-options {
   display: grid;
   gap: 0.5rem;
 }
-.mode-option {
+.storage-option {
   display: flex;
   min-height: 3rem;
   align-items: center;
@@ -205,24 +211,24 @@ form {
   text-align: left;
   cursor: pointer;
 }
-.mode-option:hover {
+.storage-option:hover {
   border-color: var(--color-border-strong);
   background: var(--color-surface-active);
 }
-.mode-option.selected {
+.storage-option.selected {
   border-color: var(--color-text-faint);
   background: var(--color-surface-raised);
 }
-.mode-option strong,
-.mode-option small {
+.storage-option strong,
+.storage-option small {
   display: block;
 }
-.mode-option strong {
+.storage-option strong {
   margin-bottom: 0.125rem;
   font-size: 0.6875rem;
   font-weight: 500;
 }
-.mode-option small {
+.storage-option small {
   color: var(--color-text-subtle);
   font-size: 0.5625rem;
 }

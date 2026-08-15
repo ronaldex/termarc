@@ -22,7 +22,6 @@ function terminal(
             kind: "command",
             commandId: "command-1",
             commandLine: "npm run dev",
-            mode: "persistent",
           },
   } as TerminalTabState;
 }
