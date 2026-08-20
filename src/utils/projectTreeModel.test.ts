@@ -44,6 +44,38 @@ describe("projectTreeModel", () => {
     expect(model?.commandItems[0]?.tab).toBe(commandTab);
   });
 
+  it("keeps agents separate from commands with the same ID", () => {
+    const projectWithAgent: ProjectTreeProject = {
+      ...project,
+      agents: [{ id: "build", name: "Build agent", command: "pi" }],
+      agentsOpen: true,
+    };
+    const commandTab = tab({
+      id: "command",
+      launch: { kind: "command", commandId: "build", commandLine: "npm run build" },
+    });
+    const agentTab = tab({
+      id: "agent",
+      launch: {
+        kind: "command",
+        commandId: "build",
+        commandLine: "pi",
+        source: "agent",
+      },
+    });
+
+    const [model] = projectTreeModel([projectWithAgent], [commandTab, agentTab]);
+
+    expect(model?.commandItems[0]?.tab).toBe(commandTab);
+    expect(model?.agentItems[0]?.tab).toBe(agentTab);
+    expect(flattenProjectTreeModel(model ? [model] : [])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "agents" }),
+        expect.objectContaining({ kind: "agent", commandId: "build" }),
+      ]),
+    );
+  });
+
   it("keeps add-terminal hidden when filtering an existing terminal", () => {
     const [model] = projectTreeModel([project], [tab({})], "missing");
 

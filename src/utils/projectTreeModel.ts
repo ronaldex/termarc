@@ -12,6 +12,7 @@ export type ProjectTreeDisplayProject = ProjectTreeProject & {
   terminalTabs: TerminalTabState[];
   hasTerminals: boolean;
   commandItems: ProjectTreeCommandItem[];
+  agentItems: ProjectTreeCommandItem[];
 };
 
 export function projectTreeModel(
@@ -28,7 +29,10 @@ export function projectTreeModel(
       projectTabs.push(tab);
       shellTabsByProject.set(tab.projectId, projectTabs);
     } else {
-      commandTabsByKey.set(commandKey(tab.projectId, tab.launch.commandId), tab);
+      commandTabsByKey.set(
+        commandKey(tab.projectId, tab.launch.commandId, tab.launch.source ?? "command"),
+        tab,
+      );
     }
   }
 
@@ -40,7 +44,11 @@ export function projectTreeModel(
       hasTerminals: projectTabs.length > 0,
       commandItems: (project.commands ?? []).map((command) => ({
         command,
-        tab: commandTabsByKey.get(commandKey(project.id, command.id)),
+        tab: commandTabsByKey.get(commandKey(project.id, command.id, "command")),
+      })),
+      agentItems: (project.agents ?? []).map((agent) => ({
+        command: agent,
+        tab: commandTabsByKey.get(commandKey(project.id, agent.id, "agent")),
       })),
     };
   });
@@ -52,6 +60,20 @@ export function flattenProjectTreeModel(
   return projects.flatMap((project) => {
     const nodes: SidebarSelection[] = [projectSelection(project.id)];
     if (!project.projectOpen) return nodes;
+
+    if (project.agentItems.length) {
+      nodes.push({ id: `${project.id}:agents`, kind: "agents", projectId: project.id });
+    }
+    if (project.agentsOpen) {
+      nodes.push(
+        ...project.agentItems.map(({ command }) => ({
+          id: `${project.id}:agent:${command.id}`,
+          kind: "agent" as const,
+          projectId: project.id,
+          commandId: command.id,
+        })),
+      );
+    }
 
     nodes.push({ id: `${project.id}:terminals`, kind: "terminals", projectId: project.id });
     if (project.terminalOpen) {
@@ -89,8 +111,8 @@ export function flattenProjectTreeModel(
   });
 }
 
-function commandKey(projectId: string, commandId: string): string {
-  return `${projectId}\0${commandId}`;
+function commandKey(projectId: string, commandId: string, source: "command" | "agent"): string {
+  return `${projectId}\0${source}\0${commandId}`;
 }
 
 function projectSelection(projectId: string): SidebarSelection {

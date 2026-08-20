@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import AppTitlebar from "./components/AppTitlebar.vue";
-import KeyboardShortcutsView from "./components/KeyboardShortcutsView.vue";
-import GitDiffViewer from "./components/GitDiffViewer.vue";
-import TerminalSidebar from "./components/TerminalSidebar.vue";
-import WorkspaceMain from "./components/WorkspaceMain.vue";
+import AppTitlebar from "./components/layout/AppTitlebar.vue";
+import KeyboardShortcutsView from "./components/workspace/KeyboardShortcutsView.vue";
+import GitDiffViewer from "./components/git/GitDiffViewer.vue";
+import TerminalSidebar from "./components/sidebar/TerminalSidebar.vue";
+import WorkspaceMain from "./components/workspace/WorkspaceMain.vue";
 import { useProjects } from "./composables/useProjects";
 import { useSidebarActivation } from "./composables/useSidebarActivation";
 import { useSidebarLayout } from "./composables/useSidebarLayout";
@@ -20,6 +20,11 @@ import { loadCustomThemes } from "./api/themes";
 import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
 import { configurePlatformWindowStyle } from "./services/platformWindowStyle";
+import {
+  loadWorkspaceSelection,
+  resolveWorkspaceSelection,
+  saveWorkspaceSelection,
+} from "./services/workspaceState";
 import { isMacOS } from "./utils/platform";
 import { projectNameFromDirectory } from "./utils/projectName";
 import { numberedSidebarShortcuts } from "./utils/sidebarShortcuts";
@@ -60,12 +65,15 @@ const {
   update: updateProject,
   setProjectTerminals,
   saveCommand: saveProjectCommand,
+  saveAgent: saveAgentState,
   removeCommand: removeProjectCommand,
+  removeAgent: removeAgentState,
   reorderCommands: reorderCommandState,
   remove: removeProjectState,
   toggleProject,
   toggleTerminals,
   toggleCommands,
+  toggleAgents,
   persistenceDirty,
   persistenceSaving,
   persistenceError,
@@ -109,8 +117,10 @@ const {
       (item) => item.number === number,
     );
     if (!shortcut) return false;
-    if (shortcut.selection.kind === "command") {
-      selectCommandSelection(shortcut.selection.projectId, shortcut.selection.commandId);
+    if (shortcut.selection.kind === "command" || shortcut.selection.kind === "agent") {
+      if (shortcut.selection.kind === "agent")
+        selectAgent(shortcut.selection.projectId, shortcut.selection.commandId);
+      else selectCommandSelection(shortcut.selection.projectId, shortcut.selection.commandId);
       restoreLeftPreference();
       requestAnimationFrame(() => workspaceMain.value?.focusContent());
     } else {
@@ -127,6 +137,7 @@ const gitSidebar = ref<InstanceType<typeof GitDiffViewer>>();
 const gitSidebarAvailable = ref(true);
 const lastProjectId = ref<string>();
 let appDisposed = false;
+let workspaceStateReady = false;
 let closeInProgress = false;
 let unlistenCloseRequested: (() => void) | undefined;
 const {
@@ -220,12 +231,24 @@ const {
   selectTerminal,
   selectAddTerminal,
   selectCommands,
+  selectAgents,
+  selectAgent,
+  selectAddAgent,
+  selectEditAgent,
   selectCommand: selectCommandSelection,
   selectAddCommand,
   selectEditCommand,
   selectProjectManagement,
   openSettings,
 } = useWorkspaceSelection(projects);
+watch(
+  sidebarSelection,
+  (selection) => {
+    persistOpenTerminals();
+    if (workspaceStateReady) saveWorkspaceSelection(selection);
+  },
+  { deep: true },
+);
 const selectedExternalEditor = computed(() =>
   resolveExternalEditor(selectedProject.value?.externalEditor, settings.externalEditor),
 );
@@ -240,6 +263,7 @@ const { focusSidebar, activateSidebar: activateSidebarSelection } = useSidebarAc
   selectTerminal,
   selectTab,
   runCommand: (projectId, commandId) => void runCommand(projectId, commandId),
+  runAgent: (projectId, commandId) => void runAgent(projectId, commandId),
   startTerminal: (tabId) => void startProjectTerminal(tabId),
   createProjectTerminal: (projectId, directory) => void createProjectTerminal(projectId, directory),
 });
@@ -249,8 +273,11 @@ function activateSidebar(selection: SidebarSelection): void {
 }
 const { cycleTerminal: cycleSidebarTerminal, closeTerminal } = useWorkspaceTerminalNavigation({
   tabs,
+  projects: treeProjects,
   selection: sidebarSelection,
+  focusContent: () => workspaceMain.value?.focusContent(),
   focusSidebar,
+  selectTab,
   selectTerminal,
   selectAddTerminal,
   closeTab,
@@ -263,6 +290,39 @@ async function createProjectTerminal(projectId: string, cwd: string): Promise<vo
   terminalPersistenceEligible.add(projectId);
   selectTerminal(projectId, tab.id);
   selectTab(tab.id);
+}
+
+async function startProjectProcesses(projectId: string): Promise<void> {
+  const project = projects.value.find((item) => item.id === projectId);
+  if (!project) return;
+
+  for (const tab of tabs.filter(
+    (item) => item.projectId === projectId && item.launch.kind === "shell",
+  )) {
+    if (tab.status !== "stopped" && tab.status !== "error") continue;
+    try {
+      if (tab.status === "error" && tab.session) await restartTab(tab);
+      else await startTab(tab);
+    } catch (error) {
+      console.error(`Could not start terminal for ${project.name}`, error);
+    }
+  }
+  for (const command of project.commands ?? []) {
+    if (!command.autostart) continue;
+    try {
+      await commandRuns.run(project, command, "command", false);
+    } catch (error) {
+      console.error(`Could not start command ${command.name}`, error);
+    }
+  }
+  for (const agent of project.agents ?? []) {
+    if (!agent.autostart) continue;
+    try {
+      await commandRuns.run(project, agent, "agent", false);
+    } catch (error) {
+      console.error(`Could not start agent ${agent.name}`, error);
+    }
+  }
 }
 
 async function startProjectTerminal(tabId: string): Promise<void> {
@@ -350,6 +410,19 @@ function selectCommand(projectId: string, commandId?: string): void {
 function editCommand(projectId: string, commandId: string): void {
   selectEditCommand(projectId, commandId);
 }
+async function runAgent(projectId: string, agentId: string): Promise<void> {
+  const project = projects.value.find((item) => item.id === projectId);
+  const agent = project?.agents?.find((item) => item.id === agentId);
+  if (!project || !agent) return;
+  const tab = await commandRuns.run(project, agent, "agent");
+  if (!tab) return;
+  activeTabId.value = tab.id;
+  selectAgent(projectId, agentId);
+  selectTab(tab.id);
+}
+async function stopAgent(projectId: string, agentId: string): Promise<void> {
+  await commandRuns.stop(projectId, agentId, "agent");
+}
 async function runCommand(projectId: string, commandId: string): Promise<void> {
   const project = projects.value.find((item) => item.id === projectId);
   const command = project?.commands?.find((item) => item.id === commandId);
@@ -369,6 +442,29 @@ async function stopCommand(projectId: string, commandId: string): Promise<void> 
 function showCommands(projectId: string): void {
   selectCommands(projectId);
 }
+function showAgents(projectId: string): void {
+  selectAgents(projectId);
+}
+function selectAgentFromWorkspace(projectId: string, agentId?: string): void {
+  if (agentId) selectEditAgent(projectId, agentId);
+  else selectAddAgent(projectId);
+}
+async function saveAgent(project: Project, agentId: string): Promise<void> {
+  try {
+    await saveAgentState(project, agentId);
+    await flushPersistence();
+    showAgents(project.id);
+    showToast("Agent saved", "success");
+  } catch (error) {
+    console.error("Could not save agent", error);
+    showToast("Could not save agent", "error");
+  }
+}
+async function removeAgent(project: Project, agentId: string): Promise<void> {
+  await commandRuns.remove(project.id, agentId, "agent");
+  await removeAgentState(project.id, agentId);
+  showAgents(project.id);
+}
 async function saveCommand(project: Project, commandId: string): Promise<void> {
   await saveProjectCommand(project, commandId);
   const updatedProject = projects.value.find((item) => item.id === project.id);
@@ -383,6 +479,13 @@ async function removeCommand(project: Project, commandId: string): Promise<void>
 function deleteCommandFromMenu(projectId: string, commandId: string): void {
   const project = projects.value.find((item) => item.id === projectId);
   if (project) void removeCommand(project, commandId);
+}
+function editAgentFromMenu(projectId: string, agentId: string): void {
+  selectEditAgent(projectId, agentId);
+}
+function deleteAgentFromMenu(projectId: string, agentId: string): void {
+  const project = projects.value.find((item) => item.id === projectId);
+  if (project) void removeAgent(project, agentId);
 }
 
 useWorkspaceShortcuts({
@@ -427,7 +530,9 @@ useWorkspaceShortcuts({
     return (
       selection.kind === "terminal" ||
       (selection.kind === "command" &&
-        Boolean(commandRuns.find(selection.projectId, selection.commandId)))
+        Boolean(commandRuns.find(selection.projectId, selection.commandId))) ||
+      (selection.kind === "agent" &&
+        Boolean(commandRuns.find(selection.projectId, selection.commandId, "agent")))
     );
   },
   activateSidebar,
@@ -475,10 +580,8 @@ onMounted(async () => {
   }
   if (appDisposed) return;
   const initialProject = projects.value[0];
-  selectProject(initialProject);
   start(initialProject.id, initialProject.directory);
 
-  let firstRestoredTabId: string | undefined;
   for (const project of projects.value) {
     let projectRestoreSucceeded = true;
     for (const terminal of project.terminals ?? []) {
@@ -487,12 +590,12 @@ onMounted(async () => {
           id: terminal.id,
           customTitle: terminal.customTitle,
           start: false,
+          activate: false,
         });
         if (!tab) {
           projectRestoreSucceeded = false;
           continue;
         }
-        firstRestoredTabId ??= tab.id;
       } catch (error) {
         projectRestoreSucceeded = false;
         console.error(`Could not restore a terminal for ${project.name}`, error);
@@ -501,15 +604,28 @@ onMounted(async () => {
     if (projectRestoreSucceeded) terminalPersistenceEligible.add(project.id);
   }
 
-  if (firstRestoredTabId) {
-    const tab = tabs.find((item) => item.id === firstRestoredTabId);
-    if (tab) {
-      selectTerminal(tab.projectId, tab.id);
-      selectTab(tab.id);
-    }
-  } else {
-    selectProject(initialProject);
-  }
+  // Restore the last stable workspace page after all referenced projects and
+  // terminals exist. Processes are deliberately not started during app startup;
+  // the project-row play button remains the explicit autostart action.
+  const restoredSelection = resolveWorkspaceSelection(
+    loadWorkspaceSelection(),
+    projects.value,
+    tabs,
+  );
+  if (restoredSelection) setSidebarSelection(restoredSelection);
+  else selectProject(initialProject);
+
+  if (restoredSelection?.kind === "terminal") selectTab(restoredSelection.tabId);
+  workspaceStateReady = true;
+  saveWorkspaceSelection(sidebarSelection.value);
+
+  await nextTick();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (sidebarSelection.value.kind === "terminal") focusActiveTerminal();
+      if (!isTerminalFocused()) workspaceMain.value?.focusContent();
+    });
+  });
 
   // Do not let intermediate restoration states overwrite the saved layout.
   // If restoration failed, retain the saved state rather than persisting a
@@ -541,11 +657,16 @@ watch(activeTabId, (id) => {
   if (tab) {
     const project = projects.value.find((item) => item.id === tab.projectId);
     if (!project) return;
-    if (tab.launch.kind === "command") selectCommand(project.id, tab.launch.commandId);
-    else selectTerminal(project.id, tab.id);
+    if (tab.launch.kind === "command") {
+      if ((tab.launch.source ?? "command") === "agent")
+        selectAgent(project.id, tab.launch.commandId);
+      else selectCommand(project.id, tab.launch.commandId);
+    } else selectTerminal(project.id, tab.id);
   }
 });
-watch([leftSidebarOpen, rightSidebarOpen], fitActiveTerminalAfterLayout, { flush: "post" });
+watch([leftSidebarOpen, rightSidebarOpen, sidebarSelection], fitActiveTerminalAfterLayout, {
+  flush: "post",
+});
 onBeforeUnmount(() => {
   appDisposed = true;
   if (toastTimeout !== undefined) window.clearTimeout(toastTimeout);
@@ -607,8 +728,13 @@ onBeforeUnmount(() => {
       @open-settings="openSettings"
       @open-keyboard-shortcuts="openKeyboardShortcutsModal"
       @toggle-project="toggleProject"
+      @start-project="startProjectProcesses"
       @toggle-terminals="toggleTerminals"
       @toggle-commands="toggleCommands"
+      @toggle-agents="toggleAgents"
+      @run-agent="runAgent"
+      @reload-agent="runAgent"
+      @stop-agent="stopAgent"
       @run-command="runCommand"
       @reload-command="reloadCommand"
       @stop-command="stopCommand"
@@ -617,6 +743,8 @@ onBeforeUnmount(() => {
       @start-terminal="startProjectTerminal"
       @edit-command="editCommand"
       @delete-command="deleteCommandFromMenu"
+      @edit-agent="editAgentFromMenu"
+      @delete-agent="deleteAgentFromMenu"
       @close="closeProjectTerminal"
       @set-terminal-title-override="setProjectTerminalTitle"
       @rename-modal-change="renameModalOpen = $event"
@@ -651,9 +779,14 @@ onBeforeUnmount(() => {
       @remove-project="removeProject"
       @save-command="saveCommand"
       @remove-command="removeCommand"
+      @save-agent="saveAgent"
+      @remove-agent="removeAgent"
+      @select-agent="selectAgentFromWorkspace"
+      @run-agent="runAgent"
       @select-command="selectCommand"
       @edit-command="editCommand"
       @show-commands="showCommands"
+      @show-agents="showAgents"
       @run-command="runCommand"
       @reload-command="reloadCommand"
       @stop-command="stopCommand"

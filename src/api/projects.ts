@@ -17,8 +17,21 @@ export function saveProjectTreeState(state: Record<string, ProjectTreeState>): P
   return invoke("save_project_tree_state", { state });
 }
 
-export function loadLocalProjectCommands(directory: string): Promise<ProjectCommand[]> {
-  return invoke("load_local_project_commands", { directory });
+export type LocalProjectConfig = {
+  commands: ProjectCommand[];
+  agents: ProjectCommand[];
+};
+
+export function loadLocalProjectConfig(directory: string): Promise<LocalProjectConfig> {
+  return invoke("load_local_project_config", { directory });
+}
+
+export async function loadLocalProjectCommands(directory: string): Promise<ProjectCommand[]> {
+  return (await loadLocalProjectConfig(directory)).commands;
+}
+
+export function saveLocalProjectAgents(directory: string, agents: ProjectCommand[]): Promise<void> {
+  return invoke("save_local_project_agents", { directory, agents });
 }
 
 export function saveLocalProjectCommands(

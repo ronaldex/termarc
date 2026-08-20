@@ -1,8 +1,9 @@
 import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import {
-  loadLocalProjectCommands,
+  loadLocalProjectConfig,
   loadProjects,
   loadProjectTreeState,
+  saveLocalProjectAgents,
   saveLocalProjectCommands,
   saveProjectCommandOrder,
   saveProjects,
@@ -31,7 +32,13 @@ const DEFAULT_PROJECT: Project = {
 };
 
 function createProjectTreeState(overrides: Partial<ProjectTreeState> = {}): ProjectTreeState {
-  return { projectOpen: true, terminalOpen: true, commandsOpen: true, ...overrides };
+  return {
+    projectOpen: true,
+    terminalOpen: true,
+    commandsOpen: true,
+    agentsOpen: true,
+    ...overrides,
+  };
 }
 
 export function useProjects() {
@@ -66,6 +73,7 @@ export function useProjects() {
             projectOpen: legacy.projectOpen ?? true,
             terminalOpen: legacy.terminalOpen ?? true,
             commandsOpen: legacy.commandsOpen ?? true,
+            agentsOpen: legacy.agentsOpen ?? true,
           },
         );
       }
@@ -93,20 +101,32 @@ export function useProjects() {
     if (!existing) return;
     if (existing.directory !== project.directory) {
       try {
-        const localCommands = await loadLocalProjectCommands(project.directory);
-        // Ranks in a different project's local file were calculated against a
-        // different global list. Preserve each store's order, then rank the new
-        // combination rather than treating expected cross-store collisions as corruption.
-        const withoutRanks = (commands: ProjectCommand[]) =>
-          [...commands].sort(compareCommandOrder).map(({ order: _order, ...command }) => command);
-        const normalized = effectiveCommandOrder(
+        const localConfig = await loadLocalProjectConfig(project.directory);
+        // Ranks in another project's local file were calculated against a different
+        // global list. Preserve each store's relative order and rank each category
+        // against this project's global definitions.
+        const withoutRanks = (items: ProjectCommand[]) =>
+          [...items].sort(compareCommandOrder).map(({ order: _order, ...item }) => item);
+        const normalizedCommands = effectiveCommandOrder(
           withoutRanks(existing.globalCommands ?? []),
-          withoutRanks(localCommands),
+          withoutRanks(localConfig.commands),
         );
-        if (!normalized.ok) throw new Error(normalized.reason);
-        if (normalized.localCommands.length)
-          await saveLocalProjectCommands(project.directory, normalized.localCommands);
-        updateEffectiveCommands(existing, normalized.globalCommands, normalized.localCommands);
+        const normalizedAgents = effectiveCommandOrder(
+          withoutRanks(existing.globalAgents ?? []),
+          withoutRanks(localConfig.agents),
+        );
+        if (!normalizedCommands.ok) throw new Error(normalizedCommands.reason);
+        if (!normalizedAgents.ok) throw new Error(normalizedAgents.reason);
+        updateEffectiveCommands(
+          existing,
+          normalizedCommands.globalCommands,
+          normalizedCommands.localCommands,
+        );
+        updateEffectiveAgents(
+          existing,
+          normalizedAgents.globalCommands,
+          normalizedAgents.localCommands,
+        );
         existing.localConfigError = undefined;
       } catch (error) {
         persistenceError.value = error instanceof Error ? error.message : String(error);
@@ -125,6 +145,43 @@ export function useProjects() {
     const project = projects.value.find((item) => item.id === projectId);
     if (!project) return;
     project.terminals = normalizeProjectTerminals(terminals) ?? [];
+    markPersistenceDirty();
+  }
+
+  async function saveAgent(project: Project, agentId: string): Promise<void> {
+    const agent = project.agents?.find((item) => item.id === agentId);
+    if (!agent) throw new Error(`Agent not found in save draft: ${agentId}`);
+    const existing = projects.value.find((item) => item.id === project.id);
+    if (!existing) throw new Error(`Project not found while saving agent: ${project.id}`);
+    const storage = agent.storage ?? "global";
+    const wasLocal = existing.localAgents?.some((item) => item.id === agent.id) ?? false;
+    const previousGlobal = existing.globalAgents ?? [];
+    const previousLocal = existing.localAgents ?? [];
+    const globalAgents = replaceCommand(previousGlobal, agent, storage === "global");
+    const localAgents = replaceCommand(previousLocal, agent, storage === "project");
+
+    // Persist the global copy before removing a local override. If global
+    // persistence fails, the existing local agent remains recoverable.
+    if (wasLocal && storage === "global") {
+      updateEffectiveAgents(existing, globalAgents, localAgents);
+      markPersistenceDirty();
+      try {
+        await flushPersistence();
+      } catch (error) {
+        updateEffectiveAgents(existing, previousGlobal, previousLocal);
+        throw error;
+      }
+      try {
+        await saveLocalProjectAgents(existing.directory, localAgents);
+      } catch (error) {
+        updateEffectiveAgents(existing, globalAgents, previousLocal);
+        throw error;
+      }
+      return;
+    }
+
+    if (storage === "project") await saveLocalProjectAgents(existing.directory, localAgents);
+    updateEffectiveAgents(existing, globalAgents, localAgents);
     markPersistenceDirty();
   }
 
@@ -148,6 +205,17 @@ export function useProjects() {
     if (storage === "project" || wasLocal)
       await saveLocalProjectCommands(existing.directory, localCommands);
     updateEffectiveCommands(existing, globalCommands, localCommands);
+    markPersistenceDirty();
+  }
+
+  async function removeAgent(projectId: string, agentId: string): Promise<void> {
+    const existing = projects.value.find((item) => item.id === projectId);
+    if (!existing) return;
+    const globalAgents = (existing.globalAgents ?? []).filter((item) => item.id !== agentId);
+    const localAgents = (existing.localAgents ?? []).filter((item) => item.id !== agentId);
+    const agent = existing.agents?.find((item) => item.id === agentId);
+    if (agent?.storage === "project") await saveLocalProjectAgents(existing.directory, localAgents);
+    updateEffectiveAgents(existing, globalAgents, localAgents);
     markPersistenceDirty();
   }
 
@@ -255,6 +323,12 @@ export function useProjects() {
     scheduleTreeStateSave();
   }
 
+  function toggleAgents(id: string): void {
+    const state = stateFor(id);
+    state.agentsOpen = !state.agentsOpen;
+    scheduleTreeStateSave();
+  }
+
   function scheduleTreeStateSave(): void {
     if (!loaded.value) return;
     if (treeStateSaveTimer !== undefined) window.clearTimeout(treeStateSaveTimer);
@@ -323,12 +397,15 @@ export function useProjects() {
     update,
     setProjectTerminals,
     saveCommand,
+    saveAgent,
     removeCommand,
+    removeAgent,
     reorderCommands,
     remove,
     toggleProject,
     toggleTerminals,
     toggleCommands,
+    toggleAgents,
     flushPersistence,
   };
 }
@@ -340,6 +417,7 @@ function normalizeProject(project: Project): Project {
     directory: project.directory,
     externalEditor: project.externalEditor,
     commands: project.commands?.map((command) => ({ ...command })).sort(compareCommandOrder) ?? [],
+    agents: project.agents?.map((agent) => ({ ...agent })).sort(compareCommandOrder) ?? [],
     globalCommands:
       project.globalCommands?.map((command) => ({ ...command })).sort(compareCommandOrder) ??
       project.commands
@@ -349,6 +427,10 @@ function normalizeProject(project: Project): Project {
       [],
     localCommands:
       project.localCommands?.map((command) => ({ ...command })).sort(compareCommandOrder) ?? [],
+    globalAgents:
+      project.globalAgents?.map((agent) => ({ ...agent })).sort(compareCommandOrder) ?? [],
+    localAgents:
+      project.localAgents?.map((agent) => ({ ...agent })).sort(compareCommandOrder) ?? [],
     localConfigError: project.localConfigError,
     terminals: normalizeProjectTerminals(project.terminals),
   };
@@ -368,6 +450,25 @@ function replaceCommand(
     order: command.order ?? commands[index]?.order,
   });
   return next;
+}
+
+function updateEffectiveAgents(
+  project: Project,
+  globalAgents: ProjectCommand[],
+  localAgents: ProjectCommand[],
+): void {
+  const global: ProjectCommand[] = globalAgents.map((agent) => ({ ...agent, storage: "global" }));
+  const local: ProjectCommand[] = localAgents.map((agent) => ({ ...agent, storage: "project" }));
+  const agents: ProjectCommand[] = [...global];
+  for (const agent of local) {
+    const index = agents.findIndex((item) => item.id === agent.id);
+    if (index >= 0) agents[index] = agent;
+    else agents.push(agent);
+  }
+  agents.sort(compareCommandOrder);
+  project.globalAgents = global.sort(compareCommandOrder);
+  project.localAgents = local.sort(compareCommandOrder);
+  project.agents = agents;
 }
 
 function updateEffectiveCommands(
@@ -416,6 +517,9 @@ function storedProject(project: Project): Project {
     commands: (project.globalCommands ?? project.commands ?? [])
       .filter((command) => command.storage !== "project")
       .map(({ storage: _storage, ...command }) => command),
+    agents: (project.globalAgents ?? project.agents ?? [])
+      .filter((agent) => agent.storage !== "project")
+      .map(({ storage: _storage, ...agent }) => agent),
     terminals: normalizeProjectTerminals(project.terminals),
   };
 }

@@ -76,6 +76,19 @@ describe("workspaceShortcutAction", () => {
     ).toEqual({ type: "cycle-terminal", direction: 1 });
   });
 
+  it("cycles a selected agent or terminal while the main content is focused", () => {
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowUp",
+          metaKey: true,
+          focusRegion: "workspace",
+          terminalSelected: true,
+        }),
+      ),
+    ).toEqual({ type: "cycle-terminal", direction: -1 });
+  });
+
   it("does not navigate command arrows from editable content", () => {
     expect(
       workspaceShortcutAction(

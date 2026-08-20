@@ -4,7 +4,7 @@ import type { TerminalTabState } from "../types/terminal";
 
 export type SidebarShortcutSelection =
   | Extract<SidebarSelection, { kind: "terminal" }>
-  | { id: string; kind: "command"; projectId: string; commandId: string };
+  | { id: string; kind: "command" | "agent"; projectId: string; commandId: string };
 
 export type NumberedSidebarShortcut = {
   number: number;
@@ -24,6 +24,12 @@ export function numberedSidebarShortcuts(
         projectId: project.id,
         tabId: tab.id,
       }));
+    const agents: NumberedSidebarShortcut["selection"][] = (project.agents ?? []).map((agent) => ({
+      id: `${project.id}:agent:${agent.id}`,
+      kind: "agent" as const,
+      projectId: project.id,
+      commandId: agent.id,
+    }));
     const commands: NumberedSidebarShortcut["selection"][] = (project.commands ?? []).map(
       (command) => ({
         id: `${project.id}:command:${command.id}`,
@@ -32,7 +38,9 @@ export function numberedSidebarShortcuts(
         commandId: command.id,
       }),
     );
-    return [...terminals, ...commands];
+    // Keep numbering aligned with the visible project-tree order: Agents,
+    // then dynamic Terminals, then Commands.
+    return [...agents, ...terminals, ...commands];
   });
 
   return selections.map((selection, index) => ({ number: index + 1, selection }));
@@ -41,5 +49,5 @@ export function numberedSidebarShortcuts(
 export function sidebarShortcutKey(selection: SidebarShortcutSelection): string {
   return selection.kind === "terminal"
     ? `terminal:${selection.tabId}`
-    : `command:${selection.projectId}:${selection.commandId}`;
+    : `${selection.kind}:${selection.projectId}:${selection.commandId}`;
 }

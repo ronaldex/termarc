@@ -7,6 +7,7 @@ import "@fontsource/jetbrains-mono/600.css";
 import "@fontsource/jetbrains-mono/700.css";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
+import "./styles/forms.css";
 
 // Production uses only Termarc's contextual actions. Keep the WebView menu in
 // development so `tauri dev` still exposes Reload and Inspect Element.

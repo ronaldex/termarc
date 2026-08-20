@@ -5,13 +5,26 @@
       "id": "command-1784280437901",
       "name": "dev",
       "command": "npm run tauri dev",
-      "order": 0
+      "order": 0,
+      "autostart": true,
+      "autoRestart": {
+        "maxRetries": 3,
+        "retryWindowSeconds": 60
+      }
     },
     {
       "id": "command-1784280820106",
       "name": "build",
       "command": "npm run tauri build",
       "order": 1
+    }
+  ],
+  "agents": [
+    {
+      "id": "agent-1787043609685-h1g3wt",
+      "name": "pi.dev",
+      "command": "pi",
+      "autostart": true
     }
   ]
 }
