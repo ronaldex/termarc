@@ -28,6 +28,7 @@ export type WorkspaceShortcutInput = {
   shortcutModifier?: "meta" | "ctrl";
   editableTarget: boolean;
   focusRegion: WorkspaceFocusRegion;
+  /** A shell terminal or named agent is selected in the left sidebar. */
   terminalSelected: boolean;
   activeTerminalAvailable: boolean;
   gitSidebarAvailable: boolean;
@@ -51,7 +52,7 @@ export function workspaceShortcutAction(
   if (
     !input.editableTarget &&
     commandModifier &&
-    input.focusRegion === "left-sidebar" &&
+    (input.focusRegion === "left-sidebar" || input.focusRegion === "workspace") &&
     input.terminalSelected &&
     (input.key === "ArrowUp" || input.key === "ArrowDown")
   ) {

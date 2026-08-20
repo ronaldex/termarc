@@ -10,7 +10,7 @@ export type TerminalContextMenuRequest = ContextMenuRequestBase & {
 };
 
 export type CommandContextMenuRequest = ContextMenuRequestBase & {
-  kind: "command";
+  kind: "command" | "agent";
   projectId: string;
   commandId: string;
 };

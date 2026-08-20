@@ -1,7 +1,8 @@
 import { watch, type Ref } from "vue";
+import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import { adjacentTabId, nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
+import { nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
 
 export function terminalSelectionAfterRemoval(
   previousTabs: readonly TerminalTabState[],
@@ -33,8 +34,11 @@ export function terminalSelectionAfterRemoval(
 
 export function useWorkspaceTerminalNavigation(options: {
   tabs: TerminalTabState[];
+  projects: Ref<ProjectTreeProject[]>;
   selection: Ref<SidebarSelection>;
   focusSidebar: (selection: SidebarSelection) => void;
+  focusContent: () => void;
+  selectTab: (tabId: string) => void;
   selectTerminal: (projectId: string, tabId: string) => void;
   selectAddTerminal: (projectId: string) => void;
   closeTab: (tabId: string) => Promise<void>;
@@ -44,22 +48,59 @@ export function useWorkspaceTerminalNavigation(options: {
 
   function cycleTerminal(direction: -1 | 1): void {
     const selection = options.selection.value;
-    if (selection.kind !== "terminal") return;
+    if (selection.kind !== "terminal" && selection.kind !== "agent") return;
+    const project = options.projects.value.find((item) => item.id === selection.projectId);
+    if (!project) return;
 
-    const nextId = adjacentTabId(
-      projectTerminalIds(options.tabs, selection.projectId),
-      selection.tabId,
-      direction,
-    );
-    const nextTab = options.tabs.find((tab) => tab.id === nextId);
-    if (!nextTab) return;
-
-    options.focusSidebar({
-      id: nextTab.id,
-      kind: "terminal",
-      projectId: nextTab.projectId,
-      tabId: nextTab.id,
+    const entries: SidebarSelection[] = [
+      ...(project.agents ?? []).map((agent) => ({
+        id: `${project.id}:agent:${agent.id}`,
+        kind: "agent" as const,
+        projectId: project.id,
+        commandId: agent.id,
+      })),
+      ...projectTerminalIds(options.tabs, project.id).flatMap((tabId) => [
+        {
+          id: tabId,
+          kind: "terminal" as const,
+          projectId: project.id,
+          tabId,
+        },
+      ]),
+    ];
+    if (entries.length < 2) return;
+    const currentIndex = entries.findIndex((entry) => {
+      if (selection.kind === "agent")
+        return entry.kind === "agent" && entry.commandId === selection.commandId;
+      return (entry as { tabId?: string }).tabId === (selection as { tabId?: string }).tabId;
     });
+    const nextIndex = (Math.max(currentIndex, 0) + direction + entries.length) % entries.length;
+    const next = entries[nextIndex];
+    if (!next) return;
+
+    options.focusSidebar(next);
+    const nextTabId =
+      next.kind === "terminal"
+        ? next.tabId
+        : next.kind === "agent"
+          ? options.tabs.find(
+              (tab) =>
+                tab.projectId === next.projectId &&
+                tab.launch.kind === "command" &&
+                tab.launch.source === "agent" &&
+                tab.launch.commandId === next.commandId,
+            )?.id
+          : undefined;
+
+    const nextTab = nextTabId ? options.tabs.find((tab) => tab.id === nextTabId) : undefined;
+    const needsStartAction =
+      nextTab?.launch.kind === "shell" &&
+      (nextTab.status === "stopped" || nextTab.status === "error");
+
+    // A stopped shell has no visible xterm to focus; focus its start action
+    // instead so the next modifier+Arrow can continue navigation or start it.
+    if (nextTabId && !needsStartAction) options.selectTab(nextTabId);
+    else requestAnimationFrame(options.focusContent);
   }
 
   async function closeTerminal(id: string): Promise<void> {

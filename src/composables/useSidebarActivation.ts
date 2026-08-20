@@ -8,12 +8,17 @@ export function useSidebarActivation(options: {
   tabs: TerminalTab[];
   activeTab: Ref<TerminalTab | undefined>;
   activeTabId: Ref<string | undefined>;
-  findCommandRun: (projectId: string, commandId: string) => TerminalTab | undefined;
+  findCommandRun: (
+    projectId: string,
+    commandId: string,
+    source?: "command" | "agent",
+  ) => TerminalTab | undefined;
   setSelection: (selection: SidebarSelection) => void;
   setDefaultProject: (projectId: string, directory: string) => void;
   selectTerminal: (projectId: string, tabId: string) => void;
   selectTab: (tabId: string) => void;
   runCommand: (projectId: string, commandId: string) => void;
+  runAgent?: (projectId: string, commandId: string) => void;
   startTerminal: (tabId: string) => void;
   createProjectTerminal: (projectId: string, directory: string) => void;
 }) {
@@ -23,8 +28,9 @@ export function useSidebarActivation(options: {
     const project = options.projects.value.find((item) => item.id === projectId);
     if (project) options.setDefaultProject(project.id, project.directory);
     if (selection.kind === "terminal") options.activeTabId.value = selection.tabId;
-    if (selection.kind === "command") {
-      const tab = options.findCommandRun(selection.projectId, selection.commandId);
+    if (selection.kind === "command" || selection.kind === "agent") {
+      const source = selection.kind === "agent" ? "agent" : "command";
+      const tab = options.findCommandRun(selection.projectId, selection.commandId, source);
       if (tab) options.activeTabId.value = tab.id;
     }
   }
@@ -40,10 +46,13 @@ export function useSidebarActivation(options: {
       }
       return;
     }
-    if (selection.kind === "command") {
-      const tab = options.findCommandRun(selection.projectId, selection.commandId);
+    if (selection.kind === "command" || selection.kind === "agent") {
+      const source = selection.kind === "agent" ? "agent" : "command";
+      const tab = options.findCommandRun(selection.projectId, selection.commandId, source);
       if (tab && (tab.status === "starting" || tab.status === "running")) {
         options.selectTab(tab.id);
+      } else if (selection.kind === "agent") {
+        options.runAgent?.(selection.projectId, selection.commandId);
       } else {
         options.runCommand(selection.projectId, selection.commandId);
       }

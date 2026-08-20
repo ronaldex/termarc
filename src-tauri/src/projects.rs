@@ -73,6 +73,8 @@ pub(crate) struct ProjectConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     commands: Option<Vec<ProjectCommand>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    agents: Option<Vec<ProjectCommand>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     terminals: Option<Vec<ProjectTerminal>>,
 }
 
@@ -96,6 +98,17 @@ pub(crate) struct ProjectCommand {
     pub(crate) order: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) storage: Option<CommandStorage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) autostart: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) auto_restart: Option<AutoRestartPolicy>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AutoRestartPolicy {
+    pub(crate) max_retries: u32,
+    pub(crate) retry_window_seconds: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -111,6 +124,12 @@ pub(crate) struct ProjectTreeStateConfig {
     project_open: bool,
     terminal_open: bool,
     commands_open: bool,
+    #[serde(default = "default_true")]
+    agents_open: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Serialize)]
@@ -122,8 +141,11 @@ pub(crate) struct LoadedProjectConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     external_editor: Option<crate::external_editor::ExternalEditor>,
     commands: Vec<ProjectCommand>,
+    agents: Vec<ProjectCommand>,
     global_commands: Vec<ProjectCommand>,
     local_commands: Vec<ProjectCommand>,
+    global_agents: Vec<ProjectCommand>,
+    local_agents: Vec<ProjectCommand>,
     #[serde(skip_serializing_if = "Option::is_none")]
     local_config_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,19 +170,27 @@ pub(crate) fn load_projects() -> Result<Vec<LoadedProjectConfig>, String> {
 
 fn load_project(project: ProjectConfig) -> LoadedProjectConfig {
     let mut global_commands = project.commands.unwrap_or_default();
+    let mut global_agents = project.agents.unwrap_or_default();
     for command in &mut global_commands {
         command.storage = Some(CommandStorage::Global);
     }
-    let (mut local_commands, local_config_error) =
+    for agent in &mut global_agents {
+        agent.storage = Some(CommandStorage::Global);
+    }
+    let (mut local_commands, mut local_agents, local_config_error) =
         match crate::project_local_config::load(&project.directory) {
-            Ok(Some(commands)) => (commands, None),
-            Ok(None) => (Vec::new(), None),
-            Err(error) => (Vec::new(), Some(error)),
+            Ok(Some(config)) => (config.commands, config.agents, None),
+            Ok(None) => (Vec::new(), Vec::new(), None),
+            Err(error) => (Vec::new(), Vec::new(), Some(error)),
         };
     for command in &mut local_commands {
         command.storage = Some(CommandStorage::Project);
     }
+    for agent in &mut local_agents {
+        agent.storage = Some(CommandStorage::Project);
+    }
     let mut commands = global_commands.clone();
+    let mut agents = global_agents.clone();
     for local in &local_commands {
         if let Some(index) = commands.iter().position(|global| global.id == local.id) {
             commands[index] = local.clone();
@@ -168,7 +198,17 @@ fn load_project(project: ProjectConfig) -> LoadedProjectConfig {
             commands.push(local.clone());
         }
     }
+    for local in &local_agents {
+        if let Some(index) = agents.iter().position(|global| global.id == local.id) {
+            agents[index] = local.clone();
+        } else {
+            agents.push(local.clone());
+        }
+    }
     commands.sort_by_key(|command| command.order.unwrap_or(u32::MAX));
+    agents.sort_by_key(|agent| agent.order.unwrap_or(u32::MAX));
+    global_agents.sort_by_key(|agent| agent.order.unwrap_or(u32::MAX));
+    local_agents.sort_by_key(|agent| agent.order.unwrap_or(u32::MAX));
     global_commands.sort_by_key(|command| command.order.unwrap_or(u32::MAX));
     local_commands.sort_by_key(|command| command.order.unwrap_or(u32::MAX));
     LoadedProjectConfig {
@@ -177,8 +217,11 @@ fn load_project(project: ProjectConfig) -> LoadedProjectConfig {
         directory: project.directory,
         external_editor: project.external_editor,
         commands,
+        agents,
         global_commands,
         local_commands,
+        global_agents,
+        local_agents,
         local_config_error,
         terminals: project.terminals,
     }
@@ -228,15 +271,48 @@ pub(crate) fn save_projects(projects: Vec<ProjectConfig>) -> Result<(), String> 
     atomic_write(&path, &contents)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LoadedLocalProjectConfig {
+    commands: Vec<ProjectCommand>,
+    agents: Vec<ProjectCommand>,
+}
+
 #[tauri::command]
-pub(crate) fn load_local_project_commands(
+pub(crate) fn load_local_project_config(
     directory: String,
-) -> Result<Vec<ProjectCommand>, String> {
-    let mut commands = crate::project_local_config::load(&directory)?.unwrap_or_default();
-    for command in &mut commands {
-        command.storage = Some(CommandStorage::Project);
+) -> Result<LoadedLocalProjectConfig, String> {
+    let mut config = crate::project_local_config::load(&directory)?.unwrap_or_else(|| {
+        crate::project_local_config::LocalConfig {
+            version: 1,
+            commands: Vec::new(),
+            agents: Vec::new(),
+        }
+    });
+    for executable in config.commands.iter_mut().chain(config.agents.iter_mut()) {
+        executable.storage = Some(CommandStorage::Project);
     }
-    Ok(commands)
+    Ok(LoadedLocalProjectConfig {
+        commands: config.commands,
+        agents: config.agents,
+    })
+}
+
+#[tauri::command]
+pub(crate) fn save_local_project_agents(
+    directory: String,
+    agents: Vec<ProjectCommand>,
+) -> Result<(), String> {
+    let _guard = project_config_write_lock()?;
+    validate_command_store(&agents, "local agent", false)?;
+    let existing = crate::project_local_config::load(&directory)?.unwrap_or_else(|| {
+        crate::project_local_config::LocalConfig {
+            version: 1,
+            commands: Vec::new(),
+            agents: Vec::new(),
+        }
+    });
+    crate::project_local_config::save(&directory, existing.commands, agents)
 }
 
 #[tauri::command]
@@ -246,7 +322,14 @@ pub(crate) fn save_local_project_commands(
 ) -> Result<(), String> {
     let _guard = project_config_write_lock()?;
     validate_command_store(&commands, "local", false)?;
-    crate::project_local_config::save(&directory, commands)
+    let existing = crate::project_local_config::load(&directory)?.unwrap_or_else(|| {
+        crate::project_local_config::LocalConfig {
+            version: 1,
+            commands: Vec::new(),
+            agents: Vec::new(),
+        }
+    });
+    crate::project_local_config::save(&directory, commands, existing.agents)
 }
 
 #[derive(Debug, Serialize)]
@@ -282,6 +365,12 @@ pub(crate) fn save_project_command_order(
     local_commands
         .iter_mut()
         .for_each(|command| command.storage = None);
+    let existing_local = crate::project_local_config::load(&directory)
+        .map_err(|error| CommandOrderFailure::new("local", error))?;
+    let should_write_local = existing_local.is_some() || !local_commands.is_empty();
+    let local_agents = existing_local
+        .map(|config| config.agents)
+        .unwrap_or_default();
 
     let path = projects_path();
     let original = fs::read(&path).map_err(|error| {
@@ -314,8 +403,9 @@ pub(crate) fn save_project_command_order(
     })?;
     atomic_write(&path, &contents).map_err(|error| CommandOrderFailure::new("global", error))?;
 
-    if !local_commands.is_empty()
-        && let Err(error) = crate::project_local_config::save(&directory, local_commands)
+    if should_write_local
+        && let Err(error) =
+            crate::project_local_config::save(&directory, local_commands, local_agents)
     {
         return match atomic_write(&path, &original) {
             Ok(()) => Err(CommandOrderFailure::new("local", error)),
@@ -337,6 +427,9 @@ fn validate_projects(projects: &[ProjectConfig]) -> Result<(), String> {
         }
         if let Some(commands) = &project.commands {
             validate_command_store(commands, "global", false)?;
+        }
+        if let Some(agents) = &project.agents {
+            validate_command_store(agents, "global agent", false)?;
         }
         if let Some(terminals) = &project.terminals {
             for terminal in terminals {
@@ -370,6 +463,14 @@ pub(crate) fn validate_command_store(
         }
         if !ids.insert(&command.id) {
             return Err(format!("duplicate {label} command id: {}", command.id));
+        }
+        if let Some(policy) = &command.auto_restart
+            && (policy.max_retries == 0 || policy.retry_window_seconds == 0)
+        {
+            return Err(format!(
+                "{label} command {} requires positive auto-restart limits",
+                command.id
+            ));
         }
         match command.order {
             Some(rank) if !ranks.insert(rank) => {
@@ -474,10 +575,7 @@ fn temporary_path(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ProjectCommand, ProjectConfig, validate_mixed_command_order,
-        validate_projects,
-    };
+    use super::{ProjectCommand, ProjectConfig, validate_mixed_command_order, validate_projects};
 
     fn command(id: &str, order: Option<u32>) -> ProjectCommand {
         ProjectCommand {
@@ -487,6 +585,8 @@ mod tests {
             directory: None,
             order,
             storage: None,
+            autostart: None,
+            auto_restart: None,
         }
     }
 

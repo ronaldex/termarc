@@ -9,7 +9,11 @@ Termarc is a macOS-focused terminal workspace built with Vue 3, TypeScript, Vite
 - `api/`: narrow, typed wrappers around Tauri commands and plugins. Keep application policy out of this layer.
 - `services/`: reusable application workflows that coordinate APIs, platform behavior, and events.
 - `composables/`: Vue state and lifecycle orchestration. Keep composables focused and use them as facades over smaller domain modules.
-- `components/`: reusable Vue UI. Prefer focused presentational components over large feature templates.
+- `components/`: reusable Vue UI organized by responsibility:
+  - `form/fields/`: reusable labeled form controls and field accessibility behavior.
+  - `ui/`: application-agnostic buttons, menus, scrolling, and overlay primitives.
+  - `layout/`, `sidebar/`, `terminal/`, `git/`, and `workspace/`: focused feature presentation.
+  - `settings/`: settings layout primitives, with complete settings screens in `settings/views/`.
 - `terminal/`: xterm-specific construction, rendering, links, and other terminal runtime helpers.
 - `utils/`: pure domain transformations, parsers, reducers, and display models. Add unit tests alongside non-trivial utilities.
 - `types/`: shared frontend domain and runtime types. Keep serializable state separate from runtime-only resources where practical.
@@ -49,6 +53,7 @@ Key terminal modules:
 
 - Design new functionality as reusable domain logic, services, and focused components rather than adding it directly to large views or composables.
 - Keep components small and cohesive. Extract repeated status indicators, rows, controls, and display behavior instead of duplicating templates or scoped CSS.
+- Put generic controls in `components/ui/` or `components/form/fields/`; keep domain-aware components in their feature directory.
 - Keep `useTerminalTabs.ts` as an orchestration facade; move terminal rendering, links, activity, shortcuts, and platform integrations into dedicated modules.
 - Keep pure business rules in `utils/` and cover them with unit tests. Prefer reducers and typed display models over scattered conditional mutations.
 - Separate serializable UI/domain state from xterm, DOM, Tauri, timers, and other runtime resources.

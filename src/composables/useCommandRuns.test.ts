@@ -85,6 +85,39 @@ describe("useCommandRuns", () => {
     });
   });
 
+  it("restarts an existing agent run without creating a duplicate tab", async () => {
+    const tab = commandTab();
+    tab.launch = {
+      kind: "command",
+      commandId: command.id,
+      commandLine: command.command,
+      source: "agent",
+    };
+    const { runs, createTab, restartTab } = setup([tab]);
+
+    await runs.run(project, command, "agent");
+
+    expect(createTab).not.toHaveBeenCalled();
+    expect(restartTab).toHaveBeenCalledWith(tab);
+    expect(tab.launch).toMatchObject({ source: "agent", commandId: command.id });
+  });
+
+  it("keeps command and agent runs with the same ID separate", () => {
+    const commandRun = commandTab();
+    const agentRun = commandTab();
+    agentRun.id = "agent-terminal";
+    agentRun.launch = {
+      kind: "command",
+      commandId: command.id,
+      commandLine: command.command,
+      source: "agent",
+    };
+    const { runs } = setup([commandRun, agentRun]);
+
+    expect(runs.find(project.id, command.id)).toBe(commandRun);
+    expect(runs.find(project.id, command.id, "agent")).toBe(agentRun);
+  });
+
   it("closes a run when its command is removed", async () => {
     const tab = commandTab();
     const { runs, closeTab } = setup([tab]);

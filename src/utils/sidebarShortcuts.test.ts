@@ -17,7 +17,7 @@ function shellTab(id: string, projectId: string): TerminalTabState {
 }
 
 describe("numberedSidebarShortcuts", () => {
-  it("numbers terminals and commands in their global project-tree order", () => {
+  it("numbers agents before terminals in their global project-tree order", () => {
     const projects: ProjectTreeProject[] = [
       {
         id: "one",
@@ -26,6 +26,7 @@ describe("numberedSidebarShortcuts", () => {
         projectOpen: true,
         terminalOpen: true,
         commandsOpen: true,
+        agents: [{ id: "pi", name: "Pi", command: "pi" }],
         commands: [{ id: "build", name: "Build", command: "npm run build" }],
       },
       {
@@ -47,11 +48,12 @@ describe("numberedSidebarShortcuts", () => {
     expect(
       shortcuts.map(({ number, selection }) => [number, sidebarShortcutKey(selection)]),
     ).toEqual([
-      [1, "terminal:one-a"],
-      [2, "terminal:one-b"],
-      [3, "command:one:build"],
-      [4, "terminal:two-a"],
-      [5, "command:two:test"],
+      [1, "agent:one:pi"],
+      [2, "terminal:one-a"],
+      [3, "terminal:one-b"],
+      [4, "command:one:build"],
+      [5, "terminal:two-a"],
+      [6, "command:two:test"],
     ]);
   });
 });

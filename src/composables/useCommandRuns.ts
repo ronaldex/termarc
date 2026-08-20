@@ -12,7 +12,10 @@ export type CommandRunDependencies = {
         kind: "command";
         commandId: string;
         commandLine: string;
+        source?: "command" | "agent";
+        autoRestart?: ProjectCommand["autoRestart"];
       };
+      activate?: boolean;
     },
   ) => Promise<TerminalTab | undefined>;
   restartTab: (tab: TerminalTab) => Promise<void>;
@@ -39,19 +42,39 @@ export function useCommandRuns({
   stopTab,
   closeTab,
 }: CommandRunDependencies) {
-  function find(projectId: string, commandId: string): TerminalTab | undefined {
-    return tabs.find((tab) => isCommandRun(tab, projectId, commandId));
+  function find(
+    projectId: string,
+    commandId: string,
+    source: "command" | "agent" = "command",
+  ): TerminalTab | undefined {
+    return tabs.find(
+      (tab) =>
+        isCommandRun(tab, projectId, commandId) &&
+        (tab.launch.kind === "command" ? (tab.launch.source ?? "command") : "command") === source,
+    );
   }
 
-  async function run(project: Project, command: ProjectCommand): Promise<TerminalTab | undefined> {
+  async function run(
+    project: Project,
+    command: ProjectCommand,
+    source: "command" | "agent" = "command",
+    activate = true,
+  ): Promise<TerminalTab | undefined> {
     const cwd = commandDirectory(project.directory, command.directory);
     const launch = {
       kind: "command" as const,
       commandId: command.id,
       commandLine: command.command,
+      source,
+      autoRestart: command.autoRestart,
     };
-    const existing = find(project.id, command.id);
-    if (!existing) return createTab(project.id, cwd, { launchTitle: command.name, launch });
+    const existing = find(project.id, command.id, source);
+    if (!existing)
+      return createTab(project.id, cwd, {
+        launchTitle: command.name,
+        launch,
+        ...(activate ? {} : { activate: false }),
+      });
 
     existing.cwd = cwd;
     existing.currentCwd = cwd;
@@ -61,13 +84,21 @@ export function useCommandRuns({
     return existing;
   }
 
-  async function stop(projectId: string, commandId: string): Promise<void> {
-    const tab = find(projectId, commandId);
+  async function stop(
+    projectId: string,
+    commandId: string,
+    source: "command" | "agent" = "command",
+  ): Promise<void> {
+    const tab = find(projectId, commandId, source);
     if (tab) await stopTab(tab);
   }
 
-  async function remove(projectId: string, commandId: string): Promise<void> {
-    const tab = find(projectId, commandId);
+  async function remove(
+    projectId: string,
+    commandId: string,
+    source: "command" | "agent" = "command",
+  ): Promise<void> {
+    const tab = find(projectId, commandId, source);
     if (tab) await closeTab(tab.id);
   }
 

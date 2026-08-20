@@ -75,7 +75,8 @@ export function useWorkspaceShortcuts(options: {
       shortcutModifier: options.shortcutModifier.value,
       editableTarget: isEditableTarget(event.target) && !options.isTerminalFocused(),
       focusRegion,
-      terminalSelected: options.selection.value.kind === "terminal",
+      terminalSelected:
+        options.selection.value.kind === "terminal" || options.selection.value.kind === "agent",
       activeTerminalAvailable: options.activeTerminalAvailable(),
       gitSidebarAvailable: options.gitSidebarAvailable.value,
     });

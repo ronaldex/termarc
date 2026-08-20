@@ -1,4 +1,5 @@
 import type { FitAddon } from "@xterm/addon-fit";
+import type { AutoRestartPolicy } from "./project";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { IDisposable, Terminal } from "@xterm/xterm";
 
@@ -31,6 +32,8 @@ export type TerminalLaunch =
       kind: "command";
       commandId: string;
       commandLine: string;
+      source?: "command" | "agent";
+      autoRestart?: AutoRestartPolicy;
     };
 
 export type TerminalActivity = {
@@ -78,6 +81,8 @@ export type TerminalRuntime = {
   pendingWriteBytes: number;
   pendingWriteCount: number;
   disposed: boolean;
+  restartTimer?: number;
+  restartAttempts: number[];
 };
 
 export type TerminalTab = TerminalTabState & TerminalRuntime;

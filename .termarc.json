@@ -5,7 +5,12 @@
       "id": "command-1784280437901",
       "name": "dev",
       "command": "npm run tauri dev",
-      "order": 0
+      "order": 0,
+      "autostart": true,
+      "autoRestart": {
+        "maxRetries": 2,
+        "retryWindowSeconds": 15
+      }
     },
     {
       "id": "command-1784280820106",

@@ -68,6 +68,7 @@ export function useTerminalTabs(configuration: {
       launchTitle?: string;
       customTitle?: string;
       start?: boolean;
+      activate?: boolean;
     } = {},
   ): Promise<TerminalTab | undefined> {
     if (disposed) return undefined;
@@ -111,9 +112,10 @@ export function useTerminalTabs(configuration: {
       pendingWriteBytes: 0,
       pendingWriteCount: 0,
       disposed: false,
+      restartAttempts: [],
     }) as TerminalTab;
     tabs.push(tab);
-    activeTabId.value = tab.id;
+    if (options.activate !== false) activeTabId.value = tab.id;
     await nextTick();
     if (!tab.container || tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
@@ -284,7 +286,27 @@ export function useTerminalTabs(configuration: {
   function selectTab(id: string): void {
     activeTabId.value = id;
     scheduleFit();
-    requestAnimationFrame(() => activeTab.value?.terminal.focus());
+    // Capture the requested tab instead of reading activeTab at callback time;
+    // a subsequent selection change must not focus the wrong terminal.
+    requestAnimationFrame(() => tabs.find((tab) => tab.id === id)?.terminal.focus());
+  }
+
+  function scheduleAutoRestart(tab: TerminalTab): void {
+    if (tab.launch.kind !== "command" || !tab.launch.autoRestart || tab.stopRequested) return;
+    const policy = tab.launch.autoRestart;
+    const now = Date.now();
+    tab.restartAttempts = tab.restartAttempts.filter(
+      (attempt) => now - attempt <= policy.retryWindowSeconds * 1000,
+    );
+    if (tab.restartAttempts.length >= policy.maxRetries) {
+      setTabStatus(tab, "error", `Auto-restart limit reached (${policy.maxRetries} retries)`);
+      return;
+    }
+    tab.restartAttempts.push(now);
+    tab.restartTimer = window.setTimeout(() => {
+      tab.restartTimer = undefined;
+      if (!tab.disposed && !tab.stopRequested) void startTab(tab);
+    }, 1000);
   }
 
   function setTabStatus(tab: TerminalTab, status: TerminalStatus, detail: string): void {
@@ -425,6 +447,7 @@ export function useTerminalTabs(configuration: {
                 tab.stopRequested || exitCode === 0 ? "stopped" : "error",
                 tab.stopRequested ? "Command stopped" : `Command exited with status ${exitCode}`,
               );
+              if (!tab.stopRequested && exitCode !== 0) scheduleAutoRestart(tab);
             } else if (exitCode === 0) {
               void closeTab(tab.id);
             } else {
@@ -436,6 +459,7 @@ export function useTerminalTabs(configuration: {
             processExited = true;
             tab.session = undefined;
             setTabStatus(tab, "error", message.message ?? "PTY error");
+            if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
           }
         },
       });
@@ -456,12 +480,17 @@ export function useTerminalTabs(configuration: {
       if (tab.disposed || generation !== tab.startGeneration) return;
       setTabStatus(tab, "error", String(error));
       tab.terminal.write(`\r\n\x1b[31mFailed to start PTY: ${String(error)}\x1b[0m\r\n`);
+      if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
     }
   }
 
   async function stopTab(tab: TerminalTab): Promise<void> {
     const session = tab.session;
     tab.session = undefined;
+    if (tab.restartTimer !== undefined) {
+      window.clearTimeout(tab.restartTimer);
+      tab.restartTimer = undefined;
+    }
     tab.stopRequested = true;
     tab.startGeneration++;
     setTabStatus(tab, "stopped", "Stopping…");
@@ -492,6 +521,7 @@ export function useTerminalTabs(configuration: {
     const wasActive = activeTabId.value === id;
     const session = tab.session;
     tab.disposed = true;
+    if (tab.restartTimer !== undefined) window.clearTimeout(tab.restartTimer);
     tab.startGeneration++;
     tab.session = undefined;
     tab.linkDisposable?.dispose();

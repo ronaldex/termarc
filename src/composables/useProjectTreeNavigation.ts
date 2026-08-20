@@ -10,7 +10,8 @@ export type ProjectTreeNavigationAction =
   | { type: "activate"; selection: SidebarSelection }
   | { type: "toggle-project"; projectId: string }
   | { type: "toggle-terminals"; projectId: string }
-  | { type: "toggle-commands"; projectId: string };
+  | { type: "toggle-commands"; projectId: string }
+  | { type: "toggle-agents"; projectId: string };
 
 export function flattenProjectTree(
   projects: readonly ProjectTreeProject[],
@@ -52,6 +53,9 @@ export function projectTreeNavigationActions(
     if (current.kind === "terminals" && project.terminalOpen) {
       return [{ type: "toggle-terminals", projectId: project.id }];
     }
+    if (current.kind === "agents" && project.agentsOpen) {
+      return [{ type: "toggle-agents", projectId: project.id }];
+    }
     if (current.kind === "commands" && project.commandsOpen) {
       return [{ type: "toggle-commands", projectId: project.id }];
     }
@@ -64,6 +68,9 @@ export function projectTreeNavigationActions(
     }
     if (current.kind === "terminals" && !project.terminalOpen) {
       return [{ type: "toggle-terminals", projectId: project.id }];
+    }
+    if (current.kind === "agents" && !project.agentsOpen) {
+      return [{ type: "toggle-agents", projectId: project.id }];
     }
     if (current.kind === "commands" && !project.commandsOpen) {
       return [{ type: "toggle-commands", projectId: project.id }];

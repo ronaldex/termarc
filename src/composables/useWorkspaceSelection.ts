@@ -35,6 +35,27 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     focus({ id: `${projectId}:add-terminal`, kind: "add-terminal", projectId });
   }
 
+  function selectAgents(projectId: string): void {
+    focus({ id: `${projectId}:agents`, kind: "agents", projectId });
+  }
+
+  function selectAddAgent(projectId: string): void {
+    focus({ id: `${projectId}:add-agent`, kind: "add-agent", projectId });
+  }
+
+  function selectAgent(projectId: string, commandId: string): void {
+    focus({ id: `${projectId}:agent:${commandId}`, kind: "agent", projectId, commandId });
+  }
+
+  function selectEditAgent(projectId: string, commandId: string): void {
+    focus({
+      id: `${projectId}:agent:${commandId}:settings`,
+      kind: "edit-agent",
+      projectId,
+      commandId,
+    });
+  }
+
   function selectCommands(projectId: string): void {
     focus({ id: `${projectId}:commands`, kind: "commands", projectId });
   }
@@ -88,6 +109,10 @@ export function useWorkspaceSelection(projects: Ref<Project[]>) {
     selectTerminalSection,
     selectAddTerminal,
     selectCommands,
+    selectAgents,
+    selectAgent,
+    selectAddAgent,
+    selectEditAgent,
     selectCommand,
     selectAddCommand,
     selectEditCommand,
