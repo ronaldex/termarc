@@ -61,9 +61,21 @@ const autostart = computed({
 const autoRestart = computed({
   get: () => Boolean(draft.value.autoRestart),
   set: (enabled: boolean) => {
-    draft.value.autoRestart = enabled ? { maxRetries: 3, retryWindowSeconds: 60 } : undefined;
+    draft.value.autoRestart = enabled
+      ? (draft.value.autoRestart ?? { maxRetries: 3, retryWindowSeconds: 60 })
+      : undefined;
   },
 });
+
+function setAutoRestartPolicy(field: "maxRetries" | "retryWindowSeconds", value: string): void {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return;
+  draft.value.autoRestart = {
+    ...(draft.value.autoRestart ?? { maxRetries: 3, retryWindowSeconds: 60 }),
+    [field]: parsed,
+  };
+}
+
 const processLabel = computed(() => (props.category === "agent" ? "agent" : "command"));
 const storageOptions = [
   { value: "global", label: "Global", description: "Available on this Mac." },
@@ -98,8 +110,7 @@ function save(): void {
     command: draft.value.command.trim(),
     directory: draft.value.directory?.trim() || undefined,
     autostart: draft.value.autostart || undefined,
-    // Keep the retry policy bounded and consistent across all commands and agents.
-    autoRestart: draft.value.autoRestart ? { maxRetries: 3, retryWindowSeconds: 60 } : undefined,
+    autoRestart: draft.value.autoRestart ? { ...draft.value.autoRestart } : undefined,
   };
   const items = [
     ...(props.category === "agent" ? (props.project.agents ?? []) : (props.project.commands ?? [])),
@@ -190,10 +201,34 @@ function remove(): void {
           <ToggleField
             v-model="autoRestart"
             label="Auto restart"
-            description="Restart after unexpected exits, up to 3 retries within 60 seconds."
+            description="Restart after unexpected exits within a configurable retry limit and window."
             control-label="Restart automatically"
             control-description="Successful exits and manual stops never trigger a restart."
           />
+
+          <template v-if="autoRestart">
+            <TextField
+              :model-value="String(draft.autoRestart?.maxRetries ?? 3)"
+              label="Maximum retries"
+              description="Maximum number of automatic restart attempts."
+              type="number"
+              min="1"
+              step="1"
+              required
+              @update:model-value="setAutoRestartPolicy('maxRetries', $event)"
+            />
+
+            <TextField
+              :model-value="String(draft.autoRestart?.retryWindowSeconds ?? 60)"
+              label="Retry window"
+              description="Only count retries that occur within this many seconds."
+              type="number"
+              min="1"
+              step="1"
+              required
+              @update:model-value="setAutoRestartPolicy('retryWindowSeconds', $event)"
+            />
+          </template>
 
           <DirectoryField
             v-model="draft.directory"
