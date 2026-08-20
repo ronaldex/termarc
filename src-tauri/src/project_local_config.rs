@@ -9,10 +9,10 @@ const CONFIG_FILE: &str = ".termarc.json";
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct LocalConfig {
     pub(crate) version: u8,
-    #[serde(default)]
-    pub(crate) commands: Vec<ProjectCommand>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) agents: Vec<ProjectCommand>,
+    #[serde(default)]
+    pub(crate) commands: Vec<ProjectCommand>,
 }
 
 pub(crate) fn load(directory: &str) -> Result<Option<LocalConfig>, String> {
@@ -45,8 +45,8 @@ pub(crate) fn save(
     let path = config_path(directory);
     let config = LocalConfig {
         version: 1,
-        commands,
         agents,
+        commands,
     };
     let contents = serde_json::to_vec_pretty(&config)
         .map_err(|error| format!("could not serialize {}: {error}", path.display()))?;
@@ -71,6 +71,8 @@ mod tests {
             r#"{"version":1,"commands":[],"agents":[{"id":"pi","name":"Pi","command":"pi","autostart":true,"autoRestart":{"maxRetries":3,"retryWindowSeconds":60}}]}"#,
         )
         .expect("local agents should load");
+        let json = serde_json::to_string(&config).expect("local config should serialize");
+        assert!(json.find("\"agents\"") < json.find("\"commands\""));
         let serialized = serde_json::to_value(config).expect("local config should serialize");
 
         assert_eq!(serialized["agents"][0]["id"], "pi");
