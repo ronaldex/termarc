@@ -45,7 +45,7 @@ describe("terminal activity updates", () => {
   it("clears authoritative agent state on a stopped marker", () => {
     const stopped = applyAgentMarker(
       { ...idle, agent: "pi", agentState: "waiting" },
-      { agent: "pi" },
+      { agent: "pi", state: "stopped" },
     );
 
     expect(stopped.activity.agent).toBeUndefined();

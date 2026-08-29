@@ -16,13 +16,14 @@ const props = defineProps<{
   selectedProject?: Project;
   projects: Project[];
   tabs: TerminalTab[];
-  activeTabId?: string;
+  mainTerminalId?: string;
   isEmpty: boolean;
-  setTerminalContainer: (tab: TerminalTab, element: Element | null) => void;
+  terminalContainerRef: (tab: TerminalTab, ownerId: string) => (element: Element | null) => void;
 }>();
 const emit = defineEmits<{
   create: [projectId: string, directory: string];
   host: [element: HTMLElement];
+  focusTerminal: [tabId: string];
   selectProject: [project: Project];
   addProject: [];
   saveProject: [project: Project];
@@ -66,12 +67,10 @@ const agentTab = computed(() => {
       tab.launch.commandId === props.selection.commandId,
   );
 });
-const selectedTerminal = computed(() => {
-  if (props.selection.kind !== "terminal") return;
-  return props.tabs.find((tab) => tab.id === props.selection.tabId);
-});
+const mainTerminal = computed(() => props.tabs.find((tab) => tab.id === props.mainTerminalId));
 const stoppedTerminal = computed(() => {
-  const tab = selectedTerminal.value;
+  if (props.selection.kind !== "terminal" && props.selection.kind !== "subagent") return;
+  const tab = mainTerminal.value;
   return tab?.launch.kind === "shell" && tab.status === "stopped" ? tab : undefined;
 });
 const commandTab = computed(() => {
@@ -113,16 +112,17 @@ defineExpose({ focusContent, hasContentFocus });
   <main ref="mainPanel" class="main-panel" tabindex="-1" aria-label="Workspace content">
     <TerminalSurface
       v-show="
-        (selection.kind === 'terminal' && !stoppedTerminal) ||
+        ((selection.kind === 'terminal' || selection.kind === 'subagent') && !stoppedTerminal) ||
         (selection.kind === 'command' && commandTab) ||
         (selection.kind === 'agent' && agentTab)
       "
       :tabs="tabs"
-      :active-tab-id="activeTabId"
+      :main-terminal-id="mainTerminalId"
       :is-empty="isEmpty"
-      :set-terminal-container="setTerminalContainer"
+      :terminal-container-ref="terminalContainerRef"
       @create="createTerminal"
       @host="emit('host', $event)"
+      @focus="emit('focusTerminal', $event)"
       @copy="emit('copyTerminal', $event)"
       @paste="emit('pasteTerminal', $event)"
       @close="emit('closeTerminal', $event)"
@@ -194,6 +194,7 @@ defineExpose({ focusContent, hasContentFocus });
     <section
       v-else-if="
         selection.kind !== 'terminal' &&
+        selection.kind !== 'subagent' &&
         !(selection.kind === 'command' && commandTab) &&
         !(selection.kind === 'agent' && agentTab)
       "
@@ -209,6 +210,7 @@ defineExpose({ focusContent, hasContentFocus });
       <p v-else-if="selection.kind === 'add-terminal'">Terminal configuration will appear here.</p>
       <p v-else>Select an item from the project tree.</p>
     </section>
+    <footer class="workspace-footer" aria-hidden="true"></footer>
   </main>
 </template>
 
@@ -221,12 +223,24 @@ defineExpose({ focusContent, hasContentFocus });
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) var(--workspace-footer-height, 2.5rem);
   background: var(--color-app-bg);
+}
+.main-panel > :not(.workspace-footer) {
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
 }
 .main-panel > .terminal-shell {
   min-height: 0;
   height: 100%;
+}
+.workspace-footer {
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 2;
+  border-top: 1px solid var(--color-border);
+  background: var(--panel-footer-background);
 }
 .main-stub {
   display: flex;

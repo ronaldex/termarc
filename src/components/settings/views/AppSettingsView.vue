@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   AGENT_EXTENSION_OPTIONS,
+  getAgentExtensionStatus,
   installAgentExtension,
-  isAgentExtensionInstalled,
   removeAgentExtension,
   type AgentExtensionId,
+  type AgentExtensionStatus,
 } from "../../../api/agentExtensions";
 import { installCliSymlink, isCliSymlinkInstalled, removeCliSymlink } from "../../../api/cli";
 import { useAppSettings } from "../../../composables/useAppSettings";
@@ -32,11 +33,14 @@ const cliStatus = ref<ActionStatus>();
 const cliInstalled = ref(false);
 const cliBusy = ref(true);
 const extensionStatuses = ref<Partial<Record<AgentExtensionId, ActionStatus>>>({});
-const extensionInstalled = ref<Partial<Record<AgentExtensionId, boolean>>>({});
+const extensionInstallationStates = ref<Partial<Record<AgentExtensionId, AgentExtensionStatus>>>(
+  {},
+);
 const extensionBusy = ref<AgentExtensionId>();
 const extensionsLoaded = ref(false);
+let extensionStatusRefresh: Promise<void> | undefined;
 
-async function loadInstallationStates(): Promise<void> {
+async function loadCliInstallationState(): Promise<void> {
   try {
     cliInstalled.value = await isCliSymlinkInstalled();
   } catch (error) {
@@ -44,17 +48,41 @@ async function loadInstallationStates(): Promise<void> {
   } finally {
     cliBusy.value = false;
   }
+}
 
-  await Promise.all(
+function refreshExtensionInstallationStates(): Promise<void> {
+  if (extensionStatusRefresh) return extensionStatusRefresh;
+
+  extensionsLoaded.value = false;
+  extensionStatusRefresh = Promise.all(
     AGENT_EXTENSION_OPTIONS.map(async (extension) => {
       try {
-        extensionInstalled.value[extension.id] = await isAgentExtensionInstalled(extension.id);
+        extensionInstallationStates.value[extension.id] = await getAgentExtensionStatus(
+          extension.id,
+        );
+        if (extensionStatuses.value[extension.id]?.kind === "error") {
+          extensionStatuses.value[extension.id] = undefined;
+        }
       } catch (error) {
         extensionStatuses.value[extension.id] = { kind: "error", message: String(error) };
       }
     }),
-  );
-  extensionsLoaded.value = true;
+  )
+    .then(() => undefined)
+    .finally(() => {
+      extensionsLoaded.value = true;
+      extensionStatusRefresh = undefined;
+    });
+  return extensionStatusRefresh;
+}
+
+async function loadInstallationStates(): Promise<void> {
+  await Promise.all([loadCliInstallationState(), refreshExtensionInstallationStates()]);
+}
+
+function handleWindowFocus(): void {
+  if (extensionBusy.value) return;
+  void refreshExtensionInstallationStates();
 }
 
 async function toggleCli(enabled: boolean): Promise<void> {
@@ -83,7 +111,7 @@ async function toggleExtension(
   extensionStatuses.value[agent] = undefined;
   try {
     const path = enabled ? await installAgentExtension(agent) : await removeAgentExtension(agent);
-    extensionInstalled.value[agent] = enabled;
+    extensionInstallationStates.value[agent] = await getAgentExtensionStatus(agent);
     extensionStatuses.value[agent] = {
       kind: "success",
       message: enabled ? `Installed at ${path}. ${reloadHint}` : `Removed ${path}`,
@@ -95,7 +123,21 @@ async function toggleExtension(
   }
 }
 
-onMounted(() => void loadInstallationStates());
+function extensionVersionDescription(agent: AgentExtensionId): string {
+  const state = extensionInstallationStates.value[agent];
+  if (!state) return "Checking installed extension…";
+  if (!state.installed) return `Not installed · Bundled with Termarc ${state.bundledVersion}`;
+  if (state.updateAvailable)
+    return `Update available · Bundled with Termarc ${state.bundledVersion}`;
+  return `Up to date · Bundled with Termarc ${state.bundledVersion}`;
+}
+
+onMounted(() => {
+  window.addEventListener("focus", handleWindowFocus);
+  void loadInstallationStates();
+});
+
+onBeforeUnmount(() => window.removeEventListener("focus", handleWindowFocus));
 
 function testAgentReadyNotification(): void {
   void sendAgentReadyNotification({
@@ -171,12 +213,23 @@ function testAgentReadyNotification(): void {
         <SettingsCard>
           <template v-for="extension in AGENT_EXTENSION_OPTIONS" :key="extension.id">
             <ToggleField
-              :model-value="extensionInstalled[extension.id] ?? false"
+              :model-value="extensionInstallationStates[extension.id]?.installed ?? false"
               :label="extension.name"
               :description="extension.description"
               :disabled="!extensionsLoaded || extensionBusy !== undefined"
               @update:model-value="toggleExtension(extension.id, extension.reloadHint, $event)"
             />
+            <SettingsActionRow :description="extensionVersionDescription(extension.id)">
+              <AppButton
+                v-if="extensionInstallationStates[extension.id]?.updateAvailable"
+                type="button"
+                size="compact"
+                :disabled="extensionBusy !== undefined"
+                @click="toggleExtension(extension.id, extension.reloadHint, true)"
+              >
+                Update
+              </AppButton>
+            </SettingsActionRow>
             <p
               v-if="extensionStatuses[extension.id]"
               class="action-status"

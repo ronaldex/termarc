@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { adjacentTabId } from "../utils/terminalTabs";
 import { handleTerminalShortcut } from "./terminalShortcuts";
 
 function keyboardEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
@@ -20,8 +19,6 @@ function dependencies() {
       [1, "one"],
       [2, "two"],
     ]),
-    orderedTabIds: ["one", "two"],
-    activeTabId: "one",
     fontSize: 13,
     selectTab: vi.fn(),
     setFontSize: vi.fn(),
@@ -29,18 +26,12 @@ function dependencies() {
 }
 
 describe("handleTerminalShortcut", () => {
-  it("cycles terminal tabs while the terminal is focused", () => {
+  it("leaves terminal navigation to the workspace handler", () => {
     const deps = dependencies();
 
     expect(handleTerminalShortcut(keyboardEvent({ key: "ArrowDown", metaKey: true }), deps)).toBe(
-      true,
+      false,
     );
-    expect(deps.selectTab).toHaveBeenCalledWith("two");
-  });
-
-  it("does not cycle terminal tabs with the previous shifted shortcut", () => {
-    const deps = dependencies();
-
     expect(
       handleTerminalShortcut(
         keyboardEvent({ key: "ArrowDown", metaKey: true, shiftKey: true }),

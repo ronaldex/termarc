@@ -36,5 +36,8 @@ export function terminalMatchesFilter(tab: TerminalTabState, query: string): boo
     tab.currentCwd,
     tab.cwd,
     tab.title,
+    tab.launch.kind === "subagent" ? tab.launch.name : undefined,
+    tab.launch.kind === "subagent" ? tab.launch.processKind : undefined,
+    tab.launch.kind === "subagent" ? tab.launch.commandLine : undefined,
   ].some((value) => value?.toLowerCase().includes(normalized));
 }

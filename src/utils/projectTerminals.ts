@@ -12,22 +12,45 @@ export function createTerminalId(): string {
 export function normalizeProjectTerminals(
   terminals: readonly ProjectTerminal[] | undefined,
 ): ProjectTerminal[] | undefined {
-  return terminals?.map((terminal) => {
+  if (!terminals) return undefined;
+  const byId = new Map(terminals.map((terminal) => [terminal.id, terminal]));
+  const normalized = terminals.map((terminal) => {
     const customTitle = normalizeTerminalTitle(terminal.customTitle ?? "");
-    return customTitle ? { id: terminal.id, customTitle } : { id: terminal.id };
+    const parent = terminal.parentTerminalId ? byId.get(terminal.parentTerminalId) : undefined;
+    const parentTerminalId =
+      parent && parent.id !== terminal.id && !parent.parentTerminalId ? parent.id : undefined;
+    return {
+      id: terminal.id,
+      ...(customTitle ? { customTitle } : {}),
+      ...(parentTerminalId ? { parentTerminalId } : {}),
+    };
   });
+  return normalized
+    .filter((terminal) => !terminal.parentTerminalId)
+    .flatMap((root) => [
+      root,
+      ...normalized.filter((terminal) => terminal.parentTerminalId === root.id),
+    ]);
 }
 
 export function projectTerminalsFromTabs(
   tabs: readonly TerminalTabState[],
   projectId: string,
 ): ProjectTerminal[] {
-  return tabs
-    .filter((tab) => tab.projectId === projectId && tab.launch.kind === "shell")
-    .map((tab) => {
-      const customTitle = normalizeTerminalTitle(tab.customTitle ?? "");
-      return customTitle ? { id: tab.id, customTitle } : { id: tab.id };
-    });
+  return (
+    normalizeProjectTerminals(
+      tabs
+        .filter((tab) => tab.projectId === projectId && tab.launch.kind === "shell")
+        .map((tab) => {
+          const customTitle = normalizeTerminalTitle(tab.customTitle ?? "");
+          return {
+            id: tab.id,
+            ...(customTitle ? { customTitle } : {}),
+            ...(tab.parentTerminalId ? { parentTerminalId: tab.parentTerminalId } : {}),
+          };
+        }),
+    ) ?? []
+  );
 }
 
 export function projectTerminalsEqual(
@@ -39,7 +62,9 @@ export function projectTerminalsEqual(
     left.length === right.length &&
     left.every(
       (terminal, index) =>
-        terminal.id === right[index]?.id && terminal.customTitle === right[index]?.customTitle,
+        terminal.id === right[index]?.id &&
+        terminal.customTitle === right[index]?.customTitle &&
+        terminal.parentTerminalId === right[index]?.parentTerminalId,
     )
   );
 }

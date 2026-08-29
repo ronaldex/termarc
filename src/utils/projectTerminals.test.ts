@@ -41,9 +41,48 @@ describe("project terminal persistence", () => {
     ]);
   });
 
+  it("persists a shell parent relationship", () => {
+    const parent = terminal("project-a", "Parent");
+    const child = { ...terminal("project-a", "Child"), parentTerminalId: parent.id };
+    expect(projectTerminalsFromTabs([parent, child], "project-a")).toEqual([
+      { id: "project-a-Parent", customTitle: "Parent" },
+      { id: "project-a-Child", customTitle: "Child", parentTerminalId: "project-a-Parent" },
+    ]);
+  });
+
   it("preserves missing terminal lists for legacy migration and explicit empty lists", () => {
     expect(normalizeProjectTerminals(undefined)).toBeUndefined();
     expect(normalizeProjectTerminals([])).toEqual([]);
+  });
+
+  it("orders restored direct children immediately after their root", () => {
+    expect(
+      normalizeProjectTerminals([
+        { id: "child", parentTerminalId: "root" },
+        { id: "other" },
+        { id: "root" },
+      ]),
+    ).toEqual([{ id: "other" }, { id: "root" }, { id: "child", parentTerminalId: "root" }]);
+  });
+
+  it("promotes stale, cyclic, and too-deep restored terminals to roots", () => {
+    expect(
+      normalizeProjectTerminals([
+        { id: "root" },
+        { id: "child", parentTerminalId: "root" },
+        { id: "grandchild", parentTerminalId: "child" },
+        { id: "orphan", parentTerminalId: "missing" },
+        { id: "cycle-a", parentTerminalId: "cycle-b" },
+        { id: "cycle-b", parentTerminalId: "cycle-a" },
+      ]),
+    ).toEqual([
+      { id: "root" },
+      { id: "child", parentTerminalId: "root" },
+      { id: "grandchild" },
+      { id: "orphan" },
+      { id: "cycle-a" },
+      { id: "cycle-b" },
+    ]);
   });
 
   it("normalizes blank custom names", () => {

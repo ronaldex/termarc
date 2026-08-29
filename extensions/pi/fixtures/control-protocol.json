@@ -1,0 +1,300 @@
+{
+  "protocolVersion": 1,
+  "requests": {
+    "status": {
+      "type": "status",
+      "protocolVersion": 1
+    },
+    "spawn": {
+      "type": "subagentSpawn",
+      "protocolVersion": 1,
+      "parentTerminalId": "terminal-parent",
+      "projectId": "project-1",
+      "name": "Fixture child",
+      "command": "pi -- fixture",
+      "cwd": "/tmp/project",
+      "processKind": "pi"
+    },
+    "list": {
+      "type": "subagentList",
+      "protocolVersion": 1,
+      "parentTerminalId": "terminal-parent",
+      "cursor": "v1:1",
+      "limit": 32
+    },
+    "subagentStatus": {
+      "type": "subagentStatus",
+      "protocolVersion": 1,
+      "id": "subagent-1"
+    },
+    "wait": {
+      "type": "subagentWait",
+      "protocolVersion": 1,
+      "id": "subagent-1",
+      "timeoutMs": 300000,
+      "returnIfResultAvailable": true
+    },
+    "output": {
+      "type": "subagentOutput",
+      "protocolVersion": 1,
+      "id": "subagent-1",
+      "after": 4,
+      "format": "plain",
+      "limit": 4096
+    },
+    "result": {
+      "type": "subagentResult",
+      "protocolVersion": 1,
+      "id": "subagent-1"
+    },
+    "resultUpdate": {
+      "type": "subagentResultUpdate",
+      "protocolVersion": 1,
+      "subagentId": "subagent-1",
+      "terminalId": "terminal-child",
+      "text": "finished",
+      "sequence": 1001
+    },
+    "resultClear": {
+      "type": "subagentResultClear",
+      "protocolVersion": 1,
+      "subagentId": "subagent-1",
+      "terminalId": "terminal-child",
+      "sequence": 1002
+    },
+    "input": {
+      "type": "subagentInput",
+      "protocolVersion": 1,
+      "id": "subagent-1",
+      "data": [103, 111, 13]
+    },
+    "stop": {
+      "type": "subagentStop",
+      "protocolVersion": 1,
+      "id": "subagent-1"
+    }
+  },
+  "responses": {
+    "status": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "protocolVersion": 1,
+        "version": "0.1.0",
+        "ready": true
+      }
+    },
+    "spawn": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "id": "subagent-1"
+      }
+    },
+    "list": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "items": [
+          {
+            "id": "subagent-1",
+            "parentTerminalId": "terminal-parent",
+            "terminalId": "terminal-child",
+            "ptyId": "pty-1",
+            "projectId": "project-1",
+            "name": "Fixture child",
+            "processKind": "pi",
+            "command": "pi -- fixture",
+            "cwd": "/tmp/project",
+            "lifecycle": "running",
+            "piState": "waiting",
+            "pid": 123,
+            "exitCode": null,
+            "error": null,
+            "createdAt": 1,
+            "startedAt": 2,
+            "endedAt": null,
+            "rawOutputCursor": 6,
+            "plainOutputCursor": 2,
+            "resultAvailable": false
+          }
+        ],
+        "nextCursor": "v1:1"
+      }
+    },
+    "subagentStatus": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "id": "subagent-1",
+        "parentTerminalId": "terminal-parent",
+        "terminalId": "terminal-child",
+        "ptyId": "pty-1",
+        "projectId": "project-1",
+        "name": "Fixture child",
+        "processKind": "pi",
+        "command": "pi -- fixture",
+        "cwd": "/tmp/project",
+        "lifecycle": "running",
+        "piState": "waiting",
+        "pid": 123,
+        "exitCode": null,
+        "error": null,
+        "createdAt": 1,
+        "startedAt": 2,
+        "endedAt": null,
+        "rawOutputCursor": 6,
+        "plainOutputCursor": 2,
+        "resultAvailable": false
+      }
+    },
+    "wait": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "timedOut": false,
+        "status": {
+          "id": "subagent-1",
+          "parentTerminalId": "terminal-parent",
+          "terminalId": "terminal-child",
+          "ptyId": "pty-1",
+          "projectId": "project-1",
+          "name": "Fixture child",
+          "processKind": "pi",
+          "command": "pi -- fixture",
+          "cwd": "/tmp/project",
+          "lifecycle": "exited",
+          "piState": "stopped",
+          "pid": null,
+          "exitCode": 0,
+          "error": null,
+          "createdAt": 1,
+          "startedAt": 2,
+          "endedAt": 3,
+          "rawOutputCursor": 6,
+          "plainOutputCursor": 2,
+          "resultAvailable": true,
+          "resultUpdatedAt": 42
+        }
+      }
+    },
+    "output": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "format": "plain",
+        "after": 4,
+        "cursor": 6,
+        "truncated": false,
+        "data": [111, 107]
+      }
+    },
+    "result": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {
+        "id": "subagent-1",
+        "text": "finished",
+        "updatedAt": 42
+      }
+    },
+    "input": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {}
+    },
+    "stop": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {}
+    },
+    "error": {
+      "ok": false,
+      "protocolVersion": 1,
+      "error": {
+        "code": "unknown_subagent",
+        "message": "unknown subagent: missing"
+      }
+    }
+  },
+  "olderVersion": {
+    "type": "status",
+    "protocolVersion": 0
+  },
+  "olderResponse": {
+    "ok": true,
+    "protocolVersion": 0,
+    "result": {}
+  },
+  "malformedRequests": [
+    {
+      "type": "status",
+      "protocolVersion": "one"
+    },
+    {
+      "type": "subagentWait",
+      "protocolVersion": 1,
+      "id": "subagent-1",
+      "timeoutMs": "soon"
+    },
+    {
+      "type": "subagentInput",
+      "protocolVersion": 1,
+      "id": "subagent-1",
+      "data": [999]
+    }
+  ],
+  "malformedResponses": [
+    {
+      "ok": true,
+      "protocolVersion": 1
+    },
+    {
+      "ok": false,
+      "protocolVersion": 1,
+      "error": {
+        "code": 7,
+        "message": "bad"
+      }
+    }
+  ],
+  "extensionPayloads": {
+    "currentList": [
+      {
+        "id": "subagent-current",
+        "name": "Current child",
+        "lifecycle": "running",
+        "piState": "waiting",
+        "resultAvailable": true,
+        "resultUpdatedAt": 42
+      }
+    ],
+    "olderList": [
+      {
+        "id": "subagent-older",
+        "name": "Older child",
+        "lifecycle": "running"
+      }
+    ],
+    "currentWait": {
+      "timedOut": false,
+      "status": {
+        "id": "subagent-current",
+        "name": "Current child",
+        "lifecycle": "exited",
+        "piState": "stopped",
+        "resultAvailable": true,
+        "resultUpdatedAt": 42
+      }
+    },
+    "malformedWait": {
+      "timedOut": "false",
+      "status": {
+        "id": "subagent-malformed",
+        "name": "Malformed child",
+        "lifecycle": "unknown",
+        "resultAvailable": "yes"
+      }
+    }
+  }
+}

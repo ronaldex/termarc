@@ -57,6 +57,38 @@ termarc projects create "Termarc" ~/Development/termarc
 
 Use `--json` with list/status commands for machine-readable output.
 
+### Subagent history retention
+
+The local control service releases live PTY input/stop ownership immediately
+when a subagent completes, while retaining bounded status, result, and output
+history. Active records are never pruned. Completed history defaults to 64
+records for 24 hours and can be configured before launching Termarc:
+
+- `TERMARC_SUBAGENT_COMPLETED_LIMIT` (maximum 10000)
+- `TERMARC_SUBAGENT_COMPLETED_TTL_SECONDS` (maximum 2592000)
+
+`termarc --json subagents` reports active/completed/pending counts and the
+effective retention policy in its additive `subagents` field. Each retained
+record keeps at most 1 MiB per raw/plain output format.
+
+### Pi subagent completion delivery
+
+The Pi extension persists each parent completion as `pending`, queues the stable
+completion key as a Pi follow-up message, and then persists `delivered`. Pending
+entries are retried during session reload/reconciliation; delivered entries and
+process-local ownership claims suppress duplicate delivery. Session shutdown
+cancels the old generation and awaits its list, watcher, persistence, and
+delivery tasks, so an old session cannot deliver after its replacement starts.
+Only subagents durably tracked by the active Pi session are eligible.
+
+Pi's extension API exposes separate `appendEntry()` and `sendMessage()` calls; it
+has no transaction spanning them and `sendMessage()` accepts no idempotency key.
+Consequently a process crash after Pi accepts the follow-up but before the
+`delivered` append reaches the session file can replay that one completion after
+restart. The pending-before-send ordering prevents loss, and all non-crash
+shutdown/reload paths are reconciled and deduplicated, but this narrow
+process-crash duplicate window cannot be made atomic with the available Pi API.
+
 ## Custom themes
 
 Create `~/.config/termarc/themes` and copy [theme.json](examples/theme.json) into that
@@ -68,12 +100,17 @@ interactive UI layers. Restart Termarc after saving the file, then select the th
 **App settings**. Invalid theme files are ignored, and custom theme IDs cannot replace the
 built-in themes.
 
-## Formatting
+## Testing and formatting
 
 ```sh
+npm test
+npm run build
 npm run format:check
 npm run format
 ```
+
+Native macOS/Tauri, PTY, notification, and Pi restart scenarios that cannot run reliably in
+headless CI are tracked in [the manual smoke matrix](docs/MACOS_TAURI_SMOKE_MATRIX.md).
 
 ## Architecture
 

@@ -7,6 +7,13 @@ export type SidebarSelection =
   | { id: string; kind: "terminal"; projectId: string; tabId: string }
   | {
       id: string;
+      kind: "subagent";
+      projectId: string;
+      tabId: string;
+      parentTerminalId?: string;
+    }
+  | {
+      id: string;
       kind: "command" | "edit-command" | "agent" | "edit-agent";
       projectId: string;
       commandId: string;

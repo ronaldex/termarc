@@ -5,6 +5,7 @@ import type { SidebarContextMenuRequest } from "../../types/contextMenu";
 import type { ProjectTreeProject } from "../../types/project";
 import type { SidebarSelection } from "../../types/sidebar";
 import type { TerminalTabState } from "../../types/terminal";
+import { normalizedTerminalParentId } from "../../utils/terminalHierarchy";
 import type { DropPlacement } from "../../utils/terminalOrdering";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
@@ -15,6 +16,7 @@ const props = defineProps<{
   tabs: TerminalTabState[];
   shortcutModifier: "meta" | "ctrl";
   collapsed?: boolean;
+  filter?: string;
   projects: ProjectTreeProject[];
   selection: SidebarSelection;
   isTerminalFocused: () => boolean;
@@ -45,6 +47,7 @@ const emit = defineEmits<{
   runAgent: [projectId: string, commandId: string];
   reloadAgent: [projectId: string, commandId: string];
   stopAgent: [projectId: string, commandId: string];
+  stopSubagent: [id: string];
   reorderTerminal: [
     projectId: string,
     movedTabId: string,
@@ -59,9 +62,17 @@ const emit = defineEmits<{
   ];
   focus: [selection: SidebarSelection];
   activate: [selection: SidebarSelection];
+  filterChange: [filter: string];
 }>();
 
-const filter = ref("");
+const localFilter = ref("");
+const filter = computed({
+  get: () => props.filter ?? localFilter.value,
+  set: (value: string) => {
+    localFilter.value = value;
+    emit("filterChange", value);
+  },
+});
 const sidebarElement = ref<HTMLElement>();
 const projectTree = ref<InstanceType<typeof ProjectTree>>();
 const searchInput = ref<HTMLInputElement>();
@@ -105,6 +116,11 @@ const contextMenuItems = computed<ContextMenuItem[]>(() =>
 const renameTab = computed(() =>
   renameTabId.value ? props.tabs.find((tab) => tab.id === renameTabId.value) : undefined,
 );
+const renameInitialName = computed(() => {
+  const tab = renameTab.value;
+  if (!tab) return "";
+  return tab.customTitle || (tab.launch.kind === "subagent" ? tab.launch.name : tab.title);
+});
 
 function focusTree(): void {
   const focused = projectTree.value?.focusActiveItem();
@@ -155,7 +171,10 @@ async function openContextMenu(request: SidebarContextMenuRequest): Promise<void
   if (request.kind === "terminal") {
     emit("focus", {
       id: request.tabId,
-      kind: "terminal",
+      kind:
+        props.tabs.find((tab) => tab.id === request.tabId)?.launch.kind === "subagent"
+          ? "subagent"
+          : "terminal",
       projectId: props.tabs.find((tab) => tab.id === request.tabId)?.projectId ?? "",
       tabId: request.tabId,
     });
@@ -214,13 +233,22 @@ function saveRename(title: string): void {
 
 function choose(node: SidebarSelection): void {
   const terminalWasFocused = props.isTerminalFocused();
+  const tab =
+    node.kind === "terminal" || node.kind === "subagent"
+      ? props.tabs.find((candidate) => candidate.id === node.tabId)
+      : undefined;
+  const isSubterminal = Boolean(tab && normalizedTerminalParentId(props.tabs, tab));
+  if (isSubterminal) {
+    emit("activate", node);
+    return;
+  }
   emit("focus", node);
   if (props.collapsed) {
     emit("preview");
     requestAnimationFrame(focusTree);
     return;
   }
-  if (terminalWasFocused && node.kind === "terminal" && node.tabId) {
+  if (terminalWasFocused && (node.kind === "terminal" || node.kind === "subagent") && node.tabId) {
     emit("activate", node);
     return;
   }
@@ -360,6 +388,8 @@ onBeforeUnmount(() => {
       @run-agent="(projectId, commandId) => emit('runAgent', projectId, commandId)"
       @reload-agent="(projectId, commandId) => emit('reloadAgent', projectId, commandId)"
       @stop-agent="(projectId, commandId) => emit('stopAgent', projectId, commandId)"
+      @stop-subagent="emit('stopSubagent', $event)"
+      @close-subagent="closeTerminal"
       @start-terminal="emit('startTerminal', $event)"
       @reorder-terminal="
         (projectId, movedId, targetId, placement) =>
@@ -386,7 +416,7 @@ onBeforeUnmount(() => {
     />
     <TerminalRenameModal
       v-if="renameTab"
-      :initial-name="renameTab.customTitle"
+      :initial-name="renameInitialName"
       @save="saveRename"
       @cancel="closeRename"
     />

@@ -39,6 +39,8 @@ export function isSidebarSelection(value: unknown): value is SidebarSelection {
       return isString(value.projectId);
     case "terminal":
       return isString(value.projectId) && isString(value.tabId);
+    case "subagent":
+      return isString(value.projectId) && isString(value.tabId) && isString(value.parentTerminalId);
     case "command":
     case "edit-command":
     case "agent":
@@ -68,8 +70,11 @@ export function loadWorkspaceSelection(): SidebarSelection | undefined {
 }
 
 export function saveWorkspaceSelection(selection: SidebarSelection): void {
-  const state: PersistedWorkspaceState = { version: STORAGE_VERSION, selection };
   try {
+    // Runtime-only children cannot be restored after restart. Keep the last
+    // stable selection rather than replacing or erasing it while inspecting one.
+    if (selection.kind === "subagent") return;
+    const state: PersistedWorkspaceState = { version: STORAGE_VERSION, selection };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.error("Could not save workspace state", error);
@@ -83,8 +88,8 @@ export function resolveWorkspaceSelection(
 ): SidebarSelection | undefined {
   if (!selection) return;
   if (selection.kind === "app-settings" || selection.kind === "projects") return selection;
-  // Keyboard shortcuts are presented as a modal rather than a workspace page.
-  if (selection.kind === "keyboard-shortcuts") return;
+  // Modal and runtime-only selections are never restored across app launches.
+  if (selection.kind === "keyboard-shortcuts" || selection.kind === "subagent") return;
 
   const project = projects.find((item) => item.id === selection.projectId);
   if (!project) return;

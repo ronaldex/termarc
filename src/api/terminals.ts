@@ -3,11 +3,21 @@ import type { PtyEvent, PtyStarted, PtyStatus } from "../types/terminal";
 
 export type PtyLaunch = { kind: "shell" } | { kind: "command"; command: string };
 
+export type SubagentPtyOwner = {
+  id: string;
+  parentTerminalId: string;
+  projectId: string;
+  name: string;
+  processKind: string;
+};
+
 export type StartTerminalOptions = {
   rows: number;
   cols: number;
   cwd: string;
   launch: PtyLaunch;
+  terminalId?: string;
+  subagent?: SubagentPtyOwner;
   onOutput: (data: ArrayBuffer) => void;
   onEvent: (event: PtyEvent) => void;
 };
@@ -24,6 +34,8 @@ export async function startTerminal(options: StartTerminalOptions): Promise<PtyS
       cols: options.cols,
       cwd: options.cwd,
       launch: options.launch,
+      terminalId: options.terminalId,
+      subagent: options.subagent,
     },
     onOutput,
     onEvent,

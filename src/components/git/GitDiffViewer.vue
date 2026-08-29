@@ -9,7 +9,6 @@ import { externalEditorLabel } from "../../settings/options";
 import { themeDefinition } from "../../themes/themeCatalog";
 import { splitGitDiff } from "../../utils/gitDiff";
 import type { ExternalEditor } from "../../types/settings";
-import CollapsedGitRail from "./CollapsedGitRail.vue";
 import ExpandedGitDiff from "./ExpandedGitDiff.vue";
 
 const props = withDefaults(
@@ -22,9 +21,6 @@ const props = withDefaults(
   { fontSize: 13 },
 );
 const emit = defineEmits<{
-  collapse: [];
-  preview: [];
-  expand: [];
   available: [value: boolean];
 }>();
 const { settings } = useAppSettings();
@@ -87,7 +83,6 @@ async function revealPendingFile(): Promise<void> {
 
 function revealFile(path: string): void {
   pendingRevealPath.value = path;
-  emit("preview");
   void nextTick(revealPendingFile);
 }
 
@@ -104,61 +99,41 @@ function hasPanelFocus(): boolean {
 defineExpose({ focusPanel, hasPanelFocus });
 
 watch(state, (result) => {
-  if (result) emit("available", Boolean(result.repository || result.error));
+  // A mode or polling transition may temporarily clear the result while a
+  // refresh is in flight. Keep the last known availability until the selected
+  // project changes (App.vue resets it there) or a new result arrives.
+  if (result) emit("available", Boolean(result.error || files.value.length));
   void revealPendingFile();
 });
 </script>
 
 <template>
-  <aside
-    ref="panelElement"
-    class="diff-sidebar"
-    :class="{ collapsed: !active }"
-    :aria-label="active ? 'Git changes' : 'Git changes summary'"
-    tabindex="-1"
-  >
-    <CollapsedGitRail
-      v-if="!active"
-      :files="files"
-      :loading="loading"
-      :error="state?.error"
-      @preview="emit('preview')"
-      @expand="emit('expand')"
-      @reveal="revealFile"
-    />
+  <div ref="panelElement" class="diff-content-view" aria-label="Git changes" tabindex="-1">
     <ExpandedGitDiff
-      v-else
       ref="expandedView"
       :files="files"
       :error="state?.error"
       :repository="state?.repository"
-      :loading="loading"
       :font-size="props.fontSize"
       :diff-theme="diffTheme"
       :expanded-files="expandedFiles"
       :all-files-expanded="allFilesExpanded"
       :editor-name="editorName"
-      @collapse="emit('collapse')"
-      @refresh="refresh"
       @toggle-file="toggleFile"
       @expand-all="expandAllFiles"
       @collapse-all="collapseAllFiles"
       @open-file="openFile"
     />
-  </aside>
+  </div>
 </template>
 
 <style scoped>
-.diff-sidebar {
+.diff-content-view {
   display: flex;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   flex-direction: column;
   background: var(--color-panel-bg);
-}
-.diff-sidebar.collapsed {
-  width: var(--sidebar-collapsed-width) !important;
-  border-left: 1px solid var(--color-border-muted);
-  color: var(--color-text);
-  background: var(--sidebar-background);
 }
 </style>

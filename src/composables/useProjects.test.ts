@@ -50,6 +50,42 @@ describe("useProjects agents", () => {
     api.saveProjectTreeState.mockResolvedValue(undefined);
   });
 
+  it("restores persisted stale, cyclic, deep, and cross-project shell parents as one-level families", async () => {
+    api.loadProjects.mockResolvedValue([
+      {
+        ...storedProject,
+        terminals: [
+          { id: "root" },
+          { id: "child", parentTerminalId: "root" },
+          { id: "too-deep", parentTerminalId: "child" },
+          { id: "stale", parentTerminalId: "missing" },
+          { id: "cycle-a", parentTerminalId: "cycle-b" },
+          { id: "cycle-b", parentTerminalId: "cycle-a" },
+        ],
+      },
+      {
+        ...storedProject,
+        id: "project-2",
+        name: "Other",
+        directory: "/other",
+        terminals: [{ id: "cross-project", parentTerminalId: "root" }],
+      },
+    ]);
+
+    const state = useProjects();
+    await state.load();
+
+    expect(state.projects.value[0]?.terminals).toEqual([
+      { id: "root" },
+      { id: "child", parentTerminalId: "root" },
+      { id: "too-deep" },
+      { id: "stale" },
+      { id: "cycle-a" },
+      { id: "cycle-b" },
+    ]);
+    expect(state.projects.value[1]?.terminals).toEqual([{ id: "cross-project" }]);
+  });
+
   it("adds a global agent to live state and the global project snapshot", async () => {
     const state = useProjects();
     await state.load();

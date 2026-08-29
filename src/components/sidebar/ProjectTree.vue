@@ -14,6 +14,7 @@ import OverlayScrollArea from "../ui/OverlayScrollArea.vue";
 import ProjectBadge from "./ProjectBadge.vue";
 import SidebarTreeActionButton from "./SidebarTreeActionButton.vue";
 import SidebarChevron from "./SidebarChevron.vue";
+import SubterminalTreeRows from "./SubterminalTreeRows.vue";
 import TerminalTreeRow from "./TerminalTreeRow.vue";
 
 const props = defineProps<{
@@ -30,10 +31,9 @@ const displayProjects = computed(() => projectTreeModel(props.projects, props.ta
 const shortcutNumbers = computed(
   () =>
     new Map(
-      numberedSidebarShortcuts(props.projects, props.tabs).map(({ number, selection }) => [
-        sidebarShortcutKey(selection),
-        number,
-      ]),
+      numberedSidebarShortcuts(props.projects, props.tabs, props.filter).map(
+        ({ number, selection }) => [sidebarShortcutKey(selection), number],
+      ),
     ),
 );
 const sortingEnabled = computed(() => !props.collapsed && !props.filter);
@@ -72,6 +72,8 @@ const emit = defineEmits<{
   runAgent: [projectId: string, commandId: string];
   reloadAgent: [projectId: string, commandId: string];
   stopAgent: [projectId: string, commandId: string];
+  stopSubagent: [id: string];
+  closeSubagent: [id: string];
   reorderTerminal: [
     projectId: string,
     movedTabId: string,
@@ -88,9 +90,6 @@ const emit = defineEmits<{
   activate: [selection: SidebarSelection];
 }>();
 
-function isActive(tab: TerminalTabState | undefined): boolean {
-  return tab?.status === "starting" || tab?.status === "running";
-}
 function isTreeActive(id: string): boolean {
   return props.selection.id === id;
 }
@@ -137,7 +136,9 @@ function moveWithKeyboard(event: KeyboardEvent, item: SortItem, label: string): 
   const project = displayProjects.value.find((candidate) => candidate.id === item.projectId);
   const ids =
     item.kind === "terminal"
-      ? project?.terminalTabs.map((tab) => tab.id)
+      ? project?.terminalNodes
+          .filter((node) => node.tab.launch.kind === "shell" && !node.parentId)
+          .map((node) => node.tab.id)
       : item.kind === "agent"
         ? project?.agentItems.map(({ command }) => command.id)
         : project?.commandItems.map(({ command }) => command.id);
@@ -214,7 +215,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="project.projectOpen" class="project-content">
-        <div v-if="project.agentItems.length" class="group">
+        <div v-if="project.counts.agents.total" class="group">
           <div
             :ref="(element) => setActiveItem(element, `${project.id}:agents`)"
             class="group-heading"
@@ -230,8 +231,7 @@ onBeforeUnmount(() => {
             <button class="group-select" @click="focusGroup(project.id, 'agents')">
               <span class="group-icon">✦</span><span v-if="!collapsed">AGENTS</span><i></i>
               <small v-if="!collapsed">
-                {{ project.agentItems.filter((item) => isActive(item.tab)).length }} /
-                {{ project.agentItems.length }}
+                {{ project.counts.agents.active }} / {{ project.counts.agents.total }}
               </small>
             </button>
           </div>
@@ -259,7 +259,61 @@ onBeforeUnmount(() => {
                 @reload="(projectId, commandId) => emit('reloadAgent', projectId, commandId)"
                 @stop="(projectId, commandId) => emit('stopAgent', projectId, commandId)"
               />
+              <SubterminalTreeRows
+                :items="item.terminalItems"
+                :shortcut-numbers="shortcutNumbers"
+                :shortcut-modifier="shortcutModifier"
+                :modifier-pressed="modifierPressed"
+                :selected-id="selection.id"
+                :collapsed="collapsed"
+                @register="setActiveItem"
+                @focus="emit('focus', $event)"
+                @start="emit('startTerminal', $event)"
+                @stop="emit('stopSubagent', $event)"
+                @close="emit('closeSubagent', $event)"
+                @rename="emit('rename', $event)"
+                @context-menu="emit('contextMenu', $event)"
+              />
             </div>
+            <div
+              v-for="parent in project.runtimeAgentParents"
+              :key="`runtime-agent-parent:${parent.tab.id}`"
+              class="runtime-agent-parent"
+            >
+              <div v-if="!collapsed" class="runtime-agent-parent-label">
+                {{ parent.tab.customTitle || parent.tab.launchTitle || parent.tab.title }}
+              </div>
+              <SubterminalTreeRows
+                :items="parent.terminalItems"
+                :shortcut-numbers="shortcutNumbers"
+                :shortcut-modifier="shortcutModifier"
+                :modifier-pressed="modifierPressed"
+                :selected-id="selection.id"
+                :collapsed="collapsed"
+                @register="setActiveItem"
+                @focus="emit('focus', $event)"
+                @start="emit('startTerminal', $event)"
+                @stop="emit('stopSubagent', $event)"
+                @close="emit('closeSubagent', $event)"
+                @rename="emit('rename', $event)"
+                @context-menu="emit('contextMenu', $event)"
+              />
+            </div>
+            <SubterminalTreeRows
+              :items="project.detachedAgentItems"
+              :shortcut-numbers="shortcutNumbers"
+              :shortcut-modifier="shortcutModifier"
+              :modifier-pressed="modifierPressed"
+              :selected-id="selection.id"
+              :collapsed="collapsed"
+              @register="setActiveItem"
+              @focus="emit('focus', $event)"
+              @start="emit('startTerminal', $event)"
+              @stop="emit('stopSubagent', $event)"
+              @close="emit('closeSubagent', $event)"
+              @rename="emit('rename', $event)"
+              @context-menu="emit('contextMenu', $event)"
+            />
           </template>
         </div>
 
@@ -280,12 +334,12 @@ onBeforeUnmount(() => {
               class="group-select"
               :title="
                 collapsed
-                  ? `Terminals (${project.terminalTabs.filter(isActive).length} / ${project.terminalTabs.length})`
+                  ? `Terminals (${project.counts.terminals.active} / ${project.counts.terminals.total})`
                   : undefined
               "
               :aria-label="
                 collapsed
-                  ? `Terminals (${project.terminalTabs.filter(isActive).length} / ${project.terminalTabs.length})`
+                  ? `Terminals (${project.counts.terminals.active} / ${project.counts.terminals.total})`
                   : undefined
               "
               @click="focusGroup(project.id, 'terminals')"
@@ -293,43 +347,62 @@ onBeforeUnmount(() => {
               <span class="group-icon terminal-icon">▣</span>
               <span v-if="!collapsed">TERMINALS</span><i></i>
               <small v-if="!collapsed">
-                {{ project.terminalTabs.filter(isActive).length }} /
-                {{ project.terminalTabs.length }}
+                {{ project.counts.terminals.active }} / {{ project.counts.terminals.total }}
               </small>
             </button>
           </div>
           <template v-if="project.terminalOpen">
             <div
-              v-for="tab in project.terminalTabs"
-              :key="tab.id"
-              :ref="(element) => setActiveItem(element, tab.id)"
+              v-for="item in project.terminalNodes.filter(
+                (node) => node.tab.launch.kind === 'shell' && !node.parentId,
+              )"
+              :key="item.tab.id"
+              :ref="(element) => setActiveItem(element, item.tab.id)"
               class="sortable-row"
-              :class="dropClass({ kind: 'terminal', projectId: project.id, id: tab.id })"
+              :class="dropClass({ kind: 'terminal', projectId: project.id, id: item.tab.id })"
               :data-sort-kind="sortingEnabled ? 'terminal' : undefined"
               :data-project-id="project.id"
-              :data-sort-id="tab.id"
+              :data-sort-id="item.tab.id"
               @pointerdown="
-                beginPointerDrag($event, { kind: 'terminal', projectId: project.id, id: tab.id })
+                beginPointerDrag($event, {
+                  kind: 'terminal',
+                  projectId: project.id,
+                  id: item.tab.id,
+                })
               "
               @keydown="
                 moveWithKeyboard(
                   $event,
-                  { kind: 'terminal', projectId: project.id, id: tab.id },
-                  tab.customTitle || tab.title,
+                  { kind: 'terminal', projectId: project.id, id: item.tab.id },
+                  item.tab.customTitle || item.tab.title,
                 )
               "
             >
               <TerminalTreeRow
-                :tab="tab"
-                :shortcut-number="shortcutNumbers.get(`terminal:${tab.id}`)"
+                :tab="item.tab"
+                :selection="item.selection"
+                :shortcut-number="shortcutNumbers.get(`terminal:${item.tab.id}`)"
                 :shortcut-modifier="shortcutModifier"
                 :modifier-pressed="modifierPressed"
-                :active="isTreeActive(tab.id)"
+                :active="isTreeActive(item.tab.id)"
                 :collapsed="collapsed"
                 @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"
                 @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
                 @start="emit('startTerminal', $event)"
+              />
+              <SubterminalTreeRows
+                :items="item.children"
+                :shortcut-numbers="shortcutNumbers"
+                @register="setActiveItem"
+                :shortcut-modifier="shortcutModifier"
+                :modifier-pressed="modifierPressed"
+                :selected-id="selection.id"
+                :collapsed="collapsed"
+                @focus="emit('focus', $event)"
+                @start="emit('startTerminal', $event)"
+                @rename="emit('rename', $event)"
+                @context-menu="emit('contextMenu', $event)"
               />
             </div>
             <button
@@ -373,12 +446,12 @@ onBeforeUnmount(() => {
               class="group-select"
               :title="
                 collapsed
-                  ? `Commands (${project.commandItems.filter((item) => isActive(item.tab)).length} / ${project.commandItems.length})`
+                  ? `Commands (${project.counts.commands.active} / ${project.counts.commands.total})`
                   : undefined
               "
               :aria-label="
                 collapsed
-                  ? `Commands (${project.commandItems.filter((item) => isActive(item.tab)).length} / ${project.commandItems.length})`
+                  ? `Commands (${project.counts.commands.active} / ${project.counts.commands.total})`
                   : undefined
               "
               @click="focusGroup(project.id, 'commands')"
@@ -386,8 +459,7 @@ onBeforeUnmount(() => {
               <span class="group-icon">▱</span>
               <span v-if="!collapsed">COMMANDS</span><i></i>
               <small v-if="!collapsed">
-                {{ project.commandItems.filter((item) => isActive(item.tab)).length }} /
-                {{ project.commandItems.length }}
+                {{ project.counts.commands.active }} / {{ project.counts.commands.total }}
               </small>
             </button>
           </div>
@@ -452,6 +524,18 @@ onBeforeUnmount(() => {
 }
 .sortable-row {
   position: relative;
+}
+.subagent-row {
+  width: 100%;
+}
+.runtime-agent-parent-label {
+  overflow: hidden;
+  padding: 0.25rem 0.25rem 0.125rem
+    calc(var(--tree-toggle-column) + var(--tree-column-gap) + var(--tree-icon-column));
+  color: var(--color-text-subtle);
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sortable-row[data-sort-kind] {
   cursor: grab;
@@ -672,6 +756,9 @@ button {
   stroke: currentColor;
   stroke-linecap: round;
   stroke-width: 1.5;
+}
+.project-list.compact .subagent-row {
+  margin-left: 0;
 }
 .project-list.compact .project-actions {
   display: none;

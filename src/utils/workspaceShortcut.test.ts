@@ -31,10 +31,13 @@ describe("workspaceContentFocusTarget", () => {
 });
 
 describe("workspaceShortcutAction", () => {
-  it("creates and closes terminals with command shortcuts", () => {
+  it("creates terminals and subterminals with command shortcuts", () => {
     expect(workspaceShortcutAction(shortcut({ key: "t", metaKey: true }))).toEqual({
       type: "create-terminal",
     });
+    expect(
+      workspaceShortcutAction(shortcut({ key: "T", code: "KeyT", metaKey: true, shiftKey: true })),
+    ).toEqual({ type: "create-subterminal" });
     expect(
       workspaceShortcutAction(shortcut({ key: "w", metaKey: true, activeTerminalAvailable: true })),
     ).toEqual({ type: "close-terminal" });
@@ -58,6 +61,26 @@ describe("workspaceShortcutAction", () => {
     ).toEqual({ type: "focus-right-sidebar" });
     expect(
       workspaceShortcutAction(
+        shortcut({
+          key: "ArrowRight",
+          metaKey: true,
+          focusRegion: "right-sidebar",
+          rightSidebarHasNextMode: true,
+        }),
+      ),
+    ).toEqual({ type: "focus-next-right-sidebar" });
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowLeft",
+          metaKey: true,
+          focusRegion: "right-sidebar",
+          rightSidebarHasPreviousMode: true,
+        }),
+      ),
+    ).toEqual({ type: "focus-previous-right-sidebar" });
+    expect(
+      workspaceShortcutAction(
         shortcut({ key: "ArrowLeft", metaKey: true, focusRegion: "right-sidebar" }),
       ),
     ).toEqual({ type: "focus-workspace-from-right" });
@@ -73,7 +96,7 @@ describe("workspaceShortcutAction", () => {
           terminalSelected: true,
         }),
       ),
-    ).toEqual({ type: "cycle-terminal", direction: 1 });
+    ).toEqual({ type: "cycle-terminal", direction: 1, includeChildren: false });
   });
 
   it("cycles a selected agent or terminal while the main content is focused", () => {
@@ -86,7 +109,55 @@ describe("workspaceShortcutAction", () => {
           terminalSelected: true,
         }),
       ),
-    ).toEqual({ type: "cycle-terminal", direction: -1 });
+    ).toEqual({ type: "cycle-terminal", direction: -1, includeChildren: false });
+  });
+
+  it("cycles focused subterminals vertically", () => {
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowDown",
+          metaKey: true,
+          focusRegion: "right-sidebar",
+          subterminalFocused: true,
+        }),
+      ),
+    ).toEqual({ type: "cycle-subterminal", direction: 1, includeMain: false });
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowUp",
+          metaKey: true,
+          focusRegion: "right-sidebar",
+          subterminalFocused: true,
+        }),
+      ),
+    ).toEqual({ type: "cycle-subterminal", direction: -1, includeMain: false });
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowDown",
+          metaKey: true,
+          shiftKey: true,
+          focusRegion: "right-sidebar",
+          subterminalFocused: true,
+        }),
+      ),
+    ).toEqual({ type: "cycle-subterminal", direction: 1, includeMain: true });
+  });
+
+  it("includes subagents and subterminals when Shift is held", () => {
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowDown",
+          metaKey: true,
+          shiftKey: true,
+          focusRegion: "workspace",
+          terminalSelected: true,
+        }),
+      ),
+    ).toEqual({ type: "cycle-terminal", direction: 1, includeChildren: true });
   });
 
   it("does not navigate command arrows from editable content", () => {
@@ -102,7 +173,7 @@ describe("workspaceShortcutAction", () => {
     ).toBeUndefined();
   });
 
-  it("requires the Git sidebar to be available", () => {
+  it("opens the generic sidebar when subterminals are available without Git", () => {
     expect(
       workspaceShortcutAction(
         shortcut({
@@ -110,6 +181,21 @@ describe("workspaceShortcutAction", () => {
           metaKey: true,
           focusRegion: "workspace",
           gitSidebarAvailable: false,
+          rightSidebarAvailable: true,
+        }),
+      ),
+    ).toEqual({ type: "focus-right-sidebar" });
+  });
+
+  it("requires an available right-sidebar mode", () => {
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "ArrowRight",
+          metaKey: true,
+          focusRegion: "workspace",
+          gitSidebarAvailable: false,
+          rightSidebarAvailable: false,
         }),
       ),
     ).toBeUndefined();
@@ -130,14 +216,22 @@ describe("workspaceShortcutAction", () => {
       type: "focus-project",
       number: 1,
     });
-    expect(workspaceShortcutAction(shortcut({ key: "p", code: "KeyP", metaKey: true }))).toEqual({
+    expect(workspaceShortcutAction(shortcut({ key: "s", code: "KeyS", metaKey: true }))).toEqual({
       type: "toggle-left-sidebar",
     });
     expect(
-      workspaceShortcutAction(shortcut({ key: "P", code: "KeyP", metaKey: true, shiftKey: true })),
+      workspaceShortcutAction(shortcut({ key: "S", code: "KeyS", metaKey: true, shiftKey: true })),
     ).toBeUndefined();
-    expect(workspaceShortcutAction(shortcut({ key: "D", metaKey: true }))).toEqual({
-      type: "toggle-right-sidebar",
-    });
+    expect(
+      workspaceShortcutAction(
+        shortcut({
+          key: "D",
+          code: "KeyD",
+          metaKey: true,
+          gitSidebarAvailable: false,
+          rightSidebarAvailable: true,
+        }),
+      ),
+    ).toEqual({ type: "toggle-right-sidebar" });
   });
 });

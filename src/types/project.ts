@@ -29,6 +29,8 @@ export type ProjectTerminal = {
   /** Stable identity used to restore terminal ordering across launches. */
   id: string;
   customTitle?: string;
+  /** Optional parent terminal in the same project. */
+  parentTerminalId?: string;
 };
 
 export type ProjectMetadataUpdate = Pick<Project, "id" | "name" | "directory" | "externalEditor">;

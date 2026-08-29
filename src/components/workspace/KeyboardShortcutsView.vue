@@ -9,12 +9,14 @@ const modifier = computed(() => (settings.shortcutModifier === "meta" ? "⌘" : 
 const shortcuts = [
   ["Open settings", ","],
   ["Create terminal", "T"],
+  ["Create subterminal", "Shift T"],
   ["Close terminal", "W"],
-  ["Toggle left sidebar", "P"],
-  ["Toggle Git sidebar", "D"],
+  ["Toggle left sidebar", "S"],
+  ["Toggle right sidebar", "D"],
   ["Focus process filter", "Shift F"],
   ["Open and close sidebar panels", "← / →"],
-  ["Cycle terminals", "↑ / ↓"],
+  ["Cycle main agents and terminals", "↑ / ↓"],
+  ["Cycle active terminal or agent and its children", "Shift ↑ / ↓"],
   ["Switch to terminal 1–9", "1–9"],
   ["Increase/decrease terminal font", "+ / −"],
 ];
@@ -73,6 +75,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
         </div>
         <div class="shortcut-row">
           <span>Workspace → right sidebar</span><kbd>{{ modifier }} →</kbd>
+        </div>
+        <div class="shortcut-row">
+          <span>Cycle right sidebar views</span><kbd>{{ modifier }} →</kbd>
         </div>
         <div class="shortcut-row">
           <span>Right sidebar → workspace</span><kbd>{{ modifier }} ←</kbd>

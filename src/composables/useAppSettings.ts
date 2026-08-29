@@ -54,8 +54,7 @@ function isValidSettings(value: unknown): value is AppSettings {
     isExternalEditor(value.externalEditor) &&
     typeof value.notifyWhenAgentReady === "boolean" &&
     typeof value.playSoundWhenAgentReady === "boolean" &&
-    (value.shortcutModifier === undefined ||
-      SHORTCUT_MODIFIER_OPTIONS.some((option) => option.value === value.shortcutModifier))
+    SHORTCUT_MODIFIER_OPTIONS.some((option) => option.value === value.shortcutModifier)
   );
 }
 
@@ -99,7 +98,9 @@ export function migrateSettings(value: unknown): LoadedSettings {
     };
   }
 
-  if (value.version === 1 && isRecord(value.settings)) {
+  // Version 3 briefly existed in development with a split-view preference.
+  // Read it and save the released schema while discarding that obsolete field.
+  if ((value.version === 1 || value.version === 3) && isRecord(value.settings)) {
     return { settings: validatedSettings(value.settings), needsSaving: true };
   }
 

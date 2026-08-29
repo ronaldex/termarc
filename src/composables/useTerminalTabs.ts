@@ -2,6 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { computed, markRaw, nextTick, reactive, ref, watch } from "vue";
 import { readClipboardText } from "../api/clipboard";
+import { updateSubagentPiState } from "../api/subagentSpawns";
 import { resizeTerminal, startTerminal, stopTerminal, writeTerminal } from "../api/terminals";
 import {
   listenForAgentNotificationClicks,
@@ -9,16 +10,23 @@ import {
 } from "../services/agentNotifications";
 import { createTerminalActivityMonitor } from "../services/terminalActivityMonitor";
 import { applyAgentMarker } from "../utils/terminalActivity";
-import { nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
+import { nextProjectTerminalId } from "../utils/terminalTabs";
 import { reorderProjectTerminalTabs, type DropPlacement } from "../utils/terminalOrdering";
 import { createTerminalId } from "../utils/projectTerminals";
 import {
   parseTerminalAgentMarker,
   parseTerminalShellMarker,
+  subagentPiStateUpdate,
   TERMARC_AGENT_OSC,
 } from "../utils/terminalAgentStatus";
 import { createTerminal, prepareTerminalFonts } from "../terminal/createTerminal";
 import { fitTerminalToContainer } from "../terminal/fitTerminal";
+import {
+  createTerminalMount,
+  createTerminalMountRef,
+  unmountTerminalRoot,
+} from "../terminal/terminalMount";
+import { startWithTerminalEventRace } from "../terminal/terminalStart";
 import { openPath } from "../services/externalEditor";
 import { isTerminalLinkModifierPressed, installTerminalLinks } from "../terminal/terminalLinks";
 import {
@@ -29,9 +37,16 @@ import {
 import { handleTerminalShortcut } from "../terminal/terminalShortcuts";
 import { terminalTheme } from "../terminal/terminalThemes";
 import { normalizeTerminalTitle, updateTerminalTitleOverride } from "../utils/terminalTitles";
+import { isTerminalFamilyRoot } from "../utils/terminalHierarchy";
 import { useAppSettings } from "./useAppSettings";
 import type { ExternalEditor } from "../types/settings";
-import type { TerminalLaunch, TerminalStatus, TerminalTab } from "../types/terminal";
+import type {
+  TerminalLaunch,
+  TerminalStartResult,
+  TerminalStatus,
+  TerminalTab,
+} from "../types/terminal";
+import type { Terminal } from "@xterm/xterm";
 
 const MAX_PENDING_WRITE_BYTES = 4 * 1024 * 1024;
 const MAX_PENDING_WRITE_COUNT = 256;
@@ -41,6 +56,9 @@ export function useTerminalTabs(configuration: {
   externalEditorForProject: (projectId: string) => ExternalEditor;
   activateNumberedShortcut?: (number: number) => boolean;
   onCopy?: (result: Exclude<TerminalCopyResult, "empty">) => void;
+  /** Browser-runtime seams for deterministic integration tests; ownership and IPC stay production. */
+  prepareFonts?: () => Promise<void>;
+  createTerminal?: (appearance: Parameters<typeof createTerminal>[0]) => Terminal;
 }) {
   const { settings } = useAppSettings();
   const tabs = reactive<TerminalTab[]>([]);
@@ -58,6 +76,7 @@ export function useTerminalTabs(configuration: {
   let lastPointerPosition: { x: number; y: number } | undefined;
   let defaultProject = { projectId: "home", cwd: "~" };
   const activityMonitor = createTerminalActivityMonitor({ tabs });
+  const terminalContainerRefs = new Map<string, (element: Element | null) => void>();
 
   async function createTab(
     projectId: string,
@@ -67,17 +86,25 @@ export function useTerminalTabs(configuration: {
       launch?: TerminalLaunch;
       launchTitle?: string;
       customTitle?: string;
+      /** Groups this terminal beneath another terminal-like tab in the sidebar. */
+      parentTerminalId?: string;
       start?: boolean;
       activate?: boolean;
     } = {},
   ): Promise<TerminalTab | undefined> {
     if (disposed) return undefined;
-    await prepareTerminalFonts();
+    await (configuration.prepareFonts ?? prepareTerminalFonts)();
     if (disposed) return undefined;
 
     const number = nextTabNumber++;
     const startImmediately = options.start !== false;
     const launch = options.launch ?? { kind: "shell" as const };
+    const requestedParent = options.parentTerminalId
+      ? tabs.find((tab) => tab.id === options.parentTerminalId)
+      : undefined;
+    const parentTerminalId = isTerminalFamilyRoot(tabs, requestedParent, projectId)
+      ? requestedParent.id
+      : undefined;
     let id = options.id?.trim() || createTerminalId();
     while (tabs.some((tab) => tab.id === id)) id = createTerminalId();
     const tab = reactive({
@@ -89,16 +116,17 @@ export function useTerminalTabs(configuration: {
       launchTitle: normalizeTerminalTitle(options.launchTitle ?? ""),
       currentCwd: cwd,
       detail: startImmediately
-        ? launch.kind === "command"
-          ? "Starting command…"
-          : "Starting shell…"
+        ? launch.kind === "shell"
+          ? "Starting shell…"
+          : "Starting command…"
         : "Terminal stopped",
       projectId,
       cwd,
+      parentTerminalId,
       launch,
       status: (startImmediately ? "starting" : "stopped") as TerminalStatus,
       terminal: markRaw(
-        createTerminal({
+        (configuration.createTerminal ?? createTerminal)({
           fontFamily: settings.terminalFontFamily,
           fontSize: settings.terminalFontSize,
           colorTheme: settings.colorTheme,
@@ -106,6 +134,7 @@ export function useTerminalTabs(configuration: {
       ),
       fitAddon: markRaw(new FitAddon()),
       webglFailed: false,
+      mount: markRaw(createTerminalMount()),
       startGeneration: 0,
       stopRequested: false,
       writeQueue: Promise.resolve(),
@@ -117,11 +146,11 @@ export function useTerminalTabs(configuration: {
     tabs.push(tab);
     if (options.activate !== false) activeTabId.value = tab.id;
     await nextTick();
-    if (!tab.container || tab.disposed) return tab;
+    if (tab.disposed) return tab;
     tab.terminal.loadAddon(tab.fitAddon);
-    tab.terminal.open(tab.container);
+    tab.terminal.open(tab.mount.root);
     tab.copyDisposable = markRaw(
-      installTerminalCopy(tab.container, tab.terminal, (result) => configuration.onCopy?.(result)),
+      installTerminalCopy(tab.mount.root, tab.terminal, (result) => configuration.onCopy?.(result)),
     );
     tab.linkDisposable = markRaw(
       installTerminalLinks(
@@ -169,8 +198,16 @@ export function useTerminalTabs(configuration: {
     tabs.splice(0, tabs.length, ...orderedTabs);
   }
 
-  function setTerminalContainer(tab: TerminalTab, element: Element | null): void {
-    tab.container = element instanceof HTMLDivElement ? element : undefined;
+  function terminalContainerRef(
+    tab: TerminalTab,
+    ownerId: string,
+  ): (element: Element | null) => void {
+    const key = `${tab.id}\0${ownerId}`;
+    let owner = terminalContainerRefs.get(key);
+    if (owner) return owner;
+    owner = createTerminalMountRef(tab.mount, scheduleFit);
+    terminalContainerRefs.set(key, owner);
+    return owner;
   }
 
   function installTerminalTitle(tab: TerminalTab): void {
@@ -184,6 +221,8 @@ export function useTerminalTabs(configuration: {
     tab.terminal.parser.registerOscHandler(TERMARC_AGENT_OSC, (data) => {
       const agentMarker = parseTerminalAgentMarker(data);
       if (agentMarker) {
+        const registryUpdate = subagentPiStateUpdate(tab.id, tab.launch, agentMarker);
+        if (registryUpdate) void updateSubagentPiState(registryUpdate).catch(console.error);
         const update = applyAgentMarker(tab, agentMarker);
         Object.assign(tab, update.activity);
         if (agentMarker.state === "processing") {
@@ -261,7 +300,7 @@ export function useTerminalTabs(configuration: {
       ),
     );
     tab.terminal.onResize(({ cols, rows }) => {
-      if (tab.id === activeTabId.value && tab.session) {
+      if (tab.mount.target?.isConnected && tab.session) {
         void resizeTerminal(tab.session.id, rows, cols).catch(console.error);
       }
     });
@@ -317,30 +356,30 @@ export function useTerminalTabs(configuration: {
   }
 
   function fitTab(tab: TerminalTab): void {
-    if (tab.disposed || tab.id !== activeTabId.value) return;
-    const fitted = fitTerminalToContainer(tab.container, tab.terminal, () => tab.fitAddon.fit());
+    if (tab.disposed) return;
+    const fitted = fitTerminalToContainer(tab.mount.target, tab.terminal, () => tab.fitAddon.fit());
     if (fitted && tab.session)
       void resizeTerminal(tab.session.id, tab.terminal.rows, tab.terminal.cols).catch(
         console.error,
       );
   }
 
+  function fitVisibleTerminals(): void {
+    for (const tab of tabs) fitTab(tab);
+  }
+
   function scheduleFit(): void {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = undefined;
-      if (activeTab.value) fitTab(activeTab.value);
+      fitVisibleTerminals();
     });
-  }
-
-  function fitActiveTerminal(): void {
-    if (activeTab.value) fitTab(activeTab.value);
   }
 
   async function fitActiveTerminalAfterLayout(): Promise<void> {
     // Explicit layout transitions can otherwise leave xterm one paint behind.
     await nextTick();
-    fitActiveTerminal();
+    fitVisibleTerminals();
   }
 
   function fitHostResize(): void {
@@ -350,7 +389,7 @@ export function useTerminalTabs(configuration: {
       cancelAnimationFrame(resizeFrame);
       resizeFrame = undefined;
     }
-    fitActiveTerminal();
+    fitVisibleTerminals();
   }
 
   function sendBytes(tab: TerminalTab, bytes: Uint8Array): void {
@@ -407,7 +446,7 @@ export function useTerminalTabs(configuration: {
     }
   }
 
-  async function startTab(tab: TerminalTab): Promise<void> {
+  async function startTab(tab: TerminalTab): Promise<TerminalStartResult> {
     const generation = ++tab.startGeneration;
     tab.session = undefined;
     tab.terminalTitle = undefined;
@@ -416,72 +455,91 @@ export function useTerminalTabs(configuration: {
     tab.terminalExitCode = undefined;
     tab.lastCommandExitCode = undefined;
     tab.stopRequested = false;
+    const isFixedProcess = tab.launch.kind !== "shell";
     const isCommand = tab.launch.kind === "command";
-    let processExited = false;
-    setTabStatus(tab, "starting", isCommand ? "Starting command…" : "Starting shell…");
+    setTabStatus(tab, "starting", isFixedProcess ? "Starting command…" : "Starting shell…");
     tab.terminal.reset();
     await nextTick();
     fitTab(tab);
-    try {
-      const started = await startTerminal({
-        rows: tab.terminal.rows,
-        cols: tab.terminal.cols,
-        cwd: tab.cwd,
-        launch:
-          tab.launch.kind === "command"
-            ? { kind: "command", command: tab.launch.commandLine }
-            : { kind: "shell" },
-        onOutput: (data) => {
-          if (!tab.disposed && generation === tab.startGeneration)
-            tab.terminal.write(new Uint8Array(data));
-        },
-        onEvent: (message) => {
-          if (tab.disposed || generation !== tab.startGeneration) return;
-          if (message.event === "exit") {
-            processExited = true;
-            const exitCode = message.exitCode ?? 0;
-            if (isCommand) {
-              tab.session = undefined;
-              setTabStatus(
-                tab,
-                tab.stopRequested || exitCode === 0 ? "stopped" : "error",
-                tab.stopRequested ? "Command stopped" : `Command exited with status ${exitCode}`,
-              );
-              if (!tab.stopRequested && exitCode !== 0) scheduleAutoRestart(tab);
-            } else if (exitCode === 0) {
-              void closeTab(tab.id);
-            } else {
-              tab.session = undefined;
-              tab.terminalExitCode = exitCode;
-              setTabStatus(tab, "error", `Process exited with status ${exitCode}`);
-            }
-          } else {
-            processExited = true;
+    const result = await startWithTerminalEventRace(
+      (onEvent) =>
+        startTerminal({
+          rows: tab.terminal.rows,
+          cols: tab.terminal.cols,
+          cwd: tab.cwd,
+          launch:
+            tab.launch.kind === "shell"
+              ? { kind: "shell" }
+              : { kind: "command", command: tab.launch.commandLine },
+          terminalId: tab.id,
+          subagent:
+            tab.launch.kind === "subagent" && tab.launch.parentTerminalId
+              ? {
+                  id: tab.launch.subagentId,
+                  parentTerminalId: tab.launch.parentTerminalId,
+                  projectId: tab.projectId,
+                  name: tab.launch.name,
+                  processKind: tab.launch.processKind,
+                }
+              : undefined,
+          onOutput: (data) => {
+            if (!tab.disposed && generation === tab.startGeneration)
+              tab.terminal.write(new Uint8Array(data));
+          },
+          onEvent,
+        }),
+      (message, beforeStartResolved) => {
+        if (tab.disposed || generation !== tab.startGeneration) return;
+        if (message.event === "exit") {
+          const exitCode = message.exitCode ?? 0;
+          if (isFixedProcess) {
             tab.session = undefined;
-            setTabStatus(tab, "error", message.message ?? "PTY error");
-            if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
+            setTabStatus(
+              tab,
+              tab.stopRequested || exitCode === 0 ? "stopped" : "error",
+              tab.stopRequested ? "Command stopped" : `Command exited with status ${exitCode}`,
+            );
+            if (!beforeStartResolved && isCommand && !tab.stopRequested && exitCode !== 0)
+              scheduleAutoRestart(tab);
+          } else if (exitCode === 0) {
+            void closeTab(tab.id);
+          } else {
+            tab.session = undefined;
+            tab.terminalExitCode = exitCode;
+            setTabStatus(tab, "error", `Process exited with status ${exitCode}`);
           }
-        },
-      });
-      if (tab.disposed || generation !== tab.startGeneration) {
-        await stopTerminal(started.id).catch(() => undefined);
-        return;
-      }
-      if (processExited) return;
-      tab.session = started;
-      setTabStatus(
-        tab,
-        "running",
-        `${started.shell} · ${started.pid ? `PID ${started.pid}` : "running"}`,
-      );
-      void activityMonitor.refresh();
-      if (tab.id === activeTabId.value) tab.terminal.focus();
-    } catch (error) {
-      if (tab.disposed || generation !== tab.startGeneration) return;
-      setTabStatus(tab, "error", String(error));
-      tab.terminal.write(`\r\n\x1b[31mFailed to start PTY: ${String(error)}\x1b[0m\r\n`);
-      if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
+        } else {
+          tab.session = undefined;
+          setTabStatus(tab, "error", message.message ?? "PTY error");
+          if (!beforeStartResolved && isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
+        }
+      },
+    );
+    if (tab.disposed || generation !== tab.startGeneration) {
+      if (result.outcome === "running")
+        await stopTerminal(result.session.id).catch(() => undefined);
+      return { outcome: "cancelled" };
     }
+    if (result.outcome === "exited") {
+      if (isCommand && !tab.stopRequested && result.exitCode !== 0) scheduleAutoRestart(tab);
+      return result;
+    }
+    if (result.outcome === "failed") {
+      setTabStatus(tab, "error", result.error);
+      tab.terminal.write(`\r\n\x1b[31mFailed to start PTY: ${result.error}\x1b[0m\r\n`);
+      if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
+      return result;
+    }
+    const started = result.session;
+    tab.session = started;
+    setTabStatus(
+      tab,
+      "running",
+      `${started.shell} · ${started.pid ? `PID ${started.pid}` : "running"}`,
+    );
+    void activityMonitor.refresh();
+    if (tab.id === activeTabId.value) tab.terminal.focus();
+    return result;
   }
 
   async function stopTab(tab: TerminalTab): Promise<void> {
@@ -529,8 +587,12 @@ export function useTerminalTabs(configuration: {
     tab.copyDisposable?.dispose();
     tab.copyDisposable = undefined;
     tab.terminal.dispose();
+    if (tab.mount.target) unmountTerminalRoot(tab.mount, tab.mount.target);
+    for (const key of terminalContainerRefs.keys()) {
+      if (key.startsWith(`${tab.id}\0`)) terminalContainerRefs.delete(key);
+    }
     tabs.splice(index, 1);
-    if (session) void stopTerminal(session.id).catch(console.error);
+    if (session) await stopTerminal(session.id).catch(console.error);
     if (wasActive) activeTabId.value = nextId;
     await nextTick();
     scheduleFit();
@@ -633,8 +695,6 @@ export function useTerminalTabs(configuration: {
               return shortcutNumber <= 9 ? [[shortcutNumber, tab.id]] : [];
             }),
           ),
-      orderedTabIds: projectTerminalIds(tabs, activeTab.value?.projectId),
-      activeTabId: activeTabId.value,
       fontSize: settings.terminalFontSize,
       shortcutModifier: settings.shortcutModifier,
       selectTab,
@@ -669,7 +729,7 @@ export function useTerminalTabs(configuration: {
   }
 
   function isTerminalFocused(): boolean {
-    return terminalHost?.contains(document.activeElement) ?? false;
+    return tabs.some((tab) => tab.mount.root.contains(document.activeElement));
   }
   function focusActiveTerminal(): void {
     activeTab.value?.terminal.focus();
@@ -710,8 +770,10 @@ export function useTerminalTabs(configuration: {
       tab.copyDisposable?.dispose();
       tab.copyDisposable = undefined;
       tab.terminal.dispose();
+      if (tab.mount.target) unmountTerminalRoot(tab.mount, tab.mount.target);
       if (tab.session) void stopTerminal(tab.session.id);
     }
+    terminalContainerRefs.clear();
   }
 
   return {
@@ -731,7 +793,7 @@ export function useTerminalTabs(configuration: {
     restartTab,
     stopTab,
     clearActiveTab,
-    setTerminalContainer,
+    terminalContainerRef,
     attachHost,
     fitActiveTerminalAfterLayout,
     setDefaultProject,

@@ -1,0 +1,33 @@
+{
+  "eventName": "termarc://subagent-spawn-request",
+  "event": {
+    "subagentId": "subagent-1",
+    "parentTerminalId": "terminal-parent",
+    "projectId": "project-1",
+    "name": "Fixture child",
+    "command": "pi -- fixture",
+    "cwd": "/tmp/project",
+    "processKind": "pi"
+  },
+  "startPtyRequest": {
+    "rows": 24,
+    "cols": 80,
+    "cwd": "/tmp/project",
+    "launch": {
+      "kind": "command",
+      "command": "pi -- fixture"
+    },
+    "terminalId": "terminal-child",
+    "subagent": {
+      "id": "subagent-1",
+      "parentTerminalId": "terminal-parent",
+      "projectId": "project-1",
+      "name": "Fixture child",
+      "processKind": "pi"
+    }
+  },
+  "acknowledgement": {
+    "subagentId": "subagent-1",
+    "success": true
+  }
+}
