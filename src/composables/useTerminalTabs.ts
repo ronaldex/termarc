@@ -9,6 +9,7 @@ import {
 } from "../services/agentNotifications";
 import { createTerminalActivityMonitor } from "../services/terminalActivityMonitor";
 import { applyAgentMarker } from "../utils/terminalActivity";
+import { isLinux, isMacOS } from "../utils/platform";
 import { nextProjectTerminalId, projectTerminalIds } from "../utils/terminalTabs";
 import { reorderProjectTerminalTabs, type DropPlacement } from "../utils/terminalOrdering";
 import { createTerminalId } from "../utils/projectTerminals";
@@ -134,7 +135,8 @@ export function useTerminalTabs(configuration: {
     installTerminalTitle(tab);
     installTerminalAgentStatus(tab);
     installTerminalInput(tab);
-    enableWebgl(tab);
+    // WebKit and some Linux GPU stacks corrupt WebGL terminal glyphs while scrolling.
+    if (!isMacOS() && !isLinux()) enableWebgl(tab);
     fitTab(tab);
     if (startImmediately) void startTab(tab);
     return tab;
