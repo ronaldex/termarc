@@ -21,7 +21,6 @@ const emit = defineEmits<{
   stop: [id: string];
   close: [id: string];
   start: [id: string];
-  rename: [id: string];
   contextMenu: [request: TerminalContextMenuRequest];
 }>();
 
@@ -74,9 +73,6 @@ function activate(): void {
     });
   }
 }
-function rename(): void {
-  emit("rename", props.tab.id);
-}
 function requestContextMenu(x: number, y: number): void {
   const trigger = treeItemRow.value?.getSelectButton();
   if (trigger) emit("contextMenu", { kind: "terminal", tabId: props.tab.id, x, y, trigger });
@@ -107,7 +103,6 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
         : undefined
     "
     @select="activate"
-    @double-click="rename"
     @keydown="openContextMenuFromKeyboard"
     @context-menu="openContextMenu"
   >

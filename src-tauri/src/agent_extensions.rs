@@ -5,8 +5,8 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const PI_EXTENSION_FILES: &[(&str, &str)] = &[
     (
-        "termarc-status.ts",
-        include_str!("../../extensions/pi/termarc-status.ts"),
+        "index.ts",
+        include_str!("../../extensions/pi/index.ts"),
     ),
     (
         "termarc-status/cli.ts",
@@ -71,7 +71,7 @@ impl AgentExtension {
         match id {
             "pi" => Ok(Self {
                 directory: ".pi/agent/extensions",
-                filename: "termarc-status.ts",
+                filename: "index.ts",
                 files: PI_EXTENSION_FILES,
             }),
             _ => Err(format!("unsupported agent extension: {id}")),
@@ -206,7 +206,7 @@ mod tests {
     fn installs_pi_extension_and_creates_directories() {
         let home = temporary_home();
         let installed = install("pi", home.clone()).expect("extension should install");
-        let destination = home.join(".pi/agent/extensions/termarc-status.ts");
+        let destination = home.join(".pi/agent/extensions/index.ts");
 
         assert_eq!(PathBuf::from(installed), destination);
         assert_eq!(
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn installed_status_requires_the_current_extension_source() {
         let home = temporary_home();
-        let destination = home.join(".pi/agent/extensions/termarc-status.ts");
+        let destination = home.join(".pi/agent/extensions/index.ts");
         fs::create_dir_all(
             destination
                 .parent()
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn replaces_an_outdated_termarc_extension() {
         let home = temporary_home();
-        let destination = home.join(".pi/agent/extensions/termarc-status.ts");
+        let destination = home.join(".pi/agent/extensions/index.ts");
         fs::create_dir_all(
             destination
                 .parent()

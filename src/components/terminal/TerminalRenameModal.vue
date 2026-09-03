@@ -42,9 +42,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
 async function focusName(): Promise<void> {
   await nextTick();
-  // The modal can be opened by a double-click. The click handler schedules a
-  // sidebar focus on the next animation frame, so focus once more after that
-  // frame to ensure the modal owns focus.
+  // Focus after the modal mounts so it owns focus when opened from the sidebar menu.
   requestAnimationFrame(() => {
     input.value?.focus();
     input.value?.select();

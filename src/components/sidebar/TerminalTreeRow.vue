@@ -20,7 +20,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   start: [id: string];
-  rename: [id: string];
   contextMenu: [request: TerminalContextMenuRequest];
   focus: [selection: SidebarSelection];
 }>();
@@ -80,7 +79,6 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
         : undefined
     "
     @select="focus"
-    @double-click="emit('rename', tab.id)"
     @keydown="openContextMenuFromKeyboard"
     @context-menu="openContextMenu"
   >

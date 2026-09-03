@@ -382,6 +382,7 @@ export default async function (pi: ExtensionAPI) {
         "Run one configured subagent on one focused task in a named, isolated Termarc subterminal.",
         `Available subagents: ${startupAgents.agents.map((agent) => `${agent.name}: ${agent.description}`).join("; ")}.`,
         "Set cwd when the subagent must run in a different project or Git worktree.",
+        "The completed tool result identifies the child by its subagent ID. Use that ID (for example, subagent-1), never its display name, with control commands such as close.",
         "Open the spawned Termarc terminal to inspect or interact with the full child session.",
       ].join(" "),
       promptSnippet: `Delegate one focused task to a Termarc subagent (${agentNames.join(", ")})`,
@@ -390,6 +391,7 @@ export default async function (pi: ExtensionAPI) {
         "Give each spawned subterminal a short descriptive name for its task.",
         "Set subagent cwd to the target worktree root when delegating work in another worktree.",
         "For parallel work, call this tool multiple times in the same turn.",
+        "When controlling a child after it completes, use the subagent ID reported in this tool result, not the name supplied to this tool.",
       ],
       parameters: createSubagentParams(agentNames, Type, StringEnum),
       renderCall: renderSubagentCall,
@@ -479,8 +481,13 @@ export default async function (pi: ExtensionAPI) {
           const text = typeof resultValue.text === "string" ? resultValue.text : "(no output)";
           const completed = termarcResult(agent.name, params.task, cwd, text, emptyUsage);
           return {
-            content: [{ type: "text" as const, text: getResultSummaryText(completed) }],
-            details: { results: [completed] },
+            content: [
+              {
+                type: "text" as const,
+                text: `${getResultSummaryText(completed)}\n\nSubagent ID: ${spawned.id} (use this ID, not the display name, for control commands such as close).`,
+              },
+            ],
+            details: { id: spawned.id, name: subterminalName, results: [completed] },
           };
         } finally {
           removeTempDir(prompt.dir);
@@ -536,16 +543,18 @@ export default async function (pi: ExtensionAPI) {
     name: "termarc_subagent",
     label: "Control Termarc Subagents",
     description:
-      'Run the Termarc subagent CLI and return its output to this session. Call with arguments: ["skill"] for agent-oriented workflow guidance, ["close", id] to stop and close a child terminal, or ["result", id] for a clean Pi response. Wait automatically returns when a result is already available. Use output only for diagnostics or generic processes.',
+      'Run the Termarc subagent CLI and return its output to this session. Every control command takes a subagent ID (for example, subagent-1), not the display name. Call with arguments: ["skill"] for agent-oriented workflow guidance, ["close", "subagent-1"] to stop and close a child terminal, or ["result", "subagent-1"] for a clean Pi response. Wait automatically returns when a result is already available. Use output only for diagnostics or generic processes.',
     promptSnippet: "Control Termarc subagents and retrieve their terminal output",
     promptGuidelines: [
       'Use termarc_subagent with arguments ["skill"] when you need the Termarc subagent workflow.',
       "When a Pi Termarc subagent completion triggers a parent turn, call termarc_subagent result directly. Do not call wait, status, or output first.",
+      "Pass the subagent ID (such as subagent-1) as the second argument to result, close, status, output, wait, stop, or other control commands; display names are not valid IDs.",
     ],
     parameters: Type.Object({
       arguments: Type.Array(Type.String(), {
         minItems: 1,
-        description: 'Arguments after "termarc subagents", such as ["output", "subagent-1"]',
+        description:
+          'Arguments after "termarc subagents". Control commands require a subagent ID, such as ["close", "subagent-1"] or ["output", "subagent-1"]; display names are not valid IDs.',
       }),
       json: Type.Optional(
         Type.Boolean({ description: "Request structured JSON output from the Termarc CLI" }),

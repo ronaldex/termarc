@@ -31,7 +31,7 @@ import {
   termarcMainTerminalCli,
   termarcSubagentCli,
   watcherReconciliation,
-} from "./termarc-status";
+} from "./index";
 
 const fixtures = JSON.parse(
   readFileSync(new URL("./fixtures/control-protocol.json", import.meta.url), "utf8"),
@@ -621,7 +621,7 @@ describe("Pi status extension modes", () => {
       lifecycle: "exited" as const,
       resultAvailable: false,
     };
-    const operations: import("./termarc-status").PersistedWatcherOperation[] = [
+    const operations: import("./index").PersistedWatcherOperation[] = [
       { kind: "tracked", id: status.id },
     ];
     let releasePending!: () => void;
@@ -675,7 +675,7 @@ describe("Pi status extension modes", () => {
       lifecycle: "exited" as const,
       resultAvailable: false,
     };
-    const operations: import("./termarc-status").PersistedWatcherOperation[] = [
+    const operations: import("./index").PersistedWatcherOperation[] = [
       { kind: "tracked", id: status.id },
     ];
     let releaseNotify!: () => void;
@@ -724,7 +724,7 @@ describe("Pi status extension modes", () => {
       lifecycle: "exited" as const,
       resultAvailable: false,
     };
-    const operations: import("./termarc-status").PersistedWatcherOperation[] = [
+    const operations: import("./index").PersistedWatcherOperation[] = [
       { kind: "tracked", id: status.id },
     ];
     let releaseDelivered!: () => void;

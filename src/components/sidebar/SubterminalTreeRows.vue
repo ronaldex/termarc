@@ -21,7 +21,6 @@ const emit = defineEmits<{
   start: [id: string];
   stop: [id: string];
   close: [id: string];
-  rename: [id: string];
   contextMenu: [request: TerminalContextMenuRequest];
   beginSort: [event: PointerEvent, item: SortItem];
   moveSort: [event: KeyboardEvent, item: SortItem, label: string];
@@ -69,7 +68,6 @@ const emit = defineEmits<{
       @start="emit('start', $event)"
       @stop="emit('stop', $event)"
       @close="emit('close', $event)"
-      @rename="emit('rename', $event)"
       @context-menu="emit('contextMenu', $event)"
     />
   </div>
