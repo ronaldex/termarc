@@ -187,6 +187,7 @@ export function useTerminalTabs(configuration: {
     targetTabId: string,
     placement: DropPlacement,
   ): void {
+    const movedTab = tabs.find((tab) => tab.id === movedTabId);
     const orderedTabs = reorderProjectTerminalTabs(
       tabs,
       projectId,
@@ -194,8 +195,13 @@ export function useTerminalTabs(configuration: {
       targetTabId,
       placement,
     );
-    if (orderedTabs.every((tab, index) => tab === tabs[index])) return;
-    tabs.splice(0, tabs.length, ...orderedTabs);
+    const orderedMovedTab = orderedTabs.find((tab) => tab.id === movedTabId);
+    if (movedTab && orderedMovedTab && movedTab !== orderedMovedTab) {
+      movedTab.parentTerminalId = orderedMovedTab.parentTerminalId;
+    }
+    const stableTabs = orderedTabs.map((tab) => (tab.id === movedTabId ? (movedTab ?? tab) : tab));
+    if (stableTabs.every((tab, index) => tab === tabs[index])) return;
+    tabs.splice(0, tabs.length, ...stableTabs);
   }
 
   function terminalContainerRef(

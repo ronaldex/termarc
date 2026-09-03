@@ -5,6 +5,7 @@ import {
   loadProjectTreeState,
   saveLocalProjectAgents,
   saveLocalProjectCommands,
+  saveProjectAgentOrder,
   saveProjectCommandOrder,
   saveProjects,
   saveProjectTreeState,
@@ -22,7 +23,7 @@ import {
   effectiveCommandOrder,
   reorderCommands as reorderCommandStores,
 } from "../utils/commandOrdering";
-import type { DropPlacement } from "../utils/terminalOrdering";
+import { moveId, type DropPlacement } from "../utils/terminalOrdering";
 
 const DEFAULT_PROJECT: Project = {
   id: "home",
@@ -148,6 +149,23 @@ export function useProjects() {
     markPersistenceDirty();
   }
 
+  function reorderProjects(
+    movedProjectId: string,
+    targetProjectId: string,
+    placement: DropPlacement,
+  ): void {
+    const byId = new Map(projects.value.map((project) => [project.id, project]));
+    const orderedIds = moveId(
+      projects.value.map((project) => project.id),
+      movedProjectId,
+      targetProjectId,
+      placement,
+    );
+    if (orderedIds.every((id, index) => id === projects.value[index]?.id)) return;
+    projects.value = orderedIds.flatMap((id) => (byId.get(id) ? [byId.get(id)!] : []));
+    markPersistenceDirty();
+  }
+
   async function saveAgent(project: Project, agentId: string): Promise<void> {
     const agent = project.agents?.find((item) => item.id === agentId);
     if (!agent) throw new Error(`Agent not found in save draft: ${agentId}`);
@@ -230,6 +248,58 @@ export function useProjects() {
       await saveLocalProjectCommands(existing.directory, localCommands);
     updateEffectiveCommands(existing, globalCommands, localCommands);
     markPersistenceDirty();
+  }
+
+  async function reorderAgents(
+    projectId: string,
+    movedAgentId: string,
+    targetAgentId: string,
+    placement: DropPlacement,
+  ): Promise<void> {
+    const queued = savePromise
+      .catch(() => undefined)
+      .then(async () => {
+        await persistDirtyProjects();
+        persistenceSaving.value = true;
+        try {
+          const project = projects.value.find((item) => item.id === projectId);
+          if (!project) return;
+          const previousGlobal = (project.globalAgents ?? []).map((agent) => ({ ...agent }));
+          const previousLocal = (project.localAgents ?? []).map((agent) => ({ ...agent }));
+          const result = reorderCommandStores(
+            previousGlobal,
+            previousLocal,
+            movedAgentId,
+            targetAgentId,
+            placement,
+          );
+          if (!result.ok) throw new Error(result.reason);
+          const previousOrder = effectiveCommandOrder(previousGlobal, previousLocal);
+          if (
+            previousOrder.ok &&
+            result.orderedIds.every((id, index) => id === previousOrder.orderedIds[index])
+          )
+            return;
+          updateEffectiveAgents(project, result.globalCommands, result.localCommands);
+          try {
+            await saveProjectAgentOrder(
+              project.id,
+              project.directory,
+              result.globalCommands,
+              result.localCommands,
+            );
+            persistenceError.value = undefined;
+          } catch (failure) {
+            updateEffectiveAgents(project, previousGlobal, previousLocal);
+            persistenceError.value = commandOrderFailureMessage(failure);
+            throw failure;
+          }
+        } finally {
+          persistenceSaving.value = false;
+        }
+      });
+    savePromise = queued;
+    await queued;
   }
 
   async function reorderCommands(
@@ -396,10 +466,12 @@ export function useProjects() {
     add,
     update,
     setProjectTerminals,
+    reorderProjects,
     saveCommand,
     saveAgent,
     removeCommand,
     removeAgent,
+    reorderAgents,
     reorderCommands,
     remove,
     toggleProject,

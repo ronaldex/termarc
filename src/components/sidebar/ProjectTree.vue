@@ -74,6 +74,7 @@ const emit = defineEmits<{
   stopAgent: [projectId: string, commandId: string];
   stopSubagent: [id: string];
   closeSubagent: [id: string];
+  reorderProject: [movedProjectId: string, targetProjectId: string, placement: DropPlacement];
   reorderTerminal: [
     projectId: string,
     movedTabId: string,
@@ -84,6 +85,12 @@ const emit = defineEmits<{
     projectId: string,
     movedCommandId: string,
     targetCommandId: string,
+    placement: DropPlacement,
+  ];
+  reorderAgent: [
+    projectId: string,
+    movedAgentId: string,
+    targetAgentId: string,
     placement: DropPlacement,
   ];
   focus: [selection: SidebarSelection];
@@ -120,8 +127,11 @@ function focusActiveItem(): boolean {
   return document.activeElement === button;
 }
 function emitDrop(source: SortItem, target: SortItem & { placement: DropPlacement }): void {
-  if (source.kind === "terminal")
+  if (source.kind === "project") emit("reorderProject", source.id, target.id, target.placement);
+  else if (source.kind === "terminal")
     emit("reorderTerminal", source.projectId, source.id, target.id, target.placement);
+  else if (source.kind === "agent")
+    emit("reorderAgent", source.projectId, source.id, target.id, target.placement);
   else emit("reorderCommand", source.projectId, source.id, target.id, target.placement);
 }
 const { beginPointerDrag, dropClass } = useProjectTreeSorting({
@@ -130,18 +140,32 @@ const { beginPointerDrag, dropClass } = useProjectTreeSorting({
   onDrop: emitDrop,
 });
 
+function beginProjectDrag(event: PointerEvent, projectId: string): void {
+  if (!(event.target instanceof Element) || !event.target.closest(".project-row")) return;
+  beginPointerDrag(event, { kind: "project", projectId, id: projectId });
+}
+
 function moveWithKeyboard(event: KeyboardEvent, item: SortItem, label: string): void {
   if (!sortingEnabled.value || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key))
     return;
   const project = displayProjects.value.find((candidate) => candidate.id === item.projectId);
-  const ids =
+  const terminalItem =
     item.kind === "terminal"
-      ? project?.terminalNodes
-          .filter((node) => node.tab.launch.kind === "shell" && !node.parentId)
-          .map((node) => node.tab.id)
-      : item.kind === "agent"
-        ? project?.agentItems.map(({ command }) => command.id)
-        : project?.commandItems.map(({ command }) => command.id);
+      ? project?.terminalNodes.find((node) => node.tab.id === item.id)
+      : undefined;
+  const ids =
+    item.kind === "project"
+      ? displayProjects.value.map((candidate) => candidate.id)
+      : item.kind === "terminal"
+        ? project?.terminalNodes
+            .filter(
+              (node) =>
+                node.tab.launch.kind === "shell" && node.parentId === terminalItem?.parentId,
+            )
+            .map((node) => node.tab.id)
+        : item.kind === "agent"
+          ? project?.agentItems.map(({ command }) => command.id)
+          : project?.commandItems.map(({ command }) => command.id);
   if (!ids) return;
   const index = ids.indexOf(item.id);
   const direction = event.key === "ArrowUp" ? -1 : 1;
@@ -176,12 +200,19 @@ onBeforeUnmount(() => {
       v-for="(project, projectIndex) in displayProjects"
       :key="project.id"
       class="project"
-      :class="{ collapsed: !project.projectOpen }"
+      :class="[
+        { collapsed: !project.projectOpen },
+        dropClass({ kind: 'project', projectId: project.id, id: project.id }),
+      ]"
+      @pointerdown="beginProjectDrag($event, project.id)"
     >
       <div
         :ref="(element) => setActiveItem(element, project.id)"
         class="project-row"
         :class="{ 'tree-active': isTreeActive(project.id) }"
+        :data-sort-kind="sortingEnabled ? 'project' : undefined"
+        :data-project-id="project.id"
+        :data-sort-id="project.id"
       >
         <SidebarChevron
           v-if="!collapsed"
@@ -195,6 +226,13 @@ onBeforeUnmount(() => {
           :title="collapsed ? project.name : undefined"
           :aria-label="collapsed ? project.name : undefined"
           @click="focusProject(project.id)"
+          @keydown="
+            moveWithKeyboard(
+              $event,
+              { kind: 'project', projectId: project.id, id: project.id },
+              project.name,
+            )
+          "
         >
           <ProjectBadge :name="project.name" />
           <strong v-if="!collapsed">{{ project.name }}</strong>
@@ -241,6 +279,24 @@ onBeforeUnmount(() => {
               :key="`${project.id}:agent:${item.command.id}`"
               :ref="(element) => setActiveItem(element, `${project.id}:agent:${item.command.id}`)"
               class="sortable-row"
+              :class="dropClass({ kind: 'agent', projectId: project.id, id: item.command.id })"
+              :data-sort-kind="sortingEnabled ? 'agent' : undefined"
+              :data-project-id="project.id"
+              :data-sort-id="item.command.id"
+              @pointerdown="
+                beginPointerDrag($event, {
+                  kind: 'agent',
+                  projectId: project.id,
+                  id: item.command.id,
+                })
+              "
+              @keydown="
+                moveWithKeyboard(
+                  $event,
+                  { kind: 'agent', projectId: project.id, id: item.command.id },
+                  item.command.name,
+                )
+              "
             >
               <ProcessTreeRow
                 :project-id="project.id"
@@ -394,7 +450,11 @@ onBeforeUnmount(() => {
               <SubterminalTreeRows
                 :items="item.children"
                 :shortcut-numbers="shortcutNumbers"
+                :sortable-project-id="sortingEnabled ? project.id : undefined"
+                :drop-class="dropClass"
                 @register="setActiveItem"
+                @begin-sort="beginPointerDrag"
+                @move-sort="moveWithKeyboard"
                 :shortcut-modifier="shortcutModifier"
                 :modifier-pressed="modifierPressed"
                 :selected-id="selection.id"
@@ -575,7 +635,34 @@ button {
   flex: 1;
 }
 .project {
+  position: relative;
   background: transparent;
+}
+.project.dragging {
+  opacity: 0.55;
+}
+.project.drop-before::before,
+.project.drop-after::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 0.125rem;
+  border-radius: 0.125rem;
+  background: var(--color-focus);
+  content: "";
+}
+.project.drop-before::before {
+  top: -0.0625rem;
+}
+.project.drop-after::after {
+  bottom: -0.0625rem;
+}
+.project-row[data-sort-kind] {
+  cursor: grab;
+}
+.project-row[data-sort-kind]:active {
+  cursor: grabbing;
 }
 .project + .project .project-row {
   border-top: 1px solid var(--color-border);

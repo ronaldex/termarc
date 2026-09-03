@@ -422,6 +422,76 @@ pub(crate) fn save_project_command_order(
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) fn save_project_agent_order(
+    project_id: String,
+    directory: String,
+    mut global_agents: Vec<ProjectCommand>,
+    mut local_agents: Vec<ProjectCommand>,
+) -> Result<(), CommandOrderFailure> {
+    let _guard =
+        project_config_write_lock().map_err(|error| CommandOrderFailure::new("lock", error))?;
+    validate_mixed_command_order(&global_agents, &local_agents)
+        .map_err(|error| CommandOrderFailure::new("validation", error))?;
+    global_agents
+        .iter_mut()
+        .for_each(|agent| agent.storage = None);
+    local_agents
+        .iter_mut()
+        .for_each(|agent| agent.storage = None);
+    let existing_local = crate::project_local_config::load(&directory)
+        .map_err(|error| CommandOrderFailure::new("local", error))?;
+    let should_write_local = existing_local.is_some() || !local_agents.is_empty();
+    let local_commands = existing_local
+        .map(|config| config.commands)
+        .unwrap_or_default();
+
+    let path = projects_path();
+    let original = fs::read(&path).map_err(|error| {
+        CommandOrderFailure::new(
+            "global",
+            format!("could not read {}: {error}", path.display()),
+        )
+    })?;
+    let mut projects: Vec<ProjectConfig> = serde_json::from_slice(&original).map_err(|error| {
+        CommandOrderFailure::new(
+            "global",
+            format!("could not parse {}: {error}", path.display()),
+        )
+    })?;
+    let project = projects
+        .iter_mut()
+        .find(|project| project.id == project_id)
+        .ok_or_else(|| {
+            CommandOrderFailure::new("validation", format!("project not found: {project_id}"))
+        })?;
+    if project.directory != directory {
+        return Err(CommandOrderFailure::new(
+            "validation",
+            "project directory changed while ordering agents",
+        ));
+    }
+    project.agents = Some(global_agents);
+    let contents = serde_json::to_vec_pretty(&projects).map_err(|error| {
+        CommandOrderFailure::new("global", format!("could not serialize projects: {error}"))
+    })?;
+    atomic_write(&path, &contents).map_err(|error| CommandOrderFailure::new("global", error))?;
+
+    if should_write_local
+        && let Err(error) =
+            crate::project_local_config::save(&directory, local_commands, local_agents)
+    {
+        return match atomic_write(&path, &original) {
+            Ok(()) => Err(CommandOrderFailure::new("local", error)),
+            Err(rollback) => Err(CommandOrderFailure::new(
+                "rollback",
+                format!("{error}; global rollback failed: {rollback}"),
+            )),
+        };
+    }
+    Ok(())
+}
+
 fn validate_projects(projects: &[ProjectConfig]) -> Result<(), String> {
     let mut project_ids = HashSet::new();
     let mut terminal_ids = HashSet::new();

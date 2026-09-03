@@ -71,6 +71,21 @@ describe("useRightSidebarController", () => {
     expect(unavailable.toggle).not.toHaveBeenCalled();
   });
 
+  it("opens on subterminals by default when they are available", () => {
+    const state = setup();
+    expect(state.controller.preview("git")).toBe(true);
+    expect(state.controller.mode.value).toBe("git");
+
+    expect(state.controller.openAndFocus()).toBe(true);
+    expect(state.controller.mode.value).toBe("subterminals");
+  });
+
+  it("falls back to git when no subterminals are available", () => {
+    const state = setup({ subterminals: false, git: true });
+    expect(state.controller.openAndFocus()).toBe(true);
+    expect(state.controller.mode.value).toBe("git");
+  });
+
   it("routes panel, adjacent-mode, terminal, workspace, close, and blur focus policy", () => {
     const state = setup({ panelFocused: true });
 

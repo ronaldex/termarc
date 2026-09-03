@@ -107,6 +107,7 @@ pub fn run() {
             projects::save_local_project_commands,
             projects::save_local_project_agents,
             projects::save_project_command_order,
+            projects::save_project_agent_order,
             pty::write_to_pty,
             pty::resize_pty,
             pty::get_pty_status,

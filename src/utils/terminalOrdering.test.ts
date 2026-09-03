@@ -46,6 +46,34 @@ describe("terminalOrdering", () => {
     ).toEqual(["root-b", "root-a", "child-a", "grandchild"]);
   });
 
+  it("reorders children within their parent", () => {
+    const shell = (id: string, parentTerminalId?: string) => ({
+      id,
+      projectId: "a",
+      launch: { kind: "shell" as const },
+      parentTerminalId,
+    });
+    const tabs = [shell("root"), shell("one", "root"), shell("two", "root")];
+
+    const reordered = reorderProjectTerminalTabs(tabs, "a", "two", "one", "before");
+    expect(reordered.map((tab) => tab.id)).toEqual(["root", "two", "one"]);
+    expect(reordered.find((tab) => tab.id === "two")?.parentTerminalId).toBe("root");
+  });
+
+  it("promotes a child when it is dropped beside a root", () => {
+    const shell = (id: string, parentTerminalId?: string) => ({
+      id,
+      projectId: "a",
+      launch: { kind: "shell" as const },
+      parentTerminalId,
+    });
+    const tabs = [shell("root-a"), shell("child", "root-a"), shell("root-b")];
+
+    const reordered = reorderProjectTerminalTabs(tabs, "a", "child", "root-b", "after");
+    expect(reordered.map((tab) => tab.id)).toEqual(["root-a", "root-b", "child"]);
+    expect(reordered.find((tab) => tab.id === "child")?.parentTerminalId).toBeUndefined();
+  });
+
   it("keeps stale, cyclic, and deep shell links as independently orderable roots", () => {
     const shell = (id: string, parentTerminalId?: string) => ({
       id,

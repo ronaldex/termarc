@@ -1,7 +1,11 @@
 import { onBeforeUnmount, ref, watch, type Ref } from "vue";
 import type { DropPlacement } from "../utils/terminalOrdering";
 
-export type SortItem = { kind: "terminal" | "command"; projectId: string; id: string };
+export type SortItem = {
+  kind: "project" | "terminal" | "command" | "agent";
+  projectId: string;
+  id: string;
+};
 export type SortTarget = SortItem & { placement: DropPlacement };
 
 export function useProjectTreeSorting(options: {
@@ -56,19 +60,29 @@ export function useProjectTreeSorting(options: {
   }
 
   function updateDropTarget(x: number, y: number): void {
-    const element = document
+    let element = document
       .elementFromPoint(x, y)
-      ?.closest<HTMLElement>(".sortable-row[data-sort-kind]");
+      ?.closest<HTMLElement>("[data-sort-kind][data-sort-id]");
+    if (
+      element?.dataset.sortKind === "terminal" &&
+      element.dataset.sortParentId &&
+      x < element.getBoundingClientRect().left + 32
+    ) {
+      element = element.parentElement?.closest<HTMLElement>(
+        '.sortable-row[data-sort-kind="terminal"]',
+      );
+    }
     const kind = element?.dataset.sortKind;
     const projectId = element?.dataset.projectId;
     const id = element?.dataset.sortId;
     if (
       !pending ||
-      (kind !== "terminal" && kind !== "command") ||
+      !element ||
+      (kind !== "project" && kind !== "terminal" && kind !== "command" && kind !== "agent") ||
       !projectId ||
       !id ||
       kind !== pending.item.kind ||
-      projectId !== pending.item.projectId
+      (kind !== "project" && projectId !== pending.item.projectId)
     ) {
       dropTarget.value = undefined;
       return;

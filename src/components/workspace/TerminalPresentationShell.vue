@@ -11,23 +11,27 @@ import SubterminalSidebar from "../terminal/SubterminalSidebar.vue";
 import WorkspaceMain from "./WorkspaceMain.vue";
 
 defineOptions({ inheritAttrs: false });
-const props = defineProps<{
-  tabs: TerminalTab[];
-  mainTerminalId?: string;
-  terminalContainerRef: (tab: TerminalTab, ownerId: string) => (element: Element | null) => void;
-  subterminalIds: string[];
-  terminalFamilyId?: string;
-  focusedTerminalId?: string;
-  rightSidebarOpen: boolean;
-  rightSidebarMode: RightSidebarMode;
-  rightSidebarModes: RightSidebarMode[];
-  rightSidebarPresentation: SidebarPresentation;
-  rightSidebarWidth: number;
-  showRightSidebar: boolean;
-  selectedProjectDirectory?: string;
-  terminalFontSize: number;
-  externalEditor: ExternalEditor;
-}>();
+const props = withDefaults(
+  defineProps<{
+    workspaceReady?: boolean;
+    tabs: TerminalTab[];
+    mainTerminalId?: string;
+    terminalContainerRef: (tab: TerminalTab, ownerId: string) => (element: Element | null) => void;
+    subterminalIds: string[];
+    terminalFamilyId?: string;
+    focusedTerminalId?: string;
+    rightSidebarOpen: boolean;
+    rightSidebarMode: RightSidebarMode;
+    rightSidebarModes: RightSidebarMode[];
+    rightSidebarPresentation: SidebarPresentation;
+    rightSidebarWidth: number;
+    showRightSidebar: boolean;
+    selectedProjectDirectory?: string;
+    terminalFontSize: number;
+    externalEditor: ExternalEditor;
+  }>(),
+  { workspaceReady: true },
+);
 const emit = defineEmits<{
   selectRightMode: [mode: RightSidebarMode];
   previewRightMode: [];
@@ -83,6 +87,7 @@ defineExpose({
   <WorkspaceMain
     v-bind="attrs"
     ref="workspaceMain"
+    :workspace-ready="workspaceReady"
     :tabs="tabs"
     :main-terminal-id="mainTerminalId"
     :terminal-container-ref="terminalContainerRef"

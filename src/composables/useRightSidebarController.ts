@@ -35,7 +35,10 @@ export function useRightSidebarController(options: {
   }
 
   function openAndFocus(next?: RightSidebarMode): boolean {
-    if (!preview(next)) return false;
+    // Entering the panel from the main terminal should land on its subterminals,
+    // rather than whichever auxiliary mode happened to be selected previously.
+    const preferred = next ?? (availability.value.subterminals ? "subterminals" : undefined);
+    if (!preview(preferred)) return false;
     scheduleFocus(() => void options.focusPanel());
     return true;
   }

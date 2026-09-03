@@ -47,6 +47,7 @@ const emit = defineEmits<{
   reloadAgent: [projectId: string, commandId: string];
   stopAgent: [projectId: string, commandId: string];
   stopSubagent: [id: string];
+  reorderProject: [movedProjectId: string, targetProjectId: string, placement: DropPlacement];
   reorderTerminal: [
     projectId: string,
     movedTabId: string,
@@ -57,6 +58,12 @@ const emit = defineEmits<{
     projectId: string,
     movedCommandId: string,
     targetCommandId: string,
+    placement: DropPlacement,
+  ];
+  reorderAgent: [
+    projectId: string,
+    movedAgentId: string,
+    targetAgentId: string,
     placement: DropPlacement,
   ];
   focus: [selection: SidebarSelection];
@@ -381,6 +388,9 @@ onBeforeUnmount(() => {
       @stop-subagent="emit('stopSubagent', $event)"
       @close-subagent="closeTerminal"
       @start-terminal="emit('startTerminal', $event)"
+      @reorder-project="
+        (movedId, targetId, placement) => emit('reorderProject', movedId, targetId, placement)
+      "
       @reorder-terminal="
         (projectId, movedId, targetId, placement) =>
           emit('reorderTerminal', projectId, movedId, targetId, placement)
@@ -388,6 +398,10 @@ onBeforeUnmount(() => {
       @reorder-command="
         (projectId, movedId, targetId, placement) =>
           emit('reorderCommand', projectId, movedId, targetId, placement)
+      "
+      @reorder-agent="
+        (projectId, movedId, targetId, placement) =>
+          emit('reorderAgent', projectId, movedId, targetId, placement)
       "
       @focus="choose"
       @activate="activate"

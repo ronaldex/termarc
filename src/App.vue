@@ -88,8 +88,10 @@ const {
   add: addProjectState,
   update: updateProject,
   setProjectTerminals,
+  reorderProjects,
   saveCommand: saveProjectCommand,
   saveAgent: saveAgentState,
+  reorderAgents,
   removeCommand: removeProjectCommand,
   removeAgent: removeAgentState,
   reorderCommands: reorderCommandState,
@@ -171,7 +173,7 @@ const gitSidebarAvailable = ref(false);
 const mainTerminalId = ref<string>();
 const lastProjectId = ref<string>();
 let appDisposed = false;
-let workspaceStateReady = false;
+const workspaceStateReady = ref(false);
 let closeInProgress = false;
 let unlistenCloseRequested: (() => void) | undefined;
 const {
@@ -328,7 +330,7 @@ watch(
   sidebarSelection,
   (selection) => {
     persistOpenTerminals();
-    if (!workspaceStateReady) return;
+    if (!workspaceStateReady.value) return;
     const main = tabs.find((tab) => tab.id === mainTerminalId.value);
     if (
       main &&
@@ -420,6 +422,7 @@ async function createProjectTerminal(
   selectTerminal(projectId, tab.id);
   presentTerminal(tab.id, !tab.parentTerminalId);
   selectTab(tab.id);
+  if (tab.parentTerminalId) rightSidebarController.openAndFocus("subterminals");
 }
 
 async function startProjectProcesses(projectId: string): Promise<void> {
@@ -778,7 +781,7 @@ onMounted(async () => {
     presentTerminal(restoredSelection.tabId);
     selectTab(restoredSelection.tabId);
   }
-  workspaceStateReady = true;
+  workspaceStateReady.value = true;
   saveWorkspaceSelection(sidebarSelection.value);
 
   await nextTick();
@@ -919,8 +922,10 @@ onBeforeUnmount(() => {
       @run-command="runCommand"
       @reload-command="reloadCommand"
       @stop-command="stopCommand"
+      @reorder-project="reorderProjects"
       @reorder-terminal="reorderProjectTerminals"
       @reorder-command="reorderCommands"
+      @reorder-agent="reorderAgents"
       @start-terminal="startProjectTerminal"
       @edit-command="editCommand"
       @delete-command="deleteCommandFromMenu"
@@ -942,6 +947,7 @@ onBeforeUnmount(() => {
     <TerminalPresentationShell
       ref="terminalPresentationShell"
       :selection="sidebarSelection"
+      :workspace-ready="workspaceStateReady"
       :selected-project="selectedProject"
       :projects="projects"
       :tabs="tabs"
