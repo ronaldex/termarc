@@ -85,12 +85,7 @@ const stoppedRun = computed(() => {
       ? { tab, kind: "Agent", heading: "Agent is stopped", actionLabel: "Start agent" }
       : undefined;
   }
-  if (props.selection.kind === "command") {
-    const tab = commandTab.value;
-    return tab?.status === "stopped"
-      ? { tab, kind: "Command", heading: "Command is stopped", actionLabel: "Run command" }
-      : undefined;
-  }
+  // Completed commands retain their terminal so their output remains available for inspection.
 });
 const commandTab = computed(() => {
   if (props.selection.kind !== "command") return;

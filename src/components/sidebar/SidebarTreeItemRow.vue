@@ -23,7 +23,6 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   select: [event: MouseEvent];
-  doubleClick: [event: MouseEvent];
   keydown: [event: KeyboardEvent];
   contextMenu: [event: MouseEvent];
 }>();
@@ -62,7 +61,6 @@ defineExpose({ getSelectButton });
       :title="title"
       :aria-label="ariaLabel"
       @click="emit('select', $event)"
-      @dblclick.stop="emit('doubleClick', $event)"
       @keydown="emit('keydown', $event)"
     >
       <span class="tree-item-icon"><slot name="icon" /></span>

@@ -59,7 +59,6 @@ function handleWindowBlur(): void {
 
 const emit = defineEmits<{
   startTerminal: [id: string];
-  rename: [id: string];
   contextMenu: [request: SidebarContextMenuRequest];
   toggleProject: [id: string];
   startProject: [id: string];
@@ -327,7 +326,6 @@ onBeforeUnmount(() => {
                 @start="emit('startTerminal', $event)"
                 @stop="emit('stopSubagent', $event)"
                 @close="emit('closeSubagent', $event)"
-                @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
               />
             </div>
@@ -351,7 +349,6 @@ onBeforeUnmount(() => {
                 @start="emit('startTerminal', $event)"
                 @stop="emit('stopSubagent', $event)"
                 @close="emit('closeSubagent', $event)"
-                @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
               />
             </div>
@@ -367,7 +364,6 @@ onBeforeUnmount(() => {
               @start="emit('startTerminal', $event)"
               @stop="emit('stopSubagent', $event)"
               @close="emit('closeSubagent', $event)"
-              @rename="emit('rename', $event)"
               @context-menu="emit('contextMenu', $event)"
             />
           </template>
@@ -443,7 +439,6 @@ onBeforeUnmount(() => {
                 :active="isTreeActive(item.tab.id)"
                 :collapsed="collapsed"
                 @focus="collapsed ? emit('activate', $event) : emit('focus', $event)"
-                @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
                 @start="emit('startTerminal', $event)"
               />
@@ -461,7 +456,6 @@ onBeforeUnmount(() => {
                 :collapsed="collapsed"
                 @focus="emit('focus', $event)"
                 @start="emit('startTerminal', $event)"
-                @rename="emit('rename', $event)"
                 @context-menu="emit('contextMenu', $event)"
               />
             </div>

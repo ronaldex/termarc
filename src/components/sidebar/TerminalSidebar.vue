@@ -372,7 +372,6 @@ onBeforeUnmount(() => {
       :filter="treeFilter"
       :selection="selection"
       :collapsed="collapsed"
-      @rename="openRename"
       @context-menu="openContextMenu"
       @toggle-project="emit('toggleProject', $event)"
       @start-project="emit('startProject', $event)"
