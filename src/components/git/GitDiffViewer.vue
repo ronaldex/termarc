@@ -7,7 +7,7 @@ import { useGitDiff } from "../../composables/useGitDiff";
 import { openPath } from "../../services/externalEditor";
 import { externalEditorLabel } from "../../settings/options";
 import { themeDefinition } from "../../themes/themeCatalog";
-import { splitGitDiff } from "../../utils/gitDiff";
+import { splitGitDiff, summarizeGitDiff, type GitDiffSummary } from "../../utils/gitDiff";
 import type { ExternalEditor } from "../../types/settings";
 import ExpandedGitDiff from "./ExpandedGitDiff.vue";
 
@@ -22,6 +22,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{
   available: [value: boolean];
+  summary: [value: { summary: GitDiffSummary; loading: boolean; error?: string }];
 }>();
 const { settings } = useAppSettings();
 const panelElement = ref<HTMLElement>();
@@ -42,6 +43,7 @@ const files = computed(() => {
   }
   return splitGitDiff(result.diff);
 });
+const summary = computed(() => summarizeGitDiff(files.value));
 const repository = computed(() => state.value?.repository);
 const diffTheme = computed(() => themeDefinition(settings.colorTheme).colorScheme);
 const editorName = computed(() => externalEditorLabel(props.externalEditor));
@@ -98,13 +100,22 @@ function hasPanelFocus(): boolean {
 
 defineExpose({ focusPanel, hasPanelFocus });
 
-watch(state, (result) => {
-  // A mode or polling transition may temporarily clear the result while a
-  // refresh is in flight. Keep the last known availability until the selected
-  // project changes (App.vue resets it there) or a new result arrives.
-  if (result) emit("available", Boolean(result.error || files.value.length));
-  void revealPendingFile();
-});
+watch(
+  [state, loading],
+  ([result, isLoading]) => {
+    emit("summary", {
+      summary: summary.value,
+      loading: isLoading,
+      ...(result?.error ? { error: result.error } : {}),
+    });
+    // A mode or polling transition may temporarily clear the result while a
+    // refresh is in flight. Keep the last known availability until the selected
+    // project changes (App.vue resets it there) or a new result arrives.
+    if (result) emit("available", Boolean(result.error || files.value.length));
+    void revealPendingFile();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

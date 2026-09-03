@@ -10,11 +10,13 @@ function terminal(
   projectId: string,
   customTitle?: string,
   kind: "shell" | "command" = "shell",
+  cwd = "/project",
 ): TerminalTabState {
   return {
     id: `${projectId}-${customTitle ?? kind}`,
     projectId,
     customTitle,
+    ...(cwd ? { cwd } : {}),
     launch:
       kind === "shell"
         ? { kind: "shell" }
@@ -27,7 +29,7 @@ function terminal(
 }
 
 describe("project terminal persistence", () => {
-  it("keeps shell count and custom names in tab order", () => {
+  it("keeps shell count, custom names, and working directories in tab order", () => {
     const tabs = [
       terminal("project-a", " Editor "),
       terminal("project-b", "Other"),
@@ -36,8 +38,8 @@ describe("project terminal persistence", () => {
     ];
 
     expect(projectTerminalsFromTabs(tabs, "project-a")).toEqual([
-      { id: "project-a- Editor ", customTitle: "Editor" },
-      { id: "project-a-shell" },
+      { id: "project-a- Editor ", customTitle: "Editor", cwd: "/project" },
+      { id: "project-a-shell", cwd: "/project" },
     ]);
   });
 
@@ -45,8 +47,13 @@ describe("project terminal persistence", () => {
     const parent = terminal("project-a", "Parent");
     const child = { ...terminal("project-a", "Child"), parentTerminalId: parent.id };
     expect(projectTerminalsFromTabs([parent, child], "project-a")).toEqual([
-      { id: "project-a-Parent", customTitle: "Parent" },
-      { id: "project-a-Child", customTitle: "Child", parentTerminalId: "project-a-Parent" },
+      { id: "project-a-Parent", customTitle: "Parent", cwd: "/project" },
+      {
+        id: "project-a-Child",
+        customTitle: "Child",
+        cwd: "/project",
+        parentTerminalId: "project-a-Parent",
+      },
     ]);
   });
 
@@ -82,6 +89,22 @@ describe("project terminal persistence", () => {
       { id: "orphan" },
       { id: "cycle-a" },
       { id: "cycle-b" },
+    ]);
+  });
+
+  it("normalizes terminal working directories", () => {
+    expect(
+      normalizeProjectTerminals([
+        { id: "one", cwd: "  /tmp/work  " },
+        { id: "two", cwd: "   " },
+      ]),
+    ).toEqual([{ id: "one", cwd: "/tmp/work" }, { id: "two" }]);
+  });
+
+  it("persists the last current working directory", () => {
+    const tab = { ...terminal("project-a"), currentCwd: "/project/packages/app" };
+    expect(projectTerminalsFromTabs([tab], "project-a")).toEqual([
+      { id: "project-a-shell", cwd: "/project/packages/app" },
     ]);
   });
 

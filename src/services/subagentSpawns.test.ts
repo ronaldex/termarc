@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubagentSpawnRequest } from "../api/subagentSpawns";
 
 const transport = vi.hoisted(() => ({
-  listener: undefined as ((event: { payload: SubagentSpawnRequest }) => void) | undefined,
+  listeners: new Map<string, (event: { payload: any }) => void>(),
   register: vi.fn(async () => undefined),
   unlisten: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(async (_name: string, listener: typeof transport.listener) => {
-    transport.listener = listener;
+  listen: vi.fn(async (name: string, listener: (event: { payload: any }) => void) => {
+    transport.listeners.set(name, listener);
     return transport.unlisten;
   }),
 }));
@@ -22,11 +22,13 @@ import type { TerminalTab, TerminalTabState } from "../types/terminal";
 import {
   createSubagentSpawnService,
   handleSubagentSpawnRequest,
+  SUBAGENT_CLOSE_EVENT,
+  SUBAGENT_SPAWN_EVENT,
   topLevelTerminalMetadata,
 } from "./subagentSpawns";
 
 beforeEach(() => {
-  transport.listener = undefined;
+  transport.listeners.clear();
   transport.register.mockClear();
   transport.unlisten.mockClear();
 });
@@ -98,7 +100,7 @@ describe("frontend subagent spawn handling", () => {
       { terminalId: "parent-1", projectId: "project-1" },
     ]);
 
-    transport.listener!({ payload: request });
+    transport.listeners.get(SUBAGENT_SPAWN_EVENT)!({ payload: request });
     releaseStart({ outcome: "failed", error: "PTY setup event won the start-command race" });
     await vi.waitFor(() => expect(acknowledge).toHaveBeenCalled());
 
@@ -110,6 +112,23 @@ describe("frontend subagent spawn handling", () => {
     });
     service.dispose();
     expect(transport.unlisten).toHaveBeenCalled();
+  });
+
+  it("closes the requested subagent terminal from the control event", async () => {
+    const closeTab = vi.fn(async () => undefined);
+    const service = createSubagentSpawnService({
+      createTab: async () => undefined,
+      startTab: async () => ({ outcome: "cancelled" as const }),
+      closeTab,
+    });
+
+    await service.start();
+    transport.listeners.get(SUBAGENT_CLOSE_EVENT)!({
+      payload: { subagentId: "subagent-1", terminalId: "child-terminal" },
+    });
+
+    await vi.waitFor(() => expect(closeTab).toHaveBeenCalledWith("child-terminal"));
+    service.dispose();
   });
 
   it("creates a runtime subagent launch, starts it, and acknowledges success", async () => {

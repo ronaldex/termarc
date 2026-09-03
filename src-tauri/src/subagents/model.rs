@@ -1,9 +1,11 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use std::fmt;
 
 pub(crate) const DEFAULT_OUTPUT_LIMIT: usize = 12 * 1024;
 pub(crate) const MAX_OUTPUT_READ: usize = 12 * 1024;
 pub(crate) const MAX_RESULT_BYTES: usize = 24 * 1024;
+pub(crate) const MAX_PROGRESS_BYTES: usize = 24 * 1024;
 pub(crate) const OUTPUT_BUFFER_CAPACITY: usize = 1024 * 1024;
 pub(crate) const DEFAULT_LIST_LIMIT: usize = 32;
 pub(crate) const MAX_LIST_LIMIT: usize = 128;
@@ -152,6 +154,9 @@ pub(crate) struct SubagentStatus {
     pub(crate) result_available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) result_updated_at: Option<u64>,
+    /// Sanitized, bounded activity snapshot published by an owned Pi child.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) progress: Option<Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -181,6 +186,14 @@ pub(crate) struct SubagentResultUpdate {
     /// overtaking a later clear.
     #[serde(default)]
     pub(crate) sequence: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SubagentProgressUpdate {
+    pub(crate) subagent_id: String,
+    pub(crate) terminal_id: String,
+    pub(crate) progress: Value,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -230,6 +243,13 @@ pub(crate) struct SubagentSpawnEvent {
     pub(crate) command: String,
     pub(crate) cwd: String,
     pub(crate) process_kind: ProcessKind,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SubagentCloseEvent {
+    pub(crate) subagent_id: String,
+    pub(crate) terminal_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

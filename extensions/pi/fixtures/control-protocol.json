@@ -72,6 +72,11 @@
       "type": "subagentStop",
       "protocolVersion": 1,
       "id": "subagent-1"
+    },
+    "close": {
+      "type": "subagentClose",
+      "protocolVersion": 1,
+      "id": "subagent-1"
     }
   },
   "responses": {
@@ -204,6 +209,11 @@
       "result": {}
     },
     "stop": {
+      "ok": true,
+      "protocolVersion": 1,
+      "result": {}
+    },
+    "close": {
       "ok": true,
       "protocolVersion": 1,
       "result": {}

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TerminalTabState } from "../types/terminal";
-import { activeDirectSubagentTabs, parentClosePlan } from "./parentClose";
+import { terminalClosePlan } from "./parentClose";
 
-function tab(id: string, status: TerminalTabState["status"] = "running"): TerminalTabState {
+function tab(
+  id: string,
+  options: { parentTerminalId?: string; processName?: string } = {},
+): TerminalTabState {
   return {
     id,
     number: 1,
@@ -11,50 +14,34 @@ function tab(id: string, status: TerminalTabState["status"] = "running"): Termin
     projectId: "project-1",
     cwd: ".",
     launch: { kind: "shell" },
-    status,
+    status: "running",
+    ...options,
   };
 }
 
-function child(id: string, parentTerminalId: string, status: TerminalTabState["status"]) {
-  return {
-    ...tab(id, status),
-    launch: {
-      kind: "subagent" as const,
-      subagentId: `subagent-${id}`,
-      parentTerminalId,
-      name: id,
-      commandLine: "pi",
-      processKind: "pi",
-    },
-  };
-}
-
-describe("parent close decisions", () => {
-  it("only prompts for active direct children", () => {
+describe("terminal close plan", () => {
+  it("closes every subterminal when closing a family root", () => {
     const tabs = [
-      tab("parent"),
-      child("running", "parent", "running"),
-      child("complete", "parent", "stopped"),
-      child("other", "other-parent", "running"),
+      tab("root", { processName: "vim" }),
+      tab("shell-child", { parentTerminalId: "root" }),
+      tab("busy-child", { parentTerminalId: "root", processName: "npm" }),
+      tab("other"),
     ];
 
-    expect(activeDirectSubagentTabs(tabs, "parent").map(({ id }) => id)).toEqual(["running"]);
-    expect(parentClosePlan(tabs, "parent")).toEqual({
-      action: "cancel",
-      childTabIds: ["running", "complete"],
+    expect(terminalClosePlan(tabs, "root")).toEqual({
+      tabIds: ["root", "shell-child", "busy-child"],
+      childCount: 2,
+      runningProcessCount: 2,
     });
-    expect(parentClosePlan(tabs, "parent", "stop").action).toBe("close");
-    expect(parentClosePlan(tabs, "parent", "detach").action).toBe("detach");
   });
 
-  it("closes directly without children and detaches completed children without prompting", () => {
-    expect(parentClosePlan([tab("parent")], "parent")).toEqual({
-      action: "close",
-      childTabIds: [],
-    });
-    expect(parentClosePlan([tab("parent"), child("done", "parent", "error")], "parent")).toEqual({
-      action: "detach",
-      childTabIds: ["done"],
+  it("only closes the selected subterminal", () => {
+    const tabs = [tab("root"), tab("child", { parentTerminalId: "root", processName: "top" })];
+
+    expect(terminalClosePlan(tabs, "child")).toEqual({
+      tabIds: ["child"],
+      childCount: 0,
+      runningProcessCount: 1,
     });
   });
 });

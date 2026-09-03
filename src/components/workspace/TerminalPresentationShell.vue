@@ -3,6 +3,7 @@ import { ref, useAttrs } from "vue";
 import type { ExternalEditor } from "../../types/settings";
 import type { RightSidebarMode } from "../../types/rightSidebar";
 import type { TerminalTab } from "../../types/terminal";
+import type { GitDiffSummary } from "../../utils/gitDiff";
 import type { SidebarPresentation } from "../../composables/useSidebarVisibility";
 import GitDiffViewer from "../git/GitDiffViewer.vue";
 import RightSidebar from "../sidebar/RightSidebar.vue";
@@ -43,6 +44,11 @@ const attrs = useAttrs();
 const workspaceMain = ref<InstanceType<typeof WorkspaceMain>>();
 const rightSidebar = ref<InstanceType<typeof RightSidebar>>();
 const subterminalSidebar = ref<InstanceType<typeof SubterminalSidebar>>();
+const gitSummary = ref<{
+  summary: GitDiffSummary;
+  loading: boolean;
+  error?: string;
+}>();
 
 function focusContent(): void {
   workspaceMain.value?.focusContent();
@@ -95,11 +101,17 @@ defineExpose({
     ref="rightSidebar"
     :class="{ overlay: rightSidebarPresentation === 'overlay' }"
     :style="{
-      width: rightSidebarOpen ? `${rightSidebarWidth}px` : 'var(--sidebar-collapsed-width)',
+      width: rightSidebarOpen
+        ? rightSidebarPresentation === 'overlay'
+          ? `${rightSidebarWidth}%`
+          : '100%'
+        : 'var(--sidebar-collapsed-width)',
     }"
     :active="rightSidebarOpen"
     :mode="rightSidebarMode"
     :modes="rightSidebarModes"
+    :subterminal-count="subterminalIds.length"
+    :git-summary="gitSummary"
     @select="emit('selectRightMode', $event)"
     @preview="emit('previewRightMode')"
     @collapse="emit('collapseRight')"
@@ -127,6 +139,7 @@ defineExpose({
       :font-size="terminalFontSize"
       :external-editor="externalEditor"
       @available="emit('gitAvailable', $event)"
+      @summary="gitSummary = $event"
     />
   </RightSidebar>
 </template>

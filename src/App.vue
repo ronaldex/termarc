@@ -19,7 +19,6 @@ import { useWorkspaceTerminalNavigation } from "./composables/useWorkspaceTermin
 import { useAppSettings } from "./composables/useAppSettings";
 import { useCommandRuns } from "./composables/useCommandRuns";
 import { selectDirectory } from "./api/dialog";
-import { detachSubagents } from "./api/subagentSpawns";
 import { loadCustomThemes } from "./api/themes";
 import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
@@ -32,7 +31,7 @@ import {
 } from "./services/workspaceState";
 import { isMacOS } from "./utils/platform";
 import { projectNameFromDirectory } from "./utils/projectName";
-import type { ParentCloseChoice } from "./utils/parentClose";
+import type { TerminalCloseChoice, TerminalClosePlan } from "./utils/parentClose";
 import { numberedSidebarShortcuts } from "./utils/sidebarShortcuts";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
@@ -45,23 +44,23 @@ const macOS = isMacOS();
 const { settings, load: loadAppSettings } = useAppSettings();
 const renameModalOpen = ref(false);
 const keyboardShortcutsOpen = ref(false);
-const parentCloseChildCount = ref<number>();
+const terminalClosePlan = ref<TerminalClosePlan>();
 const terminalShortcutScopeActive = computed(
-  () => renameModalOpen.value || parentCloseChildCount.value !== undefined,
+  () => renameModalOpen.value || terminalClosePlan.value !== undefined,
 );
-let resolveParentClose: ((choice: ParentCloseChoice) => void) | undefined;
+let resolveTerminalClose: ((choice: TerminalCloseChoice) => void) | undefined;
 
-function chooseParentClose(choice: ParentCloseChoice): void {
-  parentCloseChildCount.value = undefined;
-  resolveParentClose?.(choice);
-  resolveParentClose = undefined;
+function chooseTerminalClose(choice: TerminalCloseChoice): void {
+  terminalClosePlan.value = undefined;
+  resolveTerminalClose?.(choice);
+  resolveTerminalClose = undefined;
 }
 
-function askParentClose(childCount: number): Promise<ParentCloseChoice> {
-  chooseParentClose("cancel");
-  parentCloseChildCount.value = childCount;
+function askTerminalClose(plan: TerminalClosePlan): Promise<TerminalCloseChoice> {
+  chooseTerminalClose("cancel");
+  terminalClosePlan.value = plan;
   return new Promise((resolve) => {
-    resolveParentClose = resolve;
+    resolveTerminalClose = resolve;
   });
 }
 const toast = ref<{ message: string; kind: "success" | "error" }>();
@@ -294,6 +293,8 @@ watch(
       projectId: tab.projectId,
       kind: tab.launch.kind,
       customTitle: tab.customTitle,
+      cwd: tab.cwd,
+      currentCwd: tab.currentCwd,
     })),
   persistOpenTerminals,
   { deep: true },
@@ -368,9 +369,13 @@ const { focusSidebar, activateSidebar: activateSidebarSelection } = useSidebarAc
   createProjectTerminal: (projectId, directory) => void createProjectTerminal(projectId, directory),
   activateFamilyTerminal: (tab) => {
     presentTerminal(tab.id);
-    if (tab.id !== mainTerminalId.value) focusRightSidebar("subterminals");
+    if (tab.id !== mainTerminalId.value) previewRightSidebarMode("subterminals");
   },
-  activateWorkspaceTerminal: (tab) => presentTerminal(tab.id, true),
+  activateWorkspaceTerminal: (tab, source) => {
+    presentTerminal(tab.id, true);
+    if (source === "agent") previewRightSidebarMode("subterminals");
+  },
+  restoreTerminalPreview: restoreRightPreference,
   clearWorkspaceTerminal: () => {
     mainTerminalId.value = undefined;
     resetOpenRightSidebarMode();
@@ -396,17 +401,12 @@ const terminalFamilyClose = useTerminalFamilyClose({
   tabs,
   activeTabId,
   mainTerminalId,
-  ask: askParentClose,
-  detach: detachSubagents,
+  ask: askTerminalClose,
   closeChild: closeTab,
   closeTerminal,
   selectTab,
   selectAfterClose: terminalPresentation.selectAfterClose,
   markPersistenceEligible: (projectId) => terminalPersistenceEligible.add(projectId),
-  reportError(message, error) {
-    console.error(message, error);
-    showToast(message, "error");
-  },
 });
 
 async function createProjectTerminal(
@@ -744,7 +744,7 @@ onMounted(async () => {
     let projectRestoreSucceeded = true;
     for (const terminal of project.terminals ?? []) {
       try {
-        const tab = await createTab(project.id, project.directory, {
+        const tab = await createTab(project.id, terminal.cwd ?? project.directory, {
           id: terminal.id,
           customTitle: terminal.customTitle,
           parentTerminalId: terminal.parentTerminalId,
@@ -866,7 +866,9 @@ onBeforeUnmount(() => {
     :style="{
       '--titlebar-height': `${TITLEBAR_HEIGHT}px`,
       '--left-sidebar-width': `${leftSidebarWidth}px`,
-      '--right-sidebar-width': `${rightSidebarWidth}px`,
+      '--main-panel-track': `${100 - rightSidebarWidth}fr`,
+      '--right-sidebar-share': `${rightSidebarWidth}fr`,
+      '--right-sidebar-width': `${rightSidebarWidth}%`,
     }"
   >
     <AppTitlebar :active-tab="activeTab" :macos="macOS" />
@@ -993,9 +995,10 @@ onBeforeUnmount(() => {
     />
     <KeyboardShortcutsView v-if="keyboardShortcutsOpen" @close="closeKeyboardShortcuts" />
     <ParentCloseDialog
-      v-if="parentCloseChildCount !== undefined"
-      :child-count="parentCloseChildCount"
-      @choose="chooseParentClose"
+      v-if="terminalClosePlan"
+      :child-count="terminalClosePlan.childCount"
+      :running-process-count="terminalClosePlan.runningProcessCount"
+      @choose="chooseTerminalClose"
     />
   </div>
 </template>
@@ -1097,8 +1100,11 @@ button {
   --left-sidebar-track: auto;
   --left-resize-track: 0.25rem;
   --right-resize-track: 0.25rem;
-  --right-sidebar-track: auto;
+  --main-panel-track: 60fr;
+  --right-sidebar-share: 40fr;
+  --right-sidebar-track: var(--right-sidebar-share);
   --workspace-footer-height: 2.5rem;
+  --terminal-surface-padding: 0.375rem;
   --left-overlay-max-width: calc(100% - var(--sidebar-collapsed-width));
   --right-overlay-max-width: calc(100% - var(--sidebar-collapsed-width));
   position: relative;
@@ -1106,8 +1112,8 @@ button {
   width: 100%;
   height: 100%;
   grid-template-columns:
-    var(--left-sidebar-track) var(--left-resize-track) minmax(0, 1fr)
-    var(--right-resize-track) var(--right-sidebar-track);
+    var(--left-sidebar-track) var(--left-resize-track) minmax(0, var(--main-panel-track))
+    var(--right-resize-track) minmax(0, var(--right-sidebar-track));
   grid-template-rows: minmax(var(--titlebar-height), auto) minmax(0, 1fr);
   background: var(--color-app-bg);
   overflow: hidden;
@@ -1146,6 +1152,7 @@ button {
 }
 .app-shell.right-sidebar-collapsed {
   --right-resize-track: 0;
+  --right-sidebar-track: var(--sidebar-collapsed-width);
 }
 .app-shell::before,
 .app-shell::after {

@@ -22,6 +22,11 @@ export type SubagentSpawnAcknowledgement = {
   error?: string;
 };
 
+export type SubagentCloseRequest = {
+  subagentId: string;
+  terminalId: string;
+};
+
 export function registerTopLevelTerminals(terminals: TopLevelTerminalMetadata[]): Promise<void> {
   return invoke("register_top_level_terminals", { terminals });
 }

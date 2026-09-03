@@ -3,19 +3,18 @@
 import { effectScope, nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../extensions/pi/fixtures/subagent-spawn-ipc.json";
-import type { SubagentSpawnRequest } from "../api/subagentSpawns";
 import type { PtyEvent, PtyStarted, TerminalTab } from "../types/terminal";
 
 const native = vi.hoisted(() => ({
-  listener: undefined as ((event: { payload: SubagentSpawnRequest }) => void) | undefined,
+  listeners: new Map<string, (event: { payload: any }) => void>(),
   calls: [] as Array<{ command: string; payload?: Record<string, unknown> }>,
   mode: "running" as "running" | "early-error" | "ack-rollback",
   unlisten: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(async (_event: string, listener: typeof native.listener) => {
-    native.listener = listener;
+  listen: vi.fn(async (event: string, listener: (event: { payload: any }) => void) => {
+    native.listeners.set(event, listener);
     return native.unlisten;
   }),
 }));
@@ -99,7 +98,7 @@ async function setup(mode: typeof native.mode) {
   service.update(facade.tabs);
   await service.start();
   await nextTick();
-  native.listener!({ payload: fixture.event });
+  native.listeners.get(SUBAGENT_SPAWN_EVENT)!({ payload: fixture.event });
   return { facade, service, scope };
 }
 
@@ -108,7 +107,7 @@ function call(command: string) {
 }
 
 beforeEach(() => {
-  native.listener = undefined;
+  native.listeners.clear();
   native.calls.length = 0;
   native.mode = "running";
   native.unlisten.mockClear();

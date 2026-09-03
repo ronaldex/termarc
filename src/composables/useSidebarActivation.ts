@@ -2,7 +2,6 @@ import type { Ref } from "vue";
 import type { Project } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTab } from "../types/terminal";
-import { normalizedTerminalParentId } from "../utils/terminalHierarchy";
 
 export function useSidebarActivation(options: {
   projects: Ref<Project[]>;
@@ -23,10 +22,12 @@ export function useSidebarActivation(options: {
   startTerminal: (tabId: string) => void;
   createProjectTerminal: (projectId: string, directory: string) => void;
   activateFamilyTerminal?: (tab: TerminalTab) => void;
-  activateWorkspaceTerminal?: (tab: TerminalTab) => void;
+  activateWorkspaceTerminal?: (tab: TerminalTab, source: "command" | "agent") => void;
   clearWorkspaceTerminal?: () => void;
+  restoreTerminalPreview?: () => void;
 }) {
   function focusSidebar(selection: SidebarSelection): void {
+    options.restoreTerminalPreview?.();
     options.setSelection(selection);
     const projectId = "projectId" in selection ? selection.projectId : undefined;
     const project = options.projects.value.find((item) => item.id === projectId);
@@ -41,7 +42,7 @@ export function useSidebarActivation(options: {
       const tab = options.findCommandRun(selection.projectId, selection.commandId, source);
       if (tab) {
         options.activeTabId.value = tab.id;
-        options.activateWorkspaceTerminal?.(tab);
+        options.activateWorkspaceTerminal?.(tab, source);
       } else {
         options.clearWorkspaceTerminal?.();
       }
@@ -52,11 +53,7 @@ export function useSidebarActivation(options: {
     focusSidebar(selection);
     if (selection.kind === "terminal" || selection.kind === "subagent") {
       const tab = options.tabs.find((item) => item.id === selection.tabId);
-      if (
-        selection.kind === "terminal" &&
-        (tab?.status === "stopped" || tab?.status === "error") &&
-        !normalizedTerminalParentId(options.tabs, tab)
-      ) {
+      if (selection.kind === "terminal" && (tab?.status === "stopped" || tab?.status === "error")) {
         options.startTerminal(tab.id);
       } else if (tab) {
         options.selectTab(selection.tabId);

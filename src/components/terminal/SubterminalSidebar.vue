@@ -104,6 +104,7 @@ onBeforeUnmount(() => observer?.disconnect());
   flex: 1 0 14rem;
   flex-direction: column;
   overflow: hidden;
+  padding: var(--terminal-surface-padding, 0.375rem);
   background: var(--color-app-bg);
 }
 .subterminal-pane + .subterminal-pane {

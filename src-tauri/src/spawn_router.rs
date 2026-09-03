@@ -2,19 +2,23 @@ use std::{sync::Arc, time::Duration};
 use tauri::{State, Window};
 
 use crate::subagents::{
-    ReserveSubagent, SubagentPiStateUpdate, SubagentRegistry, SubagentSpawnAcknowledgement,
-    SubagentSpawnEvent, TopLevelTerminalMetadata,
+    ReserveSubagent, SubagentCloseEvent, SubagentPiStateUpdate, SubagentRegistry,
+    SubagentSpawnAcknowledgement, SubagentSpawnEvent, TopLevelTerminalMetadata,
 };
 
 pub(crate) const SUBAGENT_SPAWN_EVENT: &str = "termarc://subagent-spawn-request";
+pub(crate) const SUBAGENT_CLOSE_EVENT: &str = "termarc://subagent-close-request";
 const SPAWN_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 type EventEmitter = dyn Fn(&str, &SubagentSpawnEvent) -> Result<(), String> + Send + Sync + 'static;
+type CloseEventEmitter =
+    dyn Fn(&str, &SubagentCloseEvent) -> Result<(), String> + Send + Sync + 'static;
 
 #[derive(Clone)]
 pub(crate) struct SpawnRouter {
     registry: SubagentRegistry,
     emit: Arc<EventEmitter>,
+    close_emit: Option<Arc<CloseEventEmitter>>,
     timeout: Duration,
 }
 
@@ -66,8 +70,17 @@ impl SpawnRouter {
         Self {
             registry,
             emit: Arc::new(emit),
+            close_emit: None,
             timeout: SPAWN_ACK_TIMEOUT,
         }
+    }
+
+    pub(crate) fn with_close_emitter(
+        mut self,
+        emit: impl Fn(&str, &SubagentCloseEvent) -> Result<(), String> + Send + Sync + 'static,
+    ) -> Self {
+        self.close_emit = Some(Arc::new(emit));
+        self
     }
 
     #[cfg(test)]
@@ -79,8 +92,26 @@ impl SpawnRouter {
         Self {
             registry,
             emit: Arc::new(emit),
+            close_emit: None,
             timeout,
         }
+    }
+
+    pub(crate) fn close(&self, id: &str) -> Result<(), (&'static str, String)> {
+        let (window_label, event) = self
+            .registry
+            .close_target(id)
+            .map_err(|error| (error.code, error.to_string()))?;
+        let emit = self.close_emit.as_ref().ok_or_else(|| {
+            (
+                "window_unavailable",
+                "subagent close routing is unavailable".to_string(),
+            )
+        })?;
+        self.registry
+            .stop(id)
+            .map_err(|error| (error.code, error.to_string()))?;
+        emit(&window_label, &event).map_err(|error| ("window_unavailable", error))
     }
 
     pub(crate) fn route(&self, request: ReserveSubagent) -> Result<String, (&'static str, String)> {
@@ -166,7 +197,13 @@ impl SpawnRouter {
 mod tests {
     use super::*;
     use crate::subagents::{AttachSubagent, SubagentPtyOwner};
-    use std::{sync::Arc, thread};
+    use std::{
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+    };
 
     fn request(parent_terminal_id: &str, project_id: &str) -> ReserveSubagent {
         ReserveSubagent {
@@ -284,6 +321,61 @@ mod tests {
         let id = router.route(request("parent-1", "project-1")).unwrap();
         assert_eq!(registry.status(&id).unwrap().terminal_id, "child-terminal");
         assert!(registry.finish_reservation(&id).is_err());
+    }
+
+    #[test]
+    fn close_stops_the_child_and_routes_its_terminal_to_the_owning_window() {
+        let registry = SubagentRegistry::default();
+        registry
+            .register_top_level_terminals(
+                "main-window",
+                vec![TopLevelTerminalMetadata {
+                    terminal_id: "parent-1".into(),
+                    project_id: "project-1".into(),
+                }],
+            )
+            .unwrap();
+        let reserved = registry.reserve(request("parent-1", "project-1")).unwrap();
+        let id = reserved.event.subagent_id.clone();
+        let stopped = Arc::new(AtomicBool::new(false));
+        let stopped_by_runtime = stopped.clone();
+        registry
+            .attach(AttachSubagent {
+                owner: SubagentPtyOwner {
+                    id: id.clone(),
+                    parent_terminal_id: "parent-1".into(),
+                    project_id: "project-1".into(),
+                    name: "Research".into(),
+                    process_kind: "pi".into(),
+                },
+                terminal_id: "child-terminal".into(),
+                pty_id: "pty-1".into(),
+                pid: None,
+                command: "pi --mode rpc".into(),
+                cwd: "/tmp/project".into(),
+                input: Arc::new(|_| Ok(())),
+                stop: Arc::new(move || {
+                    stopped_by_runtime.store(true, Ordering::Release);
+                    Ok(())
+                }),
+            })
+            .unwrap();
+        let routed = Arc::new(Mutex::new(None));
+        let routed_event = routed.clone();
+        let router = SpawnRouter::new(registry, |_, _| Ok(())).with_close_emitter(
+            move |window_label, event| {
+                *routed_event.lock().unwrap() = Some((window_label.to_string(), event.clone()));
+                Ok(())
+            },
+        );
+
+        router.close(&id).unwrap();
+
+        assert!(stopped.load(Ordering::Acquire));
+        let (window_label, event) = routed.lock().unwrap().clone().unwrap();
+        assert_eq!(window_label, "main-window");
+        assert_eq!(event.subagent_id, id);
+        assert_eq!(event.terminal_id, "child-terminal");
     }
 
     #[test]

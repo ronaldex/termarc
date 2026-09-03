@@ -112,6 +112,37 @@ async function publishResultMutation(
   throw lastError;
 }
 
+export async function publishSubagentProgress(cli: string, progress: unknown): Promise<void> {
+  const text = JSON.stringify(progress);
+  if (Buffer.byteLength(text, "utf8") > 24 * 1024) return;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(cli, ["subagents", "report-progress"], {
+      env: process.env,
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Termarc progress reporting timed out"));
+    }, 5_000);
+    child.stderr.on("data", (data) => {
+      if (stderr.length < 4_096) stderr += String(data);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      code === 0
+        ? resolve()
+        : reject(new Error(stderr.trim() || `progress reporter exited with code ${code}`));
+    });
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(text);
+  });
+}
+
 export function publishSubagentResult(
   cli: string,
   text: string,

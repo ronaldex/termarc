@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   acknowledgeSubagentSpawn,
   registerTopLevelTerminals,
+  type SubagentCloseRequest,
   type SubagentSpawnAcknowledgement,
   type SubagentSpawnRequest,
   type TopLevelTerminalMetadata,
@@ -15,6 +16,7 @@ import type {
 } from "../types/terminal";
 
 export const SUBAGENT_SPAWN_EVENT = "termarc://subagent-spawn-request";
+export const SUBAGENT_CLOSE_EVENT = "termarc://subagent-close-request";
 
 type CreateTab = (
   projectId: string,
@@ -93,7 +95,8 @@ export async function handleSubagentSpawnRequest(
 }
 
 export function createSubagentSpawnService(dependencies: SubagentSpawnDependencies) {
-  let unlisten: UnlistenFn | undefined;
+  let unlistenSpawn: UnlistenFn | undefined;
+  let unlistenClose: UnlistenFn | undefined;
   let started = false;
   let disposed = false;
   let latestTerminals: TopLevelTerminalMetadata[] = [];
@@ -115,7 +118,7 @@ export function createSubagentSpawnService(dependencies: SubagentSpawnDependenci
     },
     async start(): Promise<void> {
       if (started || disposed) return;
-      unlisten = await listen<SubagentSpawnRequest>(SUBAGENT_SPAWN_EVENT, (event) => {
+      unlistenSpawn = await listen<SubagentSpawnRequest>(SUBAGENT_SPAWN_EVENT, (event) => {
         void handleSubagentSpawnRequest(event.payload, {
           ...dependencies,
           isParentAvailable: (terminalId, projectId) =>
@@ -124,9 +127,16 @@ export function createSubagentSpawnService(dependencies: SubagentSpawnDependenci
             ),
         }).catch((error) => console.error("Could not acknowledge subagent spawn", error));
       });
+      unlistenClose = await listen<SubagentCloseRequest>(SUBAGENT_CLOSE_EVENT, (event) => {
+        void dependencies
+          .closeTab(event.payload.terminalId)
+          .catch((error) => console.error("Could not close subagent terminal", error));
+      });
       if (disposed) {
-        unlisten();
-        unlisten = undefined;
+        unlistenSpawn();
+        unlistenClose();
+        unlistenSpawn = undefined;
+        unlistenClose = undefined;
         return;
       }
       started = true;
@@ -135,8 +145,10 @@ export function createSubagentSpawnService(dependencies: SubagentSpawnDependenci
     dispose(): void {
       disposed = true;
       started = false;
-      unlisten?.();
-      unlisten = undefined;
+      unlistenSpawn?.();
+      unlistenClose?.();
+      unlistenSpawn = undefined;
+      unlistenClose = undefined;
     },
   };
 }

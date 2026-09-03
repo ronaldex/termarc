@@ -138,6 +138,46 @@ describe("projectTreeNavigationActions", () => {
     ).toEqual([{ type: "toggle-project", projectId: project.id }]);
   });
 
+  it("moves between sibling subterminals", () => {
+    const agentProject = {
+      ...project,
+      agents: [{ id: "pi", name: "Pi", command: "pi" }],
+      agentsOpen: true,
+    };
+    const parent = {
+      ...terminal,
+      id: "agent-terminal",
+      launch: { kind: "command", commandId: "pi", commandLine: "pi", source: "agent" },
+    } as TerminalTab;
+    const children = ["subagent-1", "subagent-2"].map(
+      (id) =>
+        ({
+          ...terminal,
+          id,
+          launch: {
+            kind: "subagent",
+            subagentId: id,
+            parentTerminalId: parent.id,
+            name: id,
+            commandLine: "pi",
+            processKind: "pi",
+          },
+        }) as TerminalTab,
+    );
+    const subterminalNodes = flattenProjectTree([agentProject], [parent, ...children]).filter(
+      (node) => node.kind === "subagent",
+    );
+
+    expect(
+      projectTreeNavigationActions(
+        "ArrowDown",
+        flattenProjectTree([agentProject], [parent, ...children]),
+        subterminalNodes[0]!,
+        [agentProject],
+      ),
+    ).toEqual([{ type: "focus", selection: subterminalNodes[1] }]);
+  });
+
   it("activates a command with ArrowRight", () => {
     const command = nodes.find((node) => node.kind === "command")!;
     expect(projectTreeNavigationActions("ArrowRight", nodes, command, [project])).toEqual([

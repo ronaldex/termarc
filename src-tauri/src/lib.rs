@@ -55,15 +55,24 @@ pub fn run() {
         .setup(|app| {
             windows::setup_menu(app)?;
             let subagents = app.state::<AppState>().subagents();
-            let app_handle = app.handle().clone();
+            let spawn_app_handle = app.handle().clone();
+            let close_app_handle = app.handle().clone();
             let spawn_router =
                 spawn_router::SpawnRouter::new(subagents.clone(), move |window_label, event| {
-                    let window = app_handle
+                    let window = spawn_app_handle
                         .get_webview_window(window_label)
                         .ok_or_else(|| format!("Termarc window is unavailable: {window_label}"))?;
                     window
                         .emit(spawn_router::SUBAGENT_SPAWN_EVENT, event)
                         .map_err(|error| format!("could not route spawn to window: {error}"))
+                })
+                .with_close_emitter(move |window_label, event| {
+                    let window = close_app_handle
+                        .get_webview_window(window_label)
+                        .ok_or_else(|| format!("Termarc window is unavailable: {window_label}"))?;
+                    window
+                        .emit(spawn_router::SUBAGENT_CLOSE_EVENT, event)
+                        .map_err(|error| format!("could not route close to window: {error}"))
                 });
             app.manage(spawn_router.clone());
             #[cfg(unix)]

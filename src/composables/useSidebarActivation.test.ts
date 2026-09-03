@@ -20,6 +20,7 @@ function setup(tabs: TerminalTab[] = []) {
   const activateFamilyTerminal = vi.fn();
   const activateWorkspaceTerminal = vi.fn();
   const clearWorkspaceTerminal = vi.fn();
+  const restoreTerminalPreview = vi.fn();
   const activation = useSidebarActivation({
     projects: ref([project]),
     tabs,
@@ -42,6 +43,7 @@ function setup(tabs: TerminalTab[] = []) {
     activateFamilyTerminal,
     activateWorkspaceTerminal,
     clearWorkspaceTerminal,
+    restoreTerminalPreview,
   });
   return {
     ...activation,
@@ -53,6 +55,7 @@ function setup(tabs: TerminalTab[] = []) {
     activateFamilyTerminal,
     activateWorkspaceTerminal,
     clearWorkspaceTerminal,
+    restoreTerminalPreview,
   };
 }
 
@@ -118,7 +121,7 @@ describe("useSidebarActivation", () => {
     expect(result.selectTab).not.toHaveBeenCalled();
   });
 
-  it("does not restart a stopped normalized child terminal", () => {
+  it("starts a stopped child terminal when it is activated", () => {
     const parent = {
       id: "parent",
       projectId: project.id,
@@ -141,8 +144,8 @@ describe("useSidebarActivation", () => {
       tabId: child.id,
     });
 
-    expect(result.selectTab).toHaveBeenCalledWith(child.id);
-    expect(result.startTerminal).not.toHaveBeenCalled();
+    expect(result.startTerminal).toHaveBeenCalledWith(child.id);
+    expect(result.selectTab).not.toHaveBeenCalled();
   });
 
   it("restarts a stale child link as a detached root", () => {
@@ -209,7 +212,7 @@ describe("useSidebarActivation", () => {
       commandId: "agent-1",
     });
 
-    expect(result.activateWorkspaceTerminal).toHaveBeenCalledWith(tab);
+    expect(result.activateWorkspaceTerminal).toHaveBeenCalledWith(tab, "agent");
   });
 
   it("clears the previous terminal when focusing an agent without a tab", () => {
@@ -223,6 +226,14 @@ describe("useSidebarActivation", () => {
     });
 
     expect(result.clearWorkspaceTerminal).toHaveBeenCalledOnce();
+  });
+
+  it("restores a temporary terminal preview before changing sidebar selection", () => {
+    const result = setup();
+
+    result.focusSidebar({ id: project.id, kind: "project", projectId: project.id });
+
+    expect(result.restoreTerminalPreview).toHaveBeenCalledOnce();
   });
 
   it("runs a command that does not already have an active tab", () => {

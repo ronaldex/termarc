@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::subagents::{
     OutputChunk, OutputFormat, RegistryObservability, ReserveSubagent, SubagentListPage,
-    SubagentResult, SubagentResultClear, SubagentResultUpdate, SubagentStatus, WaitResult,
+    SubagentProgressUpdate, SubagentResult, SubagentResultClear, SubagentResultUpdate,
+    SubagentStatus, WaitResult,
 };
 
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
@@ -58,6 +59,12 @@ pub(crate) enum ControlRequest {
         #[serde(flatten)]
         update: SubagentResultUpdate,
     },
+    SubagentProgressUpdate {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u32,
+        #[serde(flatten)]
+        update: SubagentProgressUpdate,
+    },
     SubagentResultClear {
         #[serde(rename = "protocolVersion")]
         protocol_version: u32,
@@ -80,6 +87,11 @@ pub(crate) enum ControlRequest {
         return_if_result_available: bool,
     },
     SubagentStop {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u32,
+        id: String,
+    },
+    SubagentClose {
         #[serde(rename = "protocolVersion")]
         protocol_version: u32,
         id: String,
@@ -108,6 +120,9 @@ impl ControlRequest {
             | Self::SubagentResultUpdate {
                 protocol_version, ..
             }
+            | Self::SubagentProgressUpdate {
+                protocol_version, ..
+            }
             | Self::SubagentResultClear {
                 protocol_version, ..
             }
@@ -118,6 +133,9 @@ impl ControlRequest {
                 protocol_version, ..
             }
             | Self::SubagentStop {
+                protocol_version, ..
+            }
+            | Self::SubagentClose {
                 protocol_version, ..
             } => *protocol_version,
         }

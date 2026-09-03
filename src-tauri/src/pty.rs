@@ -270,6 +270,7 @@ fn start_pty_session(
         process.env("TERMARC_TERMINAL_ID", terminal_id);
         process.env("TERMARC_PARENT_TERMINAL_ID", &owner.parent_terminal_id);
         process.env("TERMARC_SUBAGENT_ID", &owner.id);
+        process.env("TERMARC_SUBAGENT_NAME", &owner.name);
     }
 
     let mut child = pair

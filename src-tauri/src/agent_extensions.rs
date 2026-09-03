@@ -28,6 +28,26 @@ const PI_EXTENSION_FILES: &[(&str, &str)] = &[
         "termarc-status/watchers.ts",
         include_str!("../../extensions/pi/termarc-status/watchers.ts"),
     ),
+    (
+        "termarc-status/subagent/agents.ts",
+        include_str!("../../extensions/pi/termarc-status/subagent/agents.ts"),
+    ),
+    (
+        "termarc-status/subagent/render.ts",
+        include_str!("../../extensions/pi/termarc-status/subagent/render.ts"),
+    ),
+    (
+        "termarc-status/subagent/runner-events.ts",
+        include_str!("../../extensions/pi/termarc-status/subagent/runner-events.ts"),
+    ),
+    (
+        "termarc-status/subagent/settings.ts",
+        include_str!("../../extensions/pi/termarc-status/subagent/settings.ts"),
+    ),
+    (
+        "termarc-status/subagent/types.ts",
+        include_str!("../../extensions/pi/termarc-status/subagent/types.ts"),
+    ),
 ];
 
 struct AgentExtension {

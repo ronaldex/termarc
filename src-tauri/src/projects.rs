@@ -83,6 +83,8 @@ pub(crate) struct ProjectConfig {
 struct ProjectTerminal {
     id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     custom_title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     parent_terminal_id: Option<String>,

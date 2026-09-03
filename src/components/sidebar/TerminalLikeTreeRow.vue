@@ -112,14 +112,20 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
     @context-menu="openContextMenu"
   >
     <template #icon>
-      <span class="subagent-icon">
-        <svg class="subagent-branch" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M3 2v8h10" />
+      <span class="subagent-icon" :class="{ compact: collapsed }">
+        <svg
+          class="subagent-branch"
+          :class="{ compact: collapsed }"
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+        >
+          <path :d="collapsed ? 'M3 2v8h3' : 'M3 2v8h10'" />
         </svg>
         <TerminalStatusIndicator
+          :class="{ 'compact-status': collapsed }"
           :status="tab.status"
           :busy="tab.agentState === 'processing'"
-          :running="tab.status === 'running'"
+          :running="Boolean(tab.processName)"
           :title="statusLabel"
         />
       </span>
@@ -185,6 +191,22 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.25;
+}
+.subagent-icon.compact {
+  transform: translateX(3px);
+}
+.subagent-branch.compact {
+  right: auto;
+  left: 50%;
+  width: 0.625rem;
+  height: 0.625rem;
+  transform: translate(-50%, -0.125rem);
+  stroke-linecap: butt;
+  stroke-width: 1.5;
+}
+.compact-status {
+  z-index: 1;
+  transform: translate(0.1875rem, -1px);
 }
 .subagent-labels {
   display: flex;

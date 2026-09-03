@@ -5,7 +5,6 @@ import type { SidebarContextMenuRequest } from "../../types/contextMenu";
 import type { ProjectTreeProject } from "../../types/project";
 import type { SidebarSelection } from "../../types/sidebar";
 import type { TerminalTabState } from "../../types/terminal";
-import { normalizedTerminalParentId } from "../../utils/terminalHierarchy";
 import type { DropPlacement } from "../../utils/terminalOrdering";
 import ProjectTree from "./ProjectTree.vue";
 import SidebarFooter from "./SidebarFooter.vue";
@@ -233,15 +232,6 @@ function saveRename(title: string): void {
 
 function choose(node: SidebarSelection): void {
   const terminalWasFocused = props.isTerminalFocused();
-  const tab =
-    node.kind === "terminal" || node.kind === "subagent"
-      ? props.tabs.find((candidate) => candidate.id === node.tabId)
-      : undefined;
-  const isSubterminal = Boolean(tab && normalizedTerminalParentId(props.tabs, tab));
-  if (isSubterminal) {
-    emit("activate", node);
-    return;
-  }
   emit("focus", node);
   if (props.collapsed) {
     emit("preview");

@@ -190,8 +190,11 @@ export function useWorkspaceShortcuts(options: {
   }
 
   function handleFocusIn(): void {
-    if (!options.sidebar.value?.hasTreeFocus()) options.restoreLeftSidebar();
-    options.restoreRightSidebarOnBlur();
+    const leftSidebarHasFocus = options.sidebar.value?.hasTreeFocus() ?? false;
+    if (!leftSidebarHasFocus) {
+      options.restoreLeftSidebar();
+      options.restoreRightSidebarOnBlur();
+    }
   }
 
   let resizeFocusFrame: number | undefined;

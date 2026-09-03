@@ -85,7 +85,7 @@ onMounted(() => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 0.375rem;
+  padding: var(--terminal-surface-padding, 0.375rem);
   background: var(--color-app-bg);
 }
 .terminal-host,

@@ -125,6 +125,7 @@ struct RegisteredTerminal {
 
 struct Reservation {
     event: SubagentSpawnEvent,
+    window_label: String,
     created_at: u64,
     acknowledgement: SyncSender<SpawnAcknowledgement>,
     detached: bool,
@@ -132,6 +133,7 @@ struct Reservation {
 
 struct SubagentRecord {
     status: SubagentStatus,
+    window_label: String,
     output: SubagentOutput,
     runtime: SubagentRuntime,
     latest_result: Option<SubagentResult>,
@@ -309,6 +311,7 @@ impl SubagentRegistry {
             subagent_id,
             Reservation {
                 event: event.clone(),
+                window_label: window_label.clone(),
                 created_at: timestamp_millis(),
                 acknowledgement,
                 detached: false,
@@ -444,6 +447,7 @@ impl SubagentRegistry {
             ));
         }
         let created_at = reservation.created_at;
+        let window_label = reservation.window_label.clone();
         let parent_terminal_id =
             (!reservation.detached).then(|| attachment.owner.parent_terminal_id.clone());
         let status = SubagentStatus {
@@ -468,11 +472,13 @@ impl SubagentRegistry {
             plain_output_cursor: 0,
             result_available: false,
             result_updated_at: None,
+            progress: None,
         };
         state.records.insert(
             attachment.owner.id,
             SubagentRecord {
                 status,
+                window_label,
                 output: SubagentOutput::new(OUTPUT_BUFFER_CAPACITY),
                 runtime: SubagentRuntime::new(attachment.input, attachment.stop),
                 latest_result: None,
@@ -689,6 +695,36 @@ impl SubagentRegistry {
         Ok(())
     }
 
+    pub(crate) fn update_progress(
+        &self,
+        update: SubagentProgressUpdate,
+    ) -> Result<(), RegistryError> {
+        validate_identifier("subagent id", &update.subagent_id)?;
+        validate_identifier("terminal id", &update.terminal_id)?;
+        let encoded = serde_json::to_vec(&update.progress).map_err(|error| {
+            RegistryError::new(
+                "invalid_progress",
+                format!("could not serialize progress: {error}"),
+            )
+        })?;
+        if encoded.len() > MAX_PROGRESS_BYTES {
+            return Err(RegistryError::new(
+                "progress_too_large",
+                format!("subagent progress exceeds {MAX_PROGRESS_BYTES} bytes"),
+            ));
+        }
+        let mut state = self.lock()?;
+        let record = state
+            .records
+            .get_mut(&update.subagent_id)
+            .ok_or_else(|| unknown_subagent(&update.subagent_id))?;
+        validate_result_owner(record, &update.terminal_id)?;
+        record.status.progress = Some(update.progress);
+        record.revision = record.revision.saturating_add(1);
+        self.inner.changed.notify_all();
+        Ok(())
+    }
+
     pub(crate) fn result(&self, id: &str) -> Result<SubagentResult, RegistryError> {
         let state = self.lock()?;
         let record = state.records.get(id).ok_or_else(|| unknown_subagent(id))?;
@@ -760,6 +796,21 @@ impl SubagentRegistry {
                 })?
         };
         input(data).map_err(|message| RegistryError::new("input_failed", message))
+    }
+
+    pub(crate) fn close_target(
+        &self,
+        id: &str,
+    ) -> Result<(String, SubagentCloseEvent), RegistryError> {
+        let state = self.lock()?;
+        let record = state.records.get(id).ok_or_else(|| unknown_subagent(id))?;
+        Ok((
+            record.window_label.clone(),
+            SubagentCloseEvent {
+                subagent_id: record.status.id.clone(),
+                terminal_id: record.status.terminal_id.clone(),
+            },
+        ))
     }
 
     pub(crate) fn stop(&self, id: &str) -> Result<(), RegistryError> {
@@ -1601,6 +1652,31 @@ mod tests {
             stripper.strip(b"m red\x1b[0m\x1b]0;title\x07!\x08\n"),
             b" red!\n"
         );
+    }
+
+    #[test]
+    fn progress_updates_are_owned_bounded_and_wake_waiters() {
+        let (registry, _, _) = registry_with_subagent();
+        let id = "subagent-1";
+        registry
+            .update_progress(SubagentProgressUpdate {
+                subagent_id: id.into(),
+                terminal_id: "terminal-child".into(),
+                progress: serde_json::json!({ "activities": [{ "type": "tool", "status": "running" }] }),
+            })
+            .unwrap();
+        assert_eq!(
+            registry.status(id).unwrap().progress,
+            Some(serde_json::json!({ "activities": [{ "type": "tool", "status": "running" }] }))
+        );
+        let error = registry
+            .update_progress(SubagentProgressUpdate {
+                subagent_id: id.into(),
+                terminal_id: "wrong-terminal".into(),
+                progress: serde_json::json!({}),
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "terminal_mismatch");
     }
 
     #[test]

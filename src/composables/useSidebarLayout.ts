@@ -7,7 +7,8 @@ export function useSidebarLayout() {
   const left = useSidebarVisibility(compactSidebarMode, true);
   const right = useSidebarVisibility(compactSidebarMode);
   const leftWidth = ref(240);
-  const rightWidth = ref(480);
+  // Keep the right sidebar proportional to the window so it scales with the workspace.
+  const rightWidth = ref(40);
   let stopResize: (() => void) | undefined;
 
   function startResize(side: "left" | "right", event: PointerEvent): void {
@@ -19,7 +20,10 @@ export function useSidebarLayout() {
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX;
       if (side === "left") leftWidth.value = clamp(startWidth + delta, 190, 420);
-      else rightWidth.value = Math.max(300, startWidth - delta);
+      else {
+        const deltaPercent = (delta / window.innerWidth) * 100;
+        rightWidth.value = clamp(startWidth - deltaPercent, 20, 50);
+      }
     };
     const stop = () => {
       window.removeEventListener("pointermove", onMove);

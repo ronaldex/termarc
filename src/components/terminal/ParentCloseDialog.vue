@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from "vue";
-import type { ParentCloseChoice } from "../../utils/parentClose";
+import type { TerminalCloseChoice } from "../../utils/parentClose";
 
-defineProps<{ childCount: number }>();
-const emit = defineEmits<{ choose: [choice: ParentCloseChoice] }>();
+defineProps<{ childCount: number; runningProcessCount: number }>();
+const emit = defineEmits<{ choose: [choice: TerminalCloseChoice] }>();
 const dialog = ref<HTMLElement>();
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -29,19 +29,20 @@ onMounted(() => void nextTick(() => dialog.value?.focus()));
         @keydown="handleKeydown"
       >
         <header>
-          <h2 id="parent-close-title">Close terminal with active subagents?</h2>
+          <h2 id="parent-close-title">Close terminal with a running process?</h2>
           <p>
-            {{ childCount }} active {{ childCount === 1 ? "subagent is" : "subagents are" }} still
-            running.
+            {{ runningProcessCount }} running
+            {{ runningProcessCount === 1 ? "process will" : "processes will" }} be stopped.
+            <template v-if="childCount">
+              This will also close {{ childCount }}
+              {{ childCount === 1 ? "subterminal" : "subterminals" }}.
+            </template>
           </p>
         </header>
         <footer>
           <button type="button" @click="emit('choose', 'cancel')">Cancel</button>
-          <button type="button" @click="emit('choose', 'detach')">
-            Keep subagents as standalone terminals
-          </button>
-          <button class="danger" type="button" @click="emit('choose', 'stop')">
-            Stop parent and subagents
+          <button class="danger" type="button" @click="emit('choose', 'close')">
+            Close terminal
           </button>
         </footer>
       </section>

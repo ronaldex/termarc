@@ -135,6 +135,11 @@ impl ControlDispatcher {
                 .update_result(update)
                 .map(ControlResult::SubagentResult)
                 .map_err(registry_error),
+            ControlRequest::SubagentProgressUpdate { update, .. } => self
+                .subagents
+                .update_progress(update)
+                .map(|()| ControlResult::Empty(EmptyResponse {}))
+                .map_err(registry_error),
             ControlRequest::SubagentResultClear { clear, .. } => self
                 .subagents
                 .clear_result(clear)
@@ -181,6 +186,10 @@ impl ControlDispatcher {
                 .stop(&id)
                 .map(|()| ControlResult::Empty(EmptyResponse {}))
                 .map_err(registry_error),
+            ControlRequest::SubagentClose { id, .. } => self
+                .spawn_router
+                .close(&id)
+                .map(|()| ControlResult::Empty(EmptyResponse {})),
         };
 
         match result {
@@ -237,6 +246,7 @@ mod tests {
             "resultClear",
             "input",
             "stop",
+            "close",
         ] {
             let request: ControlRequest = serde_json::from_value(requests[operation].clone())
                 .unwrap_or_else(|error| {
@@ -264,6 +274,7 @@ mod tests {
             "result",
             "input",
             "stop",
+            "close",
         ] {
             let response = responses[operation].as_object().unwrap();
             assert_eq!(response["ok"], true, "{operation} response must succeed");
@@ -285,7 +296,7 @@ mod tests {
                         | ("wait", ControlResult::Wait(_))
                         | ("output", ControlResult::Output(_))
                         | ("result", ControlResult::SubagentResult(_))
-                        | ("input" | "stop", ControlResult::Empty(_))
+                        | ("input" | "stop" | "close", ControlResult::Empty(_))
                 ),
                 "{operation} response decoded as the wrong Rust variant"
             );

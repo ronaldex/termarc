@@ -61,6 +61,10 @@ export function subagentWaitArguments(id: string, returnOnResult = true): string
   ];
 }
 
+export function subagentPiSpawnArguments(name: string, piArguments: string[]): string[] {
+  return ["--json", "subagents", "spawn", "--name", name, "--kind", "pi", "--", ...piArguments];
+}
+
 export function subagentProcessSpawnArguments(name: string, command: string[]): string[] {
   return ["--json", "subagents", "spawn", "--name", name, "--kind", "process", "--", ...command];
 }

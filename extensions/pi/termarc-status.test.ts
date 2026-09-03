@@ -25,6 +25,7 @@ import {
   shouldReportPiStatus,
   subagentListArguments,
   subagentNotification,
+  subagentPiSpawnArguments,
   subagentProcessSpawnArguments,
   subagentWaitArguments,
   termarcMainTerminalCli,
@@ -124,7 +125,22 @@ describe("Pi status extension modes", () => {
     expect(shouldNotifySubagentWait({ timedOut: false })).toBe(true);
   });
 
-  it("builds unchanged process spawn and watcher CLI arguments", () => {
+  it("builds named Pi and process spawn arguments plus watcher CLI arguments", () => {
+    expect(subagentPiSpawnArguments("Review terminal links", ["pi", "--", "Review links"])).toEqual(
+      [
+        "--json",
+        "subagents",
+        "spawn",
+        "--name",
+        "Review terminal links",
+        "--kind",
+        "pi",
+        "--",
+        "pi",
+        "--",
+        "Review links",
+      ],
+    );
     expect(subagentProcessSpawnArguments("Tauri build", ["npm", "run", "tauri", "build"])).toEqual([
       "--json",
       "subagents",

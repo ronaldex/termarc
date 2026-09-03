@@ -1,47 +1,29 @@
 import type { TerminalTabState } from "../types/terminal";
+import { terminalFamilyForTab } from "./terminalFamily";
 
-export type ParentCloseChoice = "stop" | "detach" | "cancel";
+export type TerminalCloseChoice = "close" | "cancel";
 
-export type ParentClosePlan =
-  | { action: "cancel"; childTabIds: string[] }
-  | { action: "close"; childTabIds: string[] }
-  | { action: "detach"; childTabIds: string[] };
+export type TerminalClosePlan = {
+  tabIds: string[];
+  childCount: number;
+  runningProcessCount: number;
+};
 
-export function directSubagentTabs(
+/**
+ * A family root owns its subterminals, so closing it closes the complete family.
+ * Closing a subterminal only closes that terminal.
+ */
+export function terminalClosePlan(
   tabs: readonly TerminalTabState[],
-  parentTerminalId: string,
-): TerminalTabState[] {
-  return tabs.filter(
-    (tab) => tab.launch.kind === "subagent" && tab.launch.parentTerminalId === parentTerminalId,
-  );
-}
+  terminalId: string,
+): TerminalClosePlan {
+  const family = terminalFamilyForTab(tabs, terminalId);
+  const tabIds = family?.rootTabId === terminalId ? [...family.memberTabIds] : [terminalId];
+  const closingTabs = tabs.filter((tab) => tabIds.includes(tab.id));
 
-export function activeDirectSubagentTabs(
-  tabs: readonly TerminalTabState[],
-  parentTerminalId: string,
-): TerminalTabState[] {
-  return directSubagentTabs(tabs, parentTerminalId).filter(
-    (tab) => tab.status === "starting" || tab.status === "running",
-  );
-}
-
-/** Completed children do not prompt, but are detached so their runtime output remains visible. */
-export function parentClosePlan(
-  tabs: readonly TerminalTabState[],
-  parentTerminalId: string,
-  choice?: ParentCloseChoice,
-): ParentClosePlan {
-  const children = directSubagentTabs(tabs, parentTerminalId);
-  const childTabIds = children.map((tab) => tab.id);
-  const hasActiveChildren = children.some(
-    (tab) => tab.status === "starting" || tab.status === "running",
-  );
-
-  if (!hasActiveChildren) {
-    return childTabIds.length
-      ? { action: "detach", childTabIds }
-      : { action: "close", childTabIds };
-  }
-  if (!choice || choice === "cancel") return { action: "cancel", childTabIds };
-  return { action: choice === "stop" ? "close" : "detach", childTabIds };
+  return {
+    tabIds,
+    childCount: Math.max(0, tabIds.length - 1),
+    runningProcessCount: closingTabs.filter((tab) => Boolean(tab.processName)).length,
+  };
 }

@@ -28,8 +28,10 @@ Use the Termarc CLI to run Pi agents in separate terminal tabs while retaining c
    Use `termarc subagents output <id> --after <cursor>` only for diagnostics or as a fallback for processes without structured results.
 5. Send a follow-up prompt:
    `termarc subagents send <id> --text <prompt>`
-6. Stop a child that is no longer needed:
+6. Stop a child but leave its terminal visible:
    `termarc subagents stop <id>`
+7. Stop a child and close its terminal:
+   `termarc subagents close <id>`
 
 `wait` reports state changes; it does not return the child's answer. For Pi subagents, always use `result` to retrieve the clean answer before responding to the user. Structured results are Pi-specific; generic processes continue to use `output`. Use output cursors for incremental diagnostic reads. A Pi transition from `processing` to `waiting` means its current turn has completed. The initial `waiting` state only means Pi is ready.
 
@@ -332,6 +334,17 @@ fn execute_subagents_with_control(
     }
     if arguments
         .first()
+        .is_some_and(|value| value == "report-progress")
+    {
+        return report_subagent_progress(
+            json,
+            result_owner("report-progress")?,
+            &mut io::stdin().lock(),
+            control_request,
+        );
+    }
+    if arguments
+        .first()
         .is_some_and(|value| value == "clear-result")
     {
         let sequence =
@@ -415,6 +428,14 @@ fn parse_subagent_command(
         },
         [command, id] if command == "stop" => ParsedSubagentCommand {
             request: crate::control::ControlRequest::SubagentStop {
+                protocol_version,
+                id: id.clone(),
+            },
+            timeout: Duration::from_secs(2),
+            output_mode: SubagentOutputMode::Value,
+        },
+        [command, id] if command == "close" => ParsedSubagentCommand {
+            request: crate::control::ControlRequest::SubagentClose {
                 protocol_version,
                 id: id.clone(),
             },
@@ -584,6 +605,47 @@ fn report_subagent_result(
                 terminal_id,
                 text,
                 sequence,
+            },
+        },
+        Duration::from_secs(2),
+    )
+    .map_err(|error| error.to_string())?;
+    if json {
+        print_value(&result, true);
+    }
+    Ok(())
+}
+
+fn report_subagent_progress(
+    json: bool,
+    (subagent_id, terminal_id): (String, String),
+    input: &mut dyn Read,
+    control_request: &dyn Fn(
+        crate::control::ControlRequest,
+        Duration,
+    )
+        -> Result<crate::control::ControlResult, crate::control::ClientError>,
+) -> Result<(), String> {
+    let mut bytes = Vec::new();
+    input
+        .take((crate::subagents::MAX_PROGRESS_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("could not read subagent progress: {error}"))?;
+    if bytes.len() > crate::subagents::MAX_PROGRESS_BYTES {
+        return Err(format!(
+            "subagent progress exceeds {} bytes",
+            crate::subagents::MAX_PROGRESS_BYTES
+        ));
+    }
+    let progress = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("subagent progress must be JSON: {error}"))?;
+    let result = control_request(
+        crate::control::ControlRequest::SubagentProgressUpdate {
+            protocol_version: crate::control::PROTOCOL_VERSION,
+            update: crate::subagents::SubagentProgressUpdate {
+                subagent_id,
+                terminal_id,
+                progress,
             },
         },
         Duration::from_secs(2),
@@ -1228,6 +1290,19 @@ mod tests {
         assert!(SUBAGENT_SKILL.contains("npm run tauri build"));
         assert!(SUBAGENT_SKILL.contains("processing` to `waiting"));
         assert!(SUBAGENT_SKILL.contains("TERMARC_CLI"));
+        assert!(SUBAGENT_SKILL.contains("subagents close <id>"));
+    }
+
+    #[test]
+    fn close_requests_terminal_removal() {
+        let parsed = parse_subagent_command(
+            &arguments(&["close", "subagent-1"]),
+            None,
+            Path::new("/tmp"),
+        )
+        .unwrap();
+        assert_eq!(request_value(&parsed.request)["type"], "subagentClose");
+        assert_eq!(request_value(&parsed.request)["id"], "subagent-1");
     }
 
     #[test]
@@ -1266,6 +1341,6 @@ fn print_help() {
 
 fn print_subagents_help() {
     println!(
-        "Usage:\n  termarc subagents skill\n  termarc subagents spawn [--parent <terminal-id>] --name <name> [--project <project-id>] [--cwd <path>] [--kind <kind>] -- <command> [args...]\n  termarc subagents list [--parent <terminal-id>] [--json]\n  termarc subagents status <subagent-id> [--json]\n  termarc subagents result <subagent-id> [--json]\n  termarc subagents output <subagent-id> [--after <cursor>] [--limit <bytes>] [--raw] [--json]\n  termarc subagents send <subagent-id> --text <text>\n  termarc subagents wait <subagent-id> [--result] [--timeout <seconds>] [--json]\n  termarc subagents stop <subagent-id>"
+        "Usage:\n  termarc subagents skill\n  termarc subagents spawn [--parent <terminal-id>] --name <name> [--project <project-id>] [--cwd <path>] [--kind <kind>] -- <command> [args...]\n  termarc subagents list [--parent <terminal-id>] [--json]\n  termarc subagents status <subagent-id> [--json]\n  termarc subagents result <subagent-id> [--json]\n  termarc subagents output <subagent-id> [--after <cursor>] [--limit <bytes>] [--raw] [--json]\n  termarc subagents send <subagent-id> --text <text>\n  termarc subagents wait <subagent-id> [--result] [--timeout <seconds>] [--json]\n  termarc subagents stop <subagent-id>\n  termarc subagents close <subagent-id>"
     );
 }

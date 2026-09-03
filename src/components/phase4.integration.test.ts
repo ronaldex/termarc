@@ -216,7 +216,7 @@ describe("Phase 4 application-level mounted integration", () => {
             rightSidebarMode: controller.mode.value,
             rightSidebarModes: controller.modes.value,
             rightSidebarPresentation: "docked",
-            rightSidebarWidth: 480,
+            rightSidebarWidth: 40,
             showRightSidebar: true,
             selectedProjectDirectory: project.directory,
             terminalFontSize: 13,
@@ -300,33 +300,24 @@ describe("Phase 4 application-level mounted integration", () => {
     expect(stopped).toHaveBeenCalledWith("child");
   });
 
-  it("mounts the parent-close dialog, focuses it, and emits every close choice", async () => {
+  it("mounts the terminal-close dialog, focuses it, and emits every close choice", async () => {
     const choose = vi.fn();
-    mount(h(ParentCloseDialog, { childCount: 2, onChoose: choose }));
+    mount(h(ParentCloseDialog, { childCount: 2, runningProcessCount: 1, onChoose: choose }));
     await renderSettled();
 
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(document.activeElement).toBe(dialog);
+    expect(dialog.textContent).toContain("2 subterminals");
     dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     click(
       [...document.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("standalone"),
-      )!,
-    );
-    click(
-      [...document.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("Stop parent"),
+        button.textContent?.includes("Close terminal"),
       )!,
     );
     document
       .querySelector<HTMLElement>(".parent-close-backdrop")!
       .dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
 
-    expect(choose.mock.calls.map(([choice]) => choice)).toEqual([
-      "cancel",
-      "detach",
-      "stop",
-      "cancel",
-    ]);
+    expect(choose.mock.calls.map(([choice]) => choice)).toEqual(["cancel", "close", "cancel"]);
   });
 });
