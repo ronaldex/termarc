@@ -1,11 +1,7 @@
 import { TERMINAL_FONT_SIZE_OPTIONS } from "../settings/options";
-import { adjacentTabId } from "../utils/terminalTabs";
-
 export type TerminalShortcutDependencies = {
   terminalFocused: boolean;
   tabIdsByNumber: ReadonlyMap<number, string>;
-  orderedTabIds: readonly string[];
-  activeTabId?: string;
   fontSize: number;
   shortcutModifier?: "meta" | "ctrl";
   selectTab: (id: string) => void;
@@ -21,24 +17,6 @@ export function handleTerminalShortcut(
     dependencies.shortcutModifier === "ctrl" ? event.metaKey : event.ctrlKey;
   const shortcut = modifierPressed || (event.ctrlKey && event.shiftKey);
   if (!shortcut) return false;
-
-  if (
-    dependencies.terminalFocused &&
-    modifierPressed &&
-    !event.shiftKey &&
-    !event.altKey &&
-    !otherModifierPressed &&
-    (event.key === "ArrowUp" || event.key === "ArrowDown") &&
-    dependencies.orderedTabIds.length > 1
-  ) {
-    const nextId = adjacentTabId(
-      dependencies.orderedTabIds,
-      dependencies.activeTabId,
-      event.key === "ArrowDown" ? 1 : -1,
-    );
-    if (nextId) dependencies.selectTab(nextId);
-    return true;
-  }
 
   if (/^[1-9]$/.test(event.key)) {
     const tabId = dependencies.tabIdsByNumber.get(Number(event.key));

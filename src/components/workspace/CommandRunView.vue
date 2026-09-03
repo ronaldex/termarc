@@ -7,7 +7,6 @@ const props = defineProps<{
   command: ProjectCommand;
 }>();
 const emit = defineEmits<{ run: [] }>();
-
 </script>
 
 <template>

@@ -10,11 +10,13 @@ import TerminalStatusIndicator from "../terminal/TerminalStatusIndicator.vue";
 
 const props = defineProps<{
   tab: TerminalTabState;
+  selection?: Extract<SidebarSelection, { kind: "terminal" | "subagent" }>;
   shortcutNumber?: number;
   shortcutModifier: "meta" | "ctrl";
   modifierPressed: boolean;
   active: boolean;
   collapsed?: boolean;
+  nested?: boolean;
 }>();
 const emit = defineEmits<{
   start: [id: string];
@@ -37,6 +39,10 @@ const shortcutVisible = computed(
 const canRestart = computed(() => props.tab.status === "error");
 
 function focus(): void {
+  if (props.selection) {
+    emit("focus", props.selection);
+    return;
+  }
   emit("focus", {
     id: props.tab.id,
     kind: "terminal",
@@ -64,6 +70,7 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
     ref="treeItemRow"
     :active="active"
     :collapsed="collapsed"
+    :nested="nested"
     :shortcut-visible="shortcutVisible"
     custom-context-menu
     :title="collapsed ? display.tooltip : undefined"
@@ -78,12 +85,17 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
     @context-menu="openContextMenu"
   >
     <template #icon>
-      <TerminalStatusIndicator
-        :status="tab.status"
-        :busy="display.busy"
-        :running="display.running"
-        :title="display.tooltip"
-      />
+      <span class="terminal-icon-wrap">
+        <svg v-if="nested" class="terminal-branch" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 2v8h10" />
+        </svg>
+        <TerminalStatusIndicator
+          :status="tab.status"
+          :busy="display.busy"
+          :running="display.running"
+          :title="display.tooltip"
+        />
+      </span>
     </template>
     <template #content>
       <span class="process-labels">
@@ -123,6 +135,26 @@ function openContextMenuFromKeyboard(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
+.terminal-icon-wrap {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+.terminal-branch {
+  position: absolute;
+  right: calc(100% + 0.4375rem);
+  width: 0.875rem;
+  height: 0.875rem;
+  overflow: visible;
+  transform: translateY(-0.125rem);
+  fill: none;
+  stroke: var(--color-text-faint);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+}
 button {
   border: 0;
   color: inherit;

@@ -2,6 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type AgentExtensionId = "pi";
 
+export interface AgentExtensionStatus {
+  path: string;
+  installed: boolean;
+  current: boolean;
+  updateAvailable: boolean;
+  bundledVersion: string;
+}
+
 export interface AgentExtensionOption {
   id: AgentExtensionId;
   name: string;
@@ -21,6 +29,10 @@ export const AGENT_EXTENSION_OPTIONS: readonly AgentExtensionOption[] = [
 
 export function installAgentExtension(agent: AgentExtensionId): Promise<string> {
   return invoke("install_agent_extension", { agent });
+}
+
+export function getAgentExtensionStatus(agent: AgentExtensionId): Promise<AgentExtensionStatus> {
+  return invoke("get_agent_extension_status", { agent });
 }
 
 export function isAgentExtensionInstalled(agent: AgentExtensionId): Promise<boolean> {

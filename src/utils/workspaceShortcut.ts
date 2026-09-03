@@ -1,17 +1,21 @@
 export type WorkspaceFocusRegion = "left-sidebar" | "workspace" | "right-sidebar" | "other";
 
 export type WorkspaceShortcutAction =
-  | { type: "cycle-terminal"; direction: -1 | 1 }
+  | { type: "cycle-terminal"; direction: -1 | 1; includeChildren: boolean }
   | { type: "focus-left-sidebar" }
   | { type: "focus-workspace-from-left" }
   | { type: "focus-right-sidebar" }
   | { type: "focus-workspace-from-right" }
+  | { type: "focus-next-right-sidebar" }
+  | { type: "focus-previous-right-sidebar" }
+  | { type: "cycle-subterminal"; direction: -1 | 1; includeMain: boolean }
   | { type: "escape" }
   | { type: "open-settings" }
   | { type: "open-keyboard-shortcuts" }
   | { type: "focus-process-filter" }
   | { type: "focus-project"; number: number }
   | { type: "create-terminal" }
+  | { type: "create-subterminal" }
   | { type: "close-terminal" }
   | { type: "toggle-left-sidebar" }
   | { type: "toggle-right-sidebar" };
@@ -32,6 +36,10 @@ export type WorkspaceShortcutInput = {
   terminalSelected: boolean;
   activeTerminalAvailable: boolean;
   gitSidebarAvailable: boolean;
+  rightSidebarAvailable?: boolean;
+  rightSidebarHasNextMode?: boolean;
+  rightSidebarHasPreviousMode?: boolean;
+  subterminalFocused?: boolean;
 };
 
 export function workspaceContentFocusTarget(
@@ -48,15 +56,23 @@ export function workspaceShortcutAction(
   const otherModifierPressed = input.shortcutModifier === "ctrl" ? input.metaKey : input.ctrlKey;
   const commandModifier =
     modifierPressed && !input.shiftKey && !input.altKey && !otherModifierPressed;
+  const navigationModifier = modifierPressed && !input.altKey && !otherModifierPressed;
 
   if (
     !input.editableTarget &&
-    commandModifier &&
-    (input.focusRegion === "left-sidebar" || input.focusRegion === "workspace") &&
-    input.terminalSelected &&
+    navigationModifier &&
     (input.key === "ArrowUp" || input.key === "ArrowDown")
   ) {
-    return { type: "cycle-terminal", direction: input.key === "ArrowDown" ? 1 : -1 };
+    const direction = input.key === "ArrowDown" ? 1 : -1;
+    if (input.focusRegion === "right-sidebar" && input.subterminalFocused) {
+      return { type: "cycle-subterminal", direction, includeMain: input.shiftKey };
+    }
+    if (
+      (input.focusRegion === "left-sidebar" || input.focusRegion === "workspace") &&
+      input.terminalSelected
+    ) {
+      return { type: "cycle-terminal", direction, includeChildren: input.shiftKey };
+    }
   }
 
   if (!input.editableTarget && commandModifier) {
@@ -69,12 +85,21 @@ export function workspaceShortcutAction(
     if (
       input.key === "ArrowRight" &&
       input.focusRegion === "workspace" &&
-      input.gitSidebarAvailable
+      (input.rightSidebarAvailable ?? input.gitSidebarAvailable)
     ) {
       return { type: "focus-right-sidebar" };
     }
+    if (
+      input.key === "ArrowRight" &&
+      input.focusRegion === "right-sidebar" &&
+      input.rightSidebarHasNextMode
+    ) {
+      return { type: "focus-next-right-sidebar" };
+    }
     if (input.key === "ArrowLeft" && input.focusRegion === "right-sidebar") {
-      return { type: "focus-workspace-from-right" };
+      return input.rightSidebarHasPreviousMode
+        ? { type: "focus-previous-right-sidebar" }
+        : { type: "focus-workspace-from-right" };
     }
   }
 
@@ -111,7 +136,22 @@ export function workspaceShortcutAction(
   ) {
     return { type: "focus-process-filter" };
   }
-  if (modifierPressed && (input.key.toLowerCase() === "t" || input.code === "KeyT")) {
+  if (
+    modifierPressed &&
+    input.shiftKey &&
+    !input.altKey &&
+    !otherModifierPressed &&
+    (input.key.toLowerCase() === "t" || input.code === "KeyT")
+  ) {
+    return { type: "create-subterminal" };
+  }
+  if (
+    modifierPressed &&
+    !input.shiftKey &&
+    !input.altKey &&
+    !otherModifierPressed &&
+    (input.key.toLowerCase() === "t" || input.code === "KeyT")
+  ) {
     return { type: "create-terminal" };
   }
   if (
@@ -126,11 +166,18 @@ export function workspaceShortcutAction(
     !input.shiftKey &&
     !input.altKey &&
     !otherModifierPressed &&
-    (input.key.toLowerCase() === "p" || input.code === "KeyP")
+    (input.key.toLowerCase() === "s" || input.code === "KeyS")
   ) {
     return { type: "toggle-left-sidebar" };
   }
-  if (modifierPressed && input.key.toLowerCase() === "d" && input.gitSidebarAvailable) {
+  if (
+    modifierPressed &&
+    !input.shiftKey &&
+    !input.altKey &&
+    !otherModifierPressed &&
+    (input.key.toLowerCase() === "d" || input.code === "KeyD") &&
+    (input.rightSidebarAvailable ?? input.gitSidebarAvailable)
+  ) {
     return { type: "toggle-right-sidebar" };
   }
 }

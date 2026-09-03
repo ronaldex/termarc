@@ -1,5 +1,6 @@
 :root {
   --panel-footer-height: 2.5rem;
+  --panel-footer-background: var(--color-sidebar-bg-deep);
   --sidebar-collapsed-width: 3rem;
   --sidebar-background: linear-gradient(
     180deg,

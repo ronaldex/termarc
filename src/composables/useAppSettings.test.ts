@@ -110,6 +110,31 @@ describe("useAppSettings persistence", () => {
     });
   });
 
+  it("discards the development split-view preference from version 3", async () => {
+    const storage = mockStorage(
+      JSON.stringify({
+        version: 3,
+        settings: {
+          terminalFontFamily: "Monaco",
+          terminalFontSize: 16,
+          colorTheme: "termarc",
+          externalEditor: "vscodium",
+          notifyWhenAgentReady: false,
+          playSoundWhenAgentReady: true,
+          showSubterminalsInSplit: true,
+          shortcutModifier: "meta",
+        },
+      }),
+    );
+    const { useAppSettings } = await import("./useAppSettings");
+
+    const { settings, load } = useAppSettings();
+    load();
+
+    expect(settings).not.toHaveProperty("showSubterminalsInSplit");
+    expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toMatchObject({ version: 2 });
+  });
+
   it("loads a supported external editor", async () => {
     const storage = mockStorage(
       JSON.stringify({
@@ -121,6 +146,7 @@ describe("useAppSettings persistence", () => {
           externalEditor: "phpstorm",
           notifyWhenAgentReady: false,
           playSoundWhenAgentReady: true,
+          shortcutModifier: "meta",
         },
       }),
     );
@@ -145,6 +171,7 @@ describe("useAppSettings persistence", () => {
           externalEditor: "vscodium",
           notifyWhenAgentReady: false,
           playSoundWhenAgentReady: true,
+          shortcutModifier: "meta",
         },
       }),
     );

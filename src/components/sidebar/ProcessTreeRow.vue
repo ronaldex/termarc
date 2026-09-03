@@ -30,9 +30,7 @@ const emit = defineEmits<{
 
 const treeItemRow = ref<InstanceType<typeof SidebarTreeItemRow>>();
 const running = computed(() => props.tab?.status === "starting" || props.tab?.status === "running");
-const busy = computed(
-  () => props.category === "agent" && props.tab?.agentState === "processing",
-);
+const busy = computed(() => props.category === "agent" && props.tab?.agentState === "processing");
 const shortcutGlyph = computed(() => (props.shortcutModifier === "ctrl" ? "⌃" : "⌘"));
 const shortcutName = computed(() => (props.shortcutModifier === "ctrl" ? "Ctrl" : "Command"));
 const showsShortcut = computed(

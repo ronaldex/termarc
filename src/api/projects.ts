@@ -59,3 +59,17 @@ export function saveProjectCommandOrder(
     localCommands,
   });
 }
+
+export function saveProjectAgentOrder(
+  projectId: string,
+  directory: string,
+  globalAgents: ProjectCommand[],
+  localAgents: ProjectCommand[],
+): Promise<void> {
+  return invoke("save_project_agent_order", {
+    projectId,
+    directory,
+    globalAgents,
+    localAgents,
+  });
+}

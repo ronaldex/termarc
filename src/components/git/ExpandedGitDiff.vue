@@ -12,7 +12,6 @@ const props = defineProps<{
   files: DiffData[];
   error?: string;
   repository?: string;
-  loading: boolean;
   fontSize: number;
   diffTheme: "light" | "dark";
   expandedFiles: Set<string>;
@@ -21,8 +20,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  collapse: [];
-  refresh: [];
   toggleFile: [key: string];
   expandAll: [];
   collapseAll: [];
@@ -165,21 +162,6 @@ defineExpose({ focusActiveFile });
         </section>
       </div>
     </template>
-    <footer class="diff-footer">
-      <button type="button" title="Hide Git changes" @click="emit('collapse')">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-      </button>
-      <button
-        class="refresh-button"
-        type="button"
-        title="Refresh diff"
-        aria-label="Refresh Git changes"
-        :class="{ loading }"
-        @click="emit('refresh')"
-      >
-        ↻
-      </button>
-    </footer>
   </div>
 </template>
 
@@ -444,47 +426,5 @@ defineExpose({ focusActiveFile });
   --diff-add-widget-color--: var(--color-app-bg);
   --diff-empty-content--: var(--color-surface-raised);
   --diff-hunk-content-color--: var(--color-text-muted);
-}
-.diff-footer {
-  display: flex;
-  height: 2.5rem;
-  flex: 0 0 2.5rem;
-  align-items: center;
-  margin-top: auto;
-  padding: 0 0.75rem;
-  border-top: 1px solid var(--color-border);
-}
-.diff-footer button {
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
-  place-items: center;
-  border: 0;
-  color: var(--color-text-subtle);
-  background: transparent;
-  cursor: pointer;
-}
-.diff-footer button:hover {
-  color: var(--color-text);
-}
-.refresh-button {
-  margin-left: auto;
-}
-.diff-footer button.loading {
-  animation: spin 0.8s linear infinite;
-}
-.diff-footer svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

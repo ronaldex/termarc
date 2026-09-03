@@ -12,11 +12,11 @@ function toggle(event: MouseEvent): void {
 
 <template>
   <div v-if="collapsed" class="collapsed-footer">
-    <SidebarChevron title="Show sidebar (⌘P)" @click="toggle" />
+    <SidebarChevron title="Show sidebar (⌘S)" @click="toggle" />
   </div>
   <div v-else class="sidebar-footer">
+    <SidebarChevron direction="left" title="Hide sidebar (⌘S)" @click="toggle" />
     <button class="add-project" @click="$emit('add')">＋ Add project</button>
-    <SidebarChevron direction="left" title="Hide sidebar (⌘P)" @click="toggle" />
   </div>
 </template>
 
@@ -27,8 +27,9 @@ function toggle(event: MouseEvent): void {
   flex: 0 0 2.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0.75rem 0 1.125rem;
+  padding: 0 1.125rem 0 0.9375rem;
   border-top: 1px solid var(--line);
+  background: var(--panel-footer-background);
 }
 .add-project {
   padding: 0;
@@ -48,5 +49,6 @@ function toggle(event: MouseEvent): void {
   align-items: center;
   justify-content: center;
   border-top: 1px solid var(--line);
+  background: var(--panel-footer-background);
 }
 </style>

@@ -15,6 +15,7 @@ const props = defineProps<{
   tabs: TerminalTabState[];
   shortcutModifier: "meta" | "ctrl";
   collapsed?: boolean;
+  filter?: string;
   projects: ProjectTreeProject[];
   selection: SidebarSelection;
   isTerminalFocused: () => boolean;
@@ -45,6 +46,8 @@ const emit = defineEmits<{
   runAgent: [projectId: string, commandId: string];
   reloadAgent: [projectId: string, commandId: string];
   stopAgent: [projectId: string, commandId: string];
+  stopSubagent: [id: string];
+  reorderProject: [movedProjectId: string, targetProjectId: string, placement: DropPlacement];
   reorderTerminal: [
     projectId: string,
     movedTabId: string,
@@ -57,11 +60,25 @@ const emit = defineEmits<{
     targetCommandId: string,
     placement: DropPlacement,
   ];
+  reorderAgent: [
+    projectId: string,
+    movedAgentId: string,
+    targetAgentId: string,
+    placement: DropPlacement,
+  ];
   focus: [selection: SidebarSelection];
   activate: [selection: SidebarSelection];
+  filterChange: [filter: string];
 }>();
 
-const filter = ref("");
+const localFilter = ref("");
+const filter = computed({
+  get: () => props.filter ?? localFilter.value,
+  set: (value: string) => {
+    localFilter.value = value;
+    emit("filterChange", value);
+  },
+});
 const sidebarElement = ref<HTMLElement>();
 const projectTree = ref<InstanceType<typeof ProjectTree>>();
 const searchInput = ref<HTMLInputElement>();
@@ -105,6 +122,11 @@ const contextMenuItems = computed<ContextMenuItem[]>(() =>
 const renameTab = computed(() =>
   renameTabId.value ? props.tabs.find((tab) => tab.id === renameTabId.value) : undefined,
 );
+const renameInitialName = computed(() => {
+  const tab = renameTab.value;
+  if (!tab) return "";
+  return tab.customTitle || (tab.launch.kind === "subagent" ? tab.launch.name : tab.title);
+});
 
 function focusTree(): void {
   const focused = projectTree.value?.focusActiveItem();
@@ -155,7 +177,10 @@ async function openContextMenu(request: SidebarContextMenuRequest): Promise<void
   if (request.kind === "terminal") {
     emit("focus", {
       id: request.tabId,
-      kind: "terminal",
+      kind:
+        props.tabs.find((tab) => tab.id === request.tabId)?.launch.kind === "subagent"
+          ? "subagent"
+          : "terminal",
       projectId: props.tabs.find((tab) => tab.id === request.tabId)?.projectId ?? "",
       tabId: request.tabId,
     });
@@ -220,7 +245,7 @@ function choose(node: SidebarSelection): void {
     requestAnimationFrame(focusTree);
     return;
   }
-  if (terminalWasFocused && node.kind === "terminal" && node.tabId) {
+  if (terminalWasFocused && (node.kind === "terminal" || node.kind === "subagent") && node.tabId) {
     emit("activate", node);
     return;
   }
@@ -360,7 +385,12 @@ onBeforeUnmount(() => {
       @run-agent="(projectId, commandId) => emit('runAgent', projectId, commandId)"
       @reload-agent="(projectId, commandId) => emit('reloadAgent', projectId, commandId)"
       @stop-agent="(projectId, commandId) => emit('stopAgent', projectId, commandId)"
+      @stop-subagent="emit('stopSubagent', $event)"
+      @close-subagent="closeTerminal"
       @start-terminal="emit('startTerminal', $event)"
+      @reorder-project="
+        (movedId, targetId, placement) => emit('reorderProject', movedId, targetId, placement)
+      "
       @reorder-terminal="
         (projectId, movedId, targetId, placement) =>
           emit('reorderTerminal', projectId, movedId, targetId, placement)
@@ -368,6 +398,10 @@ onBeforeUnmount(() => {
       @reorder-command="
         (projectId, movedId, targetId, placement) =>
           emit('reorderCommand', projectId, movedId, targetId, placement)
+      "
+      @reorder-agent="
+        (projectId, movedId, targetId, placement) =>
+          emit('reorderAgent', projectId, movedId, targetId, placement)
       "
       @focus="choose"
       @activate="activate"
@@ -386,7 +420,7 @@ onBeforeUnmount(() => {
     />
     <TerminalRenameModal
       v-if="renameTab"
-      :initial-name="renameTab.customTitle"
+      :initial-name="renameInitialName"
       @save="saveRename"
       @cancel="closeRename"
     />

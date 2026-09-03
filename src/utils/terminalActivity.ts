@@ -38,11 +38,12 @@ export function applyAgentMarker(
     current.agent === marker.agent &&
     current.agentState === "processing";
 
+  const state = marker.state === "stopped" ? undefined : marker.state;
   return {
     activity: {
       ...current,
-      agent: marker.state ? marker.agent : undefined,
-      agentState: marker.state,
+      agent: state ? marker.agent : undefined,
+      agentState: state,
     },
     becameReady,
   };

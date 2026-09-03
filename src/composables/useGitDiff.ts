@@ -108,7 +108,8 @@ export function useGitDiff(
       restartPolling(isActive);
       if (wasActive !== undefined && isActive !== wasActive) {
         directoryGeneration += 1;
-        state.value = undefined;
+        // Preserve the last result while refreshing. Clearing it here makes a
+        // conditionally available Git sidebar remove its own active mode.
         void refresh();
       }
     },

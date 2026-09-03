@@ -5,6 +5,7 @@ const props = withDefaults(
   defineProps<{
     active: boolean;
     collapsed?: boolean;
+    nested?: boolean;
     title?: string;
     ariaLabel?: string;
     shortcutVisible?: boolean;
@@ -12,6 +13,7 @@ const props = withDefaults(
   }>(),
   {
     collapsed: false,
+    nested: false,
     title: undefined,
     ariaLabel: undefined,
     shortcutVisible: false,
@@ -49,6 +51,7 @@ defineExpose({ getSelectButton });
     :class="{
       'tree-active': active,
       compact: collapsed,
+      nested,
       'shortcut-visible': shortcutVisible && !collapsed,
     }"
     @contextmenu="handleContextMenu"
@@ -98,6 +101,12 @@ button {
 }
 .tree-item-row.tree-active {
   --tree-row-primary-color: var(--color-text-strong);
+}
+.tree-item-row.nested {
+  padding-left: calc(
+    var(--tree-inline-start) + var(--tree-item-icon-left) + var(--tree-icon-column) +
+      var(--tree-column-gap)
+  );
 }
 .tree-item-row:hover {
   background: color-mix(in srgb, var(--color-surface-hover) 18%, transparent);

@@ -1,5 +1,6 @@
 import type { FitAddon } from "@xterm/addon-fit";
 import type { AutoRestartPolicy } from "./project";
+import type { TerminalMount } from "../terminal/terminalMount";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { IDisposable, Terminal } from "@xterm/xterm";
 
@@ -14,6 +15,12 @@ export type PtyStarted = {
   pid?: number;
   shell: string;
 };
+
+export type TerminalStartResult =
+  | { outcome: "running"; session: PtyStarted }
+  | { outcome: "exited"; exitCode: number }
+  | { outcome: "failed"; error: string }
+  | { outcome: "cancelled" };
 
 export type AgentKind = "pi";
 export type AgentState = "processing" | "waiting";
@@ -34,6 +41,16 @@ export type TerminalLaunch =
       commandLine: string;
       source?: "command" | "agent";
       autoRestart?: AutoRestartPolicy;
+    }
+  | {
+      /** Runtime-only launch associated with a subagent record. */
+      kind: "subagent";
+      subagentId: string;
+      /** Undefined after the runtime subagent is detached from its former parent. */
+      parentTerminalId?: string;
+      name: string;
+      commandLine: string;
+      processKind: string;
     };
 
 export type TerminalActivity = {
@@ -61,6 +78,8 @@ export type TerminalTabState = TerminalActivity & {
   detail: string;
   projectId: string;
   cwd: string;
+  /** Optional visual parent shared by shells and agent terminals. */
+  parentTerminalId?: string;
   launch: TerminalLaunch;
   status: TerminalStatus;
 };
@@ -73,7 +92,8 @@ export type TerminalRuntime = {
   linkDisposable?: IDisposable;
   copyDisposable?: IDisposable;
   webglFailed: boolean;
-  container?: HTMLDivElement;
+  /** Stable xterm render root and its current presentation target. */
+  mount: TerminalMount;
   session?: PtyStarted;
   startGeneration: number;
   stopRequested: boolean;

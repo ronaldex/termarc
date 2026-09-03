@@ -1,5 +1,6 @@
 mod agent_extensions;
 pub mod cli;
+mod control;
 mod external_editor;
 mod git;
 mod notifications;
@@ -8,6 +9,8 @@ mod plugins;
 mod project_local_config;
 mod projects;
 mod pty;
+mod spawn_router;
+mod subagents;
 mod themes;
 mod windows;
 
@@ -18,7 +21,7 @@ use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
-use tauri::{Manager, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,13 +51,42 @@ pub fn run() {
                 })
                 .build(),
         )
+        .manage(AppState::default())
         .setup(|app| {
             windows::setup_menu(app)?;
+            let subagents = app.state::<AppState>().subagents();
+            let spawn_app_handle = app.handle().clone();
+            let close_app_handle = app.handle().clone();
+            let spawn_router =
+                spawn_router::SpawnRouter::new(subagents.clone(), move |window_label, event| {
+                    let window = spawn_app_handle
+                        .get_webview_window(window_label)
+                        .ok_or_else(|| format!("Termarc window is unavailable: {window_label}"))?;
+                    window
+                        .emit(spawn_router::SUBAGENT_SPAWN_EVENT, event)
+                        .map_err(|error| format!("could not route spawn to window: {error}"))
+                })
+                .with_close_emitter(move |window_label, event| {
+                    let window = close_app_handle
+                        .get_webview_window(window_label)
+                        .ok_or_else(|| format!("Termarc window is unavailable: {window_label}"))?;
+                    window
+                        .emit(spawn_router::SUBAGENT_CLOSE_EVENT, event)
+                        .map_err(|error| format!("could not route close to window: {error}"))
+                });
+            app.manage(spawn_router.clone());
+            #[cfg(unix)]
+            app.manage(control::ControlServer::start(
+                control::ControlDispatcher::new(subagents, spawn_router),
+            )?);
             Ok(())
         })
-        .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             pty::start_pty,
+            spawn_router::register_top_level_terminals,
+            spawn_router::acknowledge_subagent_spawn,
+            spawn_router::detach_subagents,
+            spawn_router::update_subagent_pi_state,
             notifications::notify_agent_ready,
             notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
@@ -63,6 +95,7 @@ pub fn run() {
             cli::install_symlink,
             cli::is_symlink_installed,
             cli::remove_symlink,
+            agent_extensions::get_agent_extension_status,
             agent_extensions::install_agent_extension,
             agent_extensions::is_agent_extension_installed,
             agent_extensions::remove_agent_extension,
@@ -74,6 +107,7 @@ pub fn run() {
             projects::save_local_project_commands,
             projects::save_local_project_agents,
             projects::save_project_command_order,
+            projects::save_project_agent_order,
             pty::write_to_pty,
             pty::resize_pty,
             pty::get_pty_status,
@@ -92,10 +126,18 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Destroyed) {
                 window.state::<AppState>().stop_for_window(window.label());
+                window
+                    .state::<spawn_router::SpawnRouter>()
+                    .unregister_window(window.label());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Termarc");
+        .build(tauri::generate_context!())
+        .expect("error while building Termarc")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app_handle.state::<AppState>().shutdown();
+            }
+        });
 }
 
 fn is_app_navigation(url: &tauri::Url) -> bool {

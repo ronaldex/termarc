@@ -51,6 +51,33 @@ describe("workspace state", () => {
     expect(loadWorkspaceSelection()).toEqual(selection);
   });
 
+  it("does not persist or restore runtime subagent selections", () => {
+    const selection: SidebarSelection = {
+      id: "subagent-terminal",
+      kind: "subagent",
+      projectId: project.id,
+      tabId: "subagent-terminal",
+      parentTerminalId: "terminal-1",
+    };
+    const stable: SidebarSelection = {
+      id: project.id,
+      kind: "project",
+      projectId: project.id,
+    };
+    saveWorkspaceSelection(stable);
+
+    saveWorkspaceSelection(selection);
+
+    expect(loadWorkspaceSelection()).toEqual(stable);
+    expect(
+      resolveWorkspaceSelection(
+        selection,
+        [project],
+        [{ id: selection.tabId, projectId: project.id }],
+      ),
+    ).toBeUndefined();
+  });
+
   it("restores stable project pages", () => {
     const selection: SidebarSelection = {
       id: "project-1:commands",

@@ -1,5 +1,6 @@
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { Project } from "../types/project";
+import type { RightSidebarMode } from "../types/rightSidebar";
 import type { SidebarSelection } from "../types/sidebar";
 import { isEditableTarget } from "../utils/dom";
 import {
@@ -19,7 +20,7 @@ export type WorkspaceFocusController = {
   hasContentFocus: () => boolean;
 };
 
-export type GitSidebarFocusController = {
+export type RightSidebarFocusController = {
   focusPanel: () => void;
   hasPanelFocus: () => boolean;
 };
@@ -27,27 +28,34 @@ export type GitSidebarFocusController = {
 export function useWorkspaceShortcuts(options: {
   sidebar: Ref<SidebarFocusController | undefined>;
   workspace: Ref<WorkspaceFocusController | undefined>;
-  gitSidebar: Ref<GitSidebarFocusController | undefined>;
+  rightSidebar: Ref<RightSidebarFocusController | undefined>;
   openLeftSidebar: () => void;
   restoreLeftSidebar: () => void;
   toggleLeftSidebar: () => void;
-  openRightSidebar: () => void;
-  restoreRightSidebar: () => void;
+  focusRightSidebar: () => void;
+  focusWorkspaceFromRight: (target: "terminal" | "workspace") => void;
+  restoreRightSidebarOnBlur: () => void;
+  moveRightSidebarFocus: (direction: -1 | 1) => void;
+  cycleSubterminal: (direction: -1 | 1, includeMain: boolean) => void;
   toggleRightSidebar: () => void;
-  closeRightSidebar: () => void;
+  closeRightSidebar: (routeFocus?: boolean) => void;
   gitSidebarAvailable: Ref<boolean>;
+  rightSidebarAvailable: Ref<boolean>;
+  rightSidebarMode: Ref<RightSidebarMode>;
+  rightSidebarModes: Ref<RightSidebarMode[]>;
   selection: Ref<SidebarSelection>;
   projects: Ref<Project[]>;
   lastProjectId: Ref<string | undefined>;
   isTerminalFocused: () => boolean;
-  focusActiveTerminal: () => void;
+  isSubterminalFocused: () => boolean;
   selectProject: (project: Project) => void;
   openSettings: () => void;
   openKeyboardShortcuts: () => void;
   focusProjectByNumber: (number: number) => void;
-  cycleTerminal: (direction: -1 | 1) => void;
+  cycleTerminal: (direction: -1 | 1, includeChildren: boolean) => void;
   activeTerminalAvailable: () => boolean;
   createTerminal: () => void;
+  createSubterminal: () => void;
   closeActiveTerminal: () => void;
   shouldActivateSidebar: (selection: SidebarSelection) => boolean;
   activateSidebar: (selection: SidebarSelection) => void;
@@ -57,7 +65,7 @@ export function useWorkspaceShortcuts(options: {
 }): void {
   function currentFocusRegion(): WorkspaceFocusRegion {
     if (options.sidebar.value?.hasTreeFocus()) return "left-sidebar";
-    if (options.gitSidebar.value?.hasPanelFocus()) return "right-sidebar";
+    if (options.rightSidebar.value?.hasPanelFocus()) return "right-sidebar";
     if (options.workspace.value?.hasContentFocus()) return "workspace";
     return "other";
   }
@@ -65,6 +73,9 @@ export function useWorkspaceShortcuts(options: {
   function handleKeydown(event: KeyboardEvent): void {
     if (options.shortcutScopeActive?.value) return;
     const focusRegion = currentFocusRegion();
+    const rightSidebarModeIndex = options.rightSidebarModes.value.indexOf(
+      options.rightSidebarMode.value,
+    );
     const action = workspaceShortcutAction({
       key: event.key,
       code: event.code,
@@ -76,9 +87,20 @@ export function useWorkspaceShortcuts(options: {
       editableTarget: isEditableTarget(event.target) && !options.isTerminalFocused(),
       focusRegion,
       terminalSelected:
-        options.selection.value.kind === "terminal" || options.selection.value.kind === "agent",
+        options.selection.value.kind === "terminal" ||
+        options.selection.value.kind === "agent" ||
+        options.selection.value.kind === "subagent",
       activeTerminalAvailable: options.activeTerminalAvailable(),
       gitSidebarAvailable: options.gitSidebarAvailable.value,
+      rightSidebarAvailable: options.rightSidebarAvailable.value,
+      rightSidebarHasNextMode:
+        rightSidebarModeIndex >= 0 &&
+        rightSidebarModeIndex < options.rightSidebarModes.value.length - 1,
+      rightSidebarHasPreviousMode: rightSidebarModeIndex > 0,
+      subterminalFocused:
+        focusRegion === "right-sidebar" &&
+        options.rightSidebarMode.value === "subterminals" &&
+        options.isSubterminalFocused(),
     });
     if (!action) return;
 
@@ -88,9 +110,13 @@ export function useWorkspaceShortcuts(options: {
       action.type === "focus-workspace-from-left" ||
       action.type === "focus-right-sidebar" ||
       action.type === "focus-workspace-from-right" ||
+      action.type === "focus-next-right-sidebar" ||
+      action.type === "focus-previous-right-sidebar" ||
+      action.type === "cycle-subterminal" ||
       action.type === "focus-process-filter" ||
       action.type === "focus-project" ||
       action.type === "create-terminal" ||
+      action.type === "create-subterminal" ||
       action.type === "close-terminal"
     ) {
       event.preventDefault();
@@ -98,9 +124,13 @@ export function useWorkspaceShortcuts(options: {
     }
 
     if (action.type === "cycle-terminal") {
-      options.cycleTerminal(action.direction);
+      options.cycleTerminal(action.direction, action.includeChildren);
+    } else if (action.type === "cycle-subterminal") {
+      options.cycleSubterminal(action.direction, action.includeMain);
     } else if (action.type === "create-terminal") {
       options.createTerminal();
+    } else if (action.type === "create-subterminal") {
+      options.createSubterminal();
     } else if (action.type === "close-terminal") {
       options.closeActiveTerminal();
     } else if (action.type === "focus-left-sidebar") {
@@ -125,24 +155,21 @@ export function useWorkspaceShortcuts(options: {
         if (!options.isTerminalFocused()) options.workspace.value?.focusContent();
       });
     } else if (action.type === "focus-right-sidebar") {
-      options.openRightSidebar();
-      requestAnimationFrame(() => options.gitSidebar.value?.focusPanel());
+      options.focusRightSidebar();
+    } else if (
+      action.type === "focus-next-right-sidebar" ||
+      action.type === "focus-previous-right-sidebar"
+    ) {
+      options.moveRightSidebarFocus(action.type === "focus-next-right-sidebar" ? 1 : -1);
     } else if (action.type === "focus-workspace-from-right") {
-      options.restoreRightSidebar();
-      requestAnimationFrame(() => {
-        const focusTarget = workspaceContentFocusTarget(
-          options.activeTerminalAvailable(),
-          options.shouldActivateSidebar(options.selection.value),
-        );
-        if (focusTarget === "terminal") options.focusActiveTerminal();
-        else options.workspace.value?.focusContent();
-      });
+      const focusTarget = workspaceContentFocusTarget(
+        options.activeTerminalAvailable(),
+        options.shouldActivateSidebar(options.selection.value),
+      );
+      options.focusWorkspaceFromRight(focusTarget);
     } else if (action.type === "escape") {
       options.restoreLeftSidebar();
-      options.closeRightSidebar();
-      if (focusRegion === "right-sidebar") {
-        requestAnimationFrame(() => options.workspace.value?.focusContent());
-      }
+      options.closeRightSidebar(focusRegion === "right-sidebar");
     } else if (action.type === "open-settings") {
       event.preventDefault();
       options.openSettings();
@@ -163,8 +190,11 @@ export function useWorkspaceShortcuts(options: {
   }
 
   function handleFocusIn(): void {
-    if (!options.sidebar.value?.hasTreeFocus()) options.restoreLeftSidebar();
-    if (!options.gitSidebar.value?.hasPanelFocus()) options.restoreRightSidebar();
+    const leftSidebarHasFocus = options.sidebar.value?.hasTreeFocus() ?? false;
+    if (!leftSidebarHasFocus) {
+      options.restoreLeftSidebar();
+      options.restoreRightSidebarOnBlur();
+    }
   }
 
   let resizeFocusFrame: number | undefined;
