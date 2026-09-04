@@ -33,9 +33,14 @@ export function createTerminalActivityMonitor({
   let refreshPending = false;
   let refreshQueued = false;
   let disposed = false;
+  let started = false;
+
+  function documentVisible(): boolean {
+    return typeof document === "undefined" || !document.hidden;
+  }
 
   async function refresh(): Promise<void> {
-    if (disposed) return;
+    if (disposed || !documentVisible()) return;
     if (refreshPending) {
       refreshQueued = true;
       return;
@@ -82,13 +87,33 @@ export function createTerminalActivityMonitor({
     }, triggerDelayMs);
   }
 
-  function start(): void {
-    if (disposed || pollTimer !== undefined) return;
+  function restartPolling(): void {
+    if (pollTimer !== undefined) clearInterval(pollTimer);
+    pollTimer = undefined;
+    if (!started || disposed || !documentVisible()) return;
     pollTimer = setInterval(() => void refresh(), pollIntervalMs);
+  }
+
+  function handleVisibilityChange(): void {
+    restartPolling();
+    if (documentVisible()) void refresh();
+  }
+
+  function start(): void {
+    if (disposed || started) return;
+    started = true;
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    restartPolling();
   }
 
   function dispose(): void {
     disposed = true;
+    started = false;
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
     if (pollTimer !== undefined) clearInterval(pollTimer);
     if (triggerTimer !== undefined) clearTimeout(triggerTimer);
     pollTimer = undefined;

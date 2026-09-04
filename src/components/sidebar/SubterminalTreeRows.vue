@@ -29,7 +29,7 @@ const emit = defineEmits<{
 
 <template>
   <div
-    v-for="item in items"
+    v-for="(item, index) in items"
     :key="item.id"
     :ref="(element) => emit('register', element, item.id)"
     class="terminal-like-row"
@@ -60,6 +60,7 @@ const emit = defineEmits<{
       :tab="item.tab"
       :selection="item.selection"
       :shortcut-number="shortcutNumbers.get(`${item.selection.kind}:${item.tab.id}`)"
+      :subterminal-number="index + 1"
       :shortcut-modifier="shortcutModifier"
       :modifier-pressed="modifierPressed"
       :active="selectedId === item.id"

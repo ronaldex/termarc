@@ -11,6 +11,8 @@ const props = defineProps<{
   tab: TerminalTabState;
   selection?: Extract<SidebarSelection, { kind: "terminal" | "subagent" }>;
   shortcutNumber?: number;
+  /** Position within this terminal's direct subterminal group. */
+  subterminalNumber?: number;
   shortcutModifier: "meta" | "ctrl";
   modifierPressed: boolean;
   active: boolean;
@@ -32,7 +34,9 @@ const label = computed(
     props.tab.customTitle ||
     (launch.value.kind === "subagent"
       ? launch.value.name
-      : props.tab.launchTitle || props.tab.terminalTitle || props.tab.title),
+      : props.tab.launchTitle ||
+        props.tab.terminalTitle ||
+        (props.subterminalNumber ? `Terminal ${props.subterminalNumber}` : props.tab.title)),
 );
 const activeProcess = computed(
   () => props.tab.status === "starting" || props.tab.status === "running",

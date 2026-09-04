@@ -157,7 +157,11 @@ pub(crate) struct LoadedProjectConfig {
 }
 
 #[tauri::command]
-pub(crate) fn load_projects() -> Result<Vec<LoadedProjectConfig>, String> {
+pub(crate) async fn load_projects() -> Result<Vec<LoadedProjectConfig>, String> {
+    run_blocking_config("load projects", load_projects_blocking).await
+}
+
+fn load_projects_blocking() -> Result<Vec<LoadedProjectConfig>, String> {
     let path = projects_path();
     if !path.exists() {
         return Ok(Vec::new());
@@ -232,7 +236,12 @@ fn load_project(project: ProjectConfig) -> LoadedProjectConfig {
 }
 
 #[tauri::command]
-pub(crate) fn load_project_tree_state()
+pub(crate) async fn load_project_tree_state()
+-> Result<std::collections::HashMap<String, ProjectTreeStateConfig>, String> {
+    run_blocking_config("load project tree state", load_project_tree_state_blocking).await
+}
+
+fn load_project_tree_state_blocking()
 -> Result<std::collections::HashMap<String, ProjectTreeStateConfig>, String> {
     let path = project_tree_state_path();
     if !path.exists() {
@@ -245,9 +254,19 @@ pub(crate) fn load_project_tree_state()
 }
 
 #[tauri::command]
-pub(crate) fn save_project_tree_state(
+pub(crate) async fn save_project_tree_state(
     state: std::collections::HashMap<String, ProjectTreeStateConfig>,
 ) -> Result<(), String> {
+    run_blocking_config("save project tree state", move || {
+        save_project_tree_state_blocking(state)
+    })
+    .await
+}
+
+fn save_project_tree_state_blocking(
+    state: std::collections::HashMap<String, ProjectTreeStateConfig>,
+) -> Result<(), String> {
+    let _guard = project_config_write_lock()?;
     let path = project_tree_state_path();
     let parent = path
         .parent()
@@ -260,7 +279,11 @@ pub(crate) fn save_project_tree_state(
 }
 
 #[tauri::command]
-pub(crate) fn save_projects(projects: Vec<ProjectConfig>) -> Result<(), String> {
+pub(crate) async fn save_projects(projects: Vec<ProjectConfig>) -> Result<(), String> {
+    run_blocking_config("save projects", move || save_projects_blocking(projects)).await
+}
+
+fn save_projects_blocking(projects: Vec<ProjectConfig>) -> Result<(), String> {
     let _guard = project_config_write_lock()?;
     validate_projects(&projects)?;
     let path = projects_path();
@@ -283,7 +306,16 @@ pub(crate) struct LoadedLocalProjectConfig {
 }
 
 #[tauri::command]
-pub(crate) fn load_local_project_config(
+pub(crate) async fn load_local_project_config(
+    directory: String,
+) -> Result<LoadedLocalProjectConfig, String> {
+    run_blocking_config("load local project config", move || {
+        load_local_project_config_blocking(directory)
+    })
+    .await
+}
+
+fn load_local_project_config_blocking(
     directory: String,
 ) -> Result<LoadedLocalProjectConfig, String> {
     let mut config = crate::project_local_config::load(&directory)?.unwrap_or_else(|| {
@@ -303,7 +335,17 @@ pub(crate) fn load_local_project_config(
 }
 
 #[tauri::command]
-pub(crate) fn save_local_project_agents(
+pub(crate) async fn save_local_project_agents(
+    directory: String,
+    agents: Vec<ProjectCommand>,
+) -> Result<(), String> {
+    run_blocking_config("save local project agents", move || {
+        save_local_project_agents_blocking(directory, agents)
+    })
+    .await
+}
+
+fn save_local_project_agents_blocking(
     directory: String,
     agents: Vec<ProjectCommand>,
 ) -> Result<(), String> {
@@ -320,7 +362,17 @@ pub(crate) fn save_local_project_agents(
 }
 
 #[tauri::command]
-pub(crate) fn save_local_project_commands(
+pub(crate) async fn save_local_project_commands(
+    directory: String,
+    commands: Vec<ProjectCommand>,
+) -> Result<(), String> {
+    run_blocking_config("save local project commands", move || {
+        save_local_project_commands_blocking(directory, commands)
+    })
+    .await
+}
+
+fn save_local_project_commands_blocking(
     directory: String,
     commands: Vec<ProjectCommand>,
 ) -> Result<(), String> {
@@ -353,7 +405,22 @@ impl CommandOrderFailure {
 }
 
 #[tauri::command]
-pub(crate) fn save_project_command_order(
+pub(crate) async fn save_project_command_order(
+    project_id: String,
+    directory: String,
+    global_commands: Vec<ProjectCommand>,
+    local_commands: Vec<ProjectCommand>,
+) -> Result<(), CommandOrderFailure> {
+    tauri::async_runtime::spawn_blocking(move || {
+        save_project_command_order_blocking(project_id, directory, global_commands, local_commands)
+    })
+    .await
+    .map_err(|error| {
+        CommandOrderFailure::new("task", format!("save command order task failed: {error}"))
+    })?
+}
+
+fn save_project_command_order_blocking(
     project_id: String,
     directory: String,
     mut global_commands: Vec<ProjectCommand>,
@@ -423,7 +490,22 @@ pub(crate) fn save_project_command_order(
 }
 
 #[tauri::command]
-pub(crate) fn save_project_agent_order(
+pub(crate) async fn save_project_agent_order(
+    project_id: String,
+    directory: String,
+    global_agents: Vec<ProjectCommand>,
+    local_agents: Vec<ProjectCommand>,
+) -> Result<(), CommandOrderFailure> {
+    tauri::async_runtime::spawn_blocking(move || {
+        save_project_agent_order_blocking(project_id, directory, global_agents, local_agents)
+    })
+    .await
+    .map_err(|error| {
+        CommandOrderFailure::new("task", format!("save agent order task failed: {error}"))
+    })?
+}
+
+fn save_project_agent_order_blocking(
     project_id: String,
     directory: String,
     mut global_agents: Vec<ProjectCommand>,
@@ -490,6 +572,16 @@ pub(crate) fn save_project_agent_order(
         };
     }
     Ok(())
+}
+
+async fn run_blocking_config<T, F>(operation: &'static str, task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("{operation} task failed: {error}"))?
 }
 
 fn validate_projects(projects: &[ProjectConfig]) -> Result<(), String> {

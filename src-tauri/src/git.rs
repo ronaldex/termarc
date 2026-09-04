@@ -33,7 +33,14 @@ pub(crate) struct GitFileSummary {
 }
 
 #[tauri::command]
-pub(crate) fn get_git_diff_directory(directory: String) -> Result<GitDiff, String> {
+pub(crate) async fn get_git_diff_directory(directory: String) -> Result<GitDiff, String> {
+    run_blocking_git("git diff", move || {
+        get_git_diff_directory_blocking(directory)
+    })
+    .await
+}
+
+fn get_git_diff_directory_blocking(directory: String) -> Result<GitDiff, String> {
     let directory = expand_user_path(&directory);
     let directory_text = directory.display().to_string();
     let repository = git_output(&directory, &["rev-parse", "--show-toplevel"])
@@ -70,7 +77,14 @@ pub(crate) fn get_git_diff_directory(directory: String) -> Result<GitDiff, Strin
 }
 
 #[tauri::command]
-pub(crate) fn get_git_diff_summary(directory: String) -> Result<GitDiffSummary, String> {
+pub(crate) async fn get_git_diff_summary(directory: String) -> Result<GitDiffSummary, String> {
+    run_blocking_git("git diff summary", move || {
+        get_git_diff_summary_blocking(directory)
+    })
+    .await
+}
+
+fn get_git_diff_summary_blocking(directory: String) -> Result<GitDiffSummary, String> {
     let directory = expand_user_path(&directory);
     let directory_text = directory.display().to_string();
     let repository = git_output(&directory, &["rev-parse", "--show-toplevel"])
@@ -109,6 +123,16 @@ pub(crate) fn get_git_diff_summary(directory: String) -> Result<GitDiffSummary, 
             String::from_utf8_lossy(stderr).trim().to_string()
         }),
     })
+}
+
+async fn run_blocking_git<T, F>(operation: &'static str, task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("{operation} task failed: {error}"))?
 }
 
 fn parse_name_status(output: &[u8]) -> HashMap<String, String> {

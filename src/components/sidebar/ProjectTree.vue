@@ -7,7 +7,10 @@ import type { ProjectTreeProject } from "../../types/project";
 import type { SidebarSelection } from "../../types/sidebar";
 import type { TerminalTabState } from "../../types/terminal";
 import { projectTreeModel } from "../../utils/projectTreeModel";
-import { numberedSidebarShortcuts, sidebarShortcutKey } from "../../utils/sidebarShortcuts";
+import {
+  numberedSidebarShortcutsFromModel,
+  sidebarShortcutKey,
+} from "../../utils/sidebarShortcuts";
 import type { DropPlacement } from "../../utils/terminalOrdering";
 import ProcessTreeRow from "./ProcessTreeRow.vue";
 import OverlayScrollArea from "../ui/OverlayScrollArea.vue";
@@ -31,9 +34,10 @@ const displayProjects = computed(() => projectTreeModel(props.projects, props.ta
 const shortcutNumbers = computed(
   () =>
     new Map(
-      numberedSidebarShortcuts(props.projects, props.tabs, props.filter).map(
-        ({ number, selection }) => [sidebarShortcutKey(selection), number],
-      ),
+      numberedSidebarShortcutsFromModel(displayProjects.value).map(({ number, selection }) => [
+        sidebarShortcutKey(selection),
+        number,
+      ]),
     ),
 );
 const sortingEnabled = computed(() => !props.collapsed && !props.filter);

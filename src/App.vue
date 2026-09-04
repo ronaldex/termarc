@@ -35,6 +35,7 @@ import type { TerminalCloseChoice, TerminalClosePlan } from "./utils/parentClose
 import { numberedSidebarShortcuts } from "./utils/sidebarShortcuts";
 import { terminalShortcutOrder } from "./utils/terminalTabs";
 import { projectTerminalsEqual, projectTerminalsFromTabs } from "./utils/projectTerminals";
+import { markStartup, measureStartup } from "./utils/startupPerformance";
 import type { Project } from "./types/project";
 import type { SidebarSelection } from "./types/sidebar";
 
@@ -119,6 +120,7 @@ const {
   activeTab,
   isEmpty,
   createTab,
+  restoreTabs,
   startTab,
   selectTab,
   closeTab,
@@ -702,6 +704,7 @@ useWorkspaceShortcuts({
 });
 
 onMounted(async () => {
+  markStartup("app-mounted");
   configurePlatformWindowStyle();
   void subagentSpawns
     .start()
@@ -727,43 +730,42 @@ onMounted(async () => {
       else unlistenCloseRequested = unlisten;
     })
     .catch((error) => console.error("Could not listen for window close", error));
-  try {
-    const themes = await loadCustomThemes();
-    registerCustomThemes(Object.fromEntries(themes.map((theme) => [theme.id, theme])));
-  } catch (error) {
-    console.error("Could not load custom themes", error);
-  }
+  // Theme and project files are independent. Start both IPC requests together,
+  // but register custom themes before validating the persisted theme setting.
+  const themesReady = loadCustomThemes()
+    .then((themes) =>
+      registerCustomThemes(Object.fromEntries(themes.map((theme) => [theme.id, theme]))),
+    )
+    .catch((error) => console.error("Could not load custom themes", error));
+  const projectsReady = loadProjectConfiguration().catch((error) =>
+    console.error("Could not load projects", error),
+  );
+  await themesReady;
+  markStartup("themes-ready");
   loadAppSettings();
-  try {
-    await loadProjectConfiguration();
-  } catch (error) {
-    console.error("Could not load projects", error);
-  }
+  markStartup("settings-ready");
+  await projectsReady;
+  markStartup("projects-ready");
   if (appDisposed) return;
   const initialProject = projects.value[0];
   start(initialProject.id, initialProject.directory);
 
+  const restoredTabs = restoreTabs(
+    projects.value.flatMap((project) =>
+      (project.terminals ?? []).map((terminal) => ({
+        projectId: project.id,
+        cwd: terminal.cwd ?? project.directory,
+        id: terminal.id,
+        customTitle: terminal.customTitle,
+        parentTerminalId: terminal.parentTerminalId,
+      })),
+    ),
+  );
+  markStartup("tabs-restored");
   for (const project of projects.value) {
-    let projectRestoreSucceeded = true;
-    for (const terminal of project.terminals ?? []) {
-      try {
-        const tab = await createTab(project.id, terminal.cwd ?? project.directory, {
-          id: terminal.id,
-          customTitle: terminal.customTitle,
-          parentTerminalId: terminal.parentTerminalId,
-          start: false,
-          activate: false,
-        });
-        if (!tab) {
-          projectRestoreSucceeded = false;
-          continue;
-        }
-      } catch (error) {
-        projectRestoreSucceeded = false;
-        console.error(`Could not restore a terminal for ${project.name}`, error);
-      }
-    }
-    if (projectRestoreSucceeded) terminalPersistenceEligible.add(project.id);
+    const expectedCount = project.terminals?.length ?? 0;
+    const restoredCount = restoredTabs.filter((tab) => tab.projectId === project.id).length;
+    if (restoredCount === expectedCount) terminalPersistenceEligible.add(project.id);
   }
 
   // Restore the last stable workspace page after all referenced projects and
@@ -782,6 +784,8 @@ onMounted(async () => {
     selectTab(restoredSelection.tabId);
   }
   workspaceStateReady.value = true;
+  markStartup("workspace-ready");
+  measureStartup("entry-to-workspace", "entry", "workspace-ready");
   saveWorkspaceSelection(sidebarSelection.value);
 
   await nextTick();
@@ -789,6 +793,8 @@ onMounted(async () => {
     requestAnimationFrame(() => {
       if (sidebarSelection.value.kind === "terminal") focusActiveTerminal();
       if (!isTerminalFocused()) terminalPresentationShell.value?.focusContent();
+      markStartup("interactive");
+      measureStartup("entry-to-interactive", "entry", "interactive");
     });
   });
 
@@ -1154,6 +1160,8 @@ button {
   --left-resize-track: 0;
 }
 .app-shell.right-sidebar-overlay {
+  /* The overlay handle is absolutely positioned, so it must not reserve grid space. */
+  --right-resize-track: 0;
   --right-sidebar-track: var(--sidebar-collapsed-width);
 }
 .app-shell.right-sidebar-collapsed {

@@ -1,19 +1,52 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import type { TerminalCloseChoice } from "../../utils/parentClose";
 
 defineProps<{ childCount: number; runningProcessCount: number }>();
 const emit = defineEmits<{ choose: [choice: TerminalCloseChoice] }>();
 const dialog = ref<HTMLElement>();
+const cancelButton = ref<HTMLButtonElement>();
+const confirmButton = ref<HTMLButtonElement>();
 
 function handleKeydown(event: KeyboardEvent): void {
+  event.stopPropagation();
   if (event.key === "Escape") {
     event.preventDefault();
     emit("choose", "cancel");
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    cancelButton.value?.focus();
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    confirmButton.value?.focus();
+    return;
+  }
+  const focusable = Array.from(
+    dialog.value?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? [],
+  );
+  if (event.key !== "Tab") return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
   }
 }
 
-onMounted(() => void nextTick(() => dialog.value?.focus()));
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown, true);
+  void nextTick(() => cancelButton.value?.focus());
+});
+onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown, true));
 </script>
 
 <template>
@@ -25,8 +58,6 @@ onMounted(() => void nextTick(() => dialog.value?.focus()));
         role="dialog"
         aria-modal="true"
         aria-labelledby="parent-close-title"
-        tabindex="-1"
-        @keydown="handleKeydown"
       >
         <header>
           <h2 id="parent-close-title">Close terminal with a running process?</h2>
@@ -40,8 +71,8 @@ onMounted(() => void nextTick(() => dialog.value?.focus()));
           </p>
         </header>
         <footer>
-          <button type="button" @click="emit('choose', 'cancel')">Cancel</button>
-          <button class="danger" type="button" @click="emit('choose', 'close')">
+          <button ref="cancelButton" type="button" @click="emit('choose', 'cancel')">Cancel</button>
+          <button ref="confirmButton" class="danger" type="button" @click="emit('choose', 'close')">
             Close terminal
           </button>
         </footer>
@@ -101,6 +132,10 @@ button:hover,
 button:focus-visible {
   color: var(--color-text-strong);
   background: var(--color-surface-hover);
+}
+button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 button.danger {
   border-color: var(--color-status-error);

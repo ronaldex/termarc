@@ -3,34 +3,39 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  autoCloseConsumedSubagent,
+  isDirectSubagentResultCommand,
+  parseSpawnedSubagent,
+  parseSubagentResult,
+  shouldAutoCloseDirectResult,
   subagentPiSpawnArguments,
   subagentProcessSpawnArguments,
-  parseSpawnedSubagent,
   SUBAGENT_WAIT_EXEC_TIMEOUT_MS,
-} from "./termarc-status/cli";
-import { termarcMainTerminalCli, termarcSubagentCli } from "./termarc-status/environment";
-import { reportPiStatus } from "./termarc-status/osc";
+  type ConsumedSubagentResult,
+} from "./cli";
+import { termarcMainTerminalCli, termarcSubagentCli } from "./environment";
+import { reportPiStatus } from "./osc";
 import {
   clearSubagentResult,
   nextResultMutationSequence,
   publishSubagentProgress,
   publishSubagentResult,
   SettledResultCollector,
-} from "./termarc-status/results";
+} from "./results";
 import {
   SUBAGENT_NOTIFICATION_OPTIONS,
   SubagentWatchers,
   type PersistedWatcherOperation,
   type SubagentNotification,
-} from "./termarc-status/watchers";
-import type { SubagentStatus } from "./termarc-status/cli";
-import type { SubagentResult as RenderedSubagentResult } from "./termarc-status/subagent/types";
+} from "./watchers";
+import type { SubagentStatus } from "./cli";
+import type { SubagentResult as RenderedSubagentResult } from "./subagent/types";
 
-export * from "./termarc-status/cli";
-export * from "./termarc-status/environment";
-export * from "./termarc-status/osc";
-export * from "./termarc-status/results";
-export * from "./termarc-status/watchers";
+export * from "./cli";
+export * from "./environment";
+export * from "./osc";
+export * from "./results";
+export * from "./watchers";
 
 const WATCHER_LEDGER_ENTRY = "termarc-subagent-watcher-ledger";
 const LEGACY_NOTIFICATION_ENTRY = "termarc-subagent-notification";
@@ -52,6 +57,7 @@ function createSubagentParams(
     Object: (properties: Record<string, unknown>) => unknown;
     String: (options: unknown) => unknown;
     Optional: (value: unknown) => unknown;
+    Boolean: (options: unknown) => unknown;
   },
   StringEnum: (values: string[], options: unknown) => unknown,
 ) {
@@ -70,6 +76,12 @@ function createSubagentParams(
       Type.String({
         description:
           "Working directory for the subagent. Relative paths resolve from the parent Pi working directory.",
+      }),
+    ),
+    keepOpen: Type.Optional(
+      Type.Boolean({
+        description:
+          "Keep the subterminal open after retrieving its result. Defaults to false; set only for later terminal interaction, transcript retention, or follow-up work.",
       }),
     ),
   });
@@ -174,6 +186,16 @@ export function persistedWatcherOperations(
   return operations;
 }
 
+function retentionReport(retention: ConsumedSubagentResult<unknown>["retention"]): string {
+  if (retention.status === "closed") {
+    return `Auto-close succeeded for subagent ${retention.id}.`;
+  }
+  if (retention.status === "kept-open") {
+    return `Kept subagent open as requested. Subagent ID: ${retention.id}.`;
+  }
+  return `Result retrieved, but auto-close failed for subagent ${retention.id}: ${retention.error}. The subterminal remains open for diagnostics.`;
+}
+
 function notifySubagentState(
   pi: ExtensionAPI,
   status: SubagentStatus,
@@ -224,8 +246,8 @@ export default async function (pi: ExtensionAPI) {
   if (subagentCli) {
     pi.on("session_start", async (_event, context) => {
       const [{ processPiEvent: parseEvent }, { emptyUsage }] = await Promise.all([
-        import("./termarc-status/subagent/runner-events"),
-        import("./termarc-status/subagent/types"),
+        import("./subagent/runner-events"),
+        import("./subagent/types"),
       ]);
       processPiEvent = parseEvent;
       childProgress = {
@@ -335,11 +357,11 @@ export default async function (pi: ExtensionAPI) {
     import("@earendil-works/pi-ai"),
     import("typebox"),
     import("@earendil-works/pi-tui"),
-    import("./termarc-status/subagent/agents"),
-    import("./termarc-status/subagent/render"),
-    import("./termarc-status/subagent/runner-events"),
-    import("./termarc-status/subagent/settings"),
-    import("./termarc-status/subagent/types"),
+    import("./subagent/agents"),
+    import("./subagent/render"),
+    import("./subagent/runner-events"),
+    import("./subagent/settings"),
+    import("./subagent/types"),
   ]);
 
   const watchers = new SubagentWatchers(pi, cli, parentTerminalId, {
@@ -382,8 +404,8 @@ export default async function (pi: ExtensionAPI) {
         "Run one configured subagent on one focused task in a named, isolated Termarc subterminal.",
         `Available subagents: ${startupAgents.agents.map((agent) => `${agent.name}: ${agent.description}`).join("; ")}.`,
         "Set cwd when the subagent must run in a different project or Git worktree.",
-        "The completed tool result identifies the child by its subagent ID. Use that ID (for example, subagent-1), never its display name, with control commands such as close.",
-        "Open the spawned Termarc terminal to inspect or interact with the full child session.",
+        "After retrieving a successful structured result, the child terminal is automatically closed unless keepOpen is true. Failed or result-less children remain open for diagnostics.",
+        "Set keepOpen only when the user needs later terminal interaction, a retained transcript, or follow-up work; a retained result clearly reports its subagent ID.",
       ].join(" "),
       promptSnippet: `Delegate one focused task to a Termarc subagent (${agentNames.join(", ")})`,
       promptGuidelines: [
@@ -391,7 +413,8 @@ export default async function (pi: ExtensionAPI) {
         "Give each spawned subterminal a short descriptive name for its task.",
         "Set subagent cwd to the target worktree root when delegating work in another worktree.",
         "For parallel work, call this tool multiple times in the same turn.",
-        "When controlling a child after it completes, use the subagent ID reported in this tool result, not the name supplied to this tool.",
+        "Leave keepOpen false by default. Set it only when the user needs later terminal interaction, a retained transcript, or follow-up work.",
+        "For a retained child, use the subagent ID reported in this tool result, not the supplied display name.",
       ],
       parameters: createSubagentParams(agentNames, Type, StringEnum),
       renderCall: renderSubagentCall,
@@ -477,17 +500,40 @@ export default async function (pi: ExtensionAPI) {
           if (resultResponse.code !== 0) {
             throw new Error(resultResponse.stderr || "Termarc subagent result was unavailable");
           }
-          const resultValue = JSON.parse(resultResponse.stdout) as { text?: unknown };
-          const text = typeof resultValue.text === "string" ? resultValue.text : "(no output)";
-          const completed = termarcResult(agent.name, params.task, cwd, text, emptyUsage);
+          const structuredResult = parseSubagentResult(JSON.parse(resultResponse.stdout));
+          if (structuredResult.id !== spawned.id) {
+            throw new Error(
+              `Termarc returned a result for ${structuredResult.id} instead of ${spawned.id}`,
+            );
+          }
+          const completed = termarcResult(
+            agent.name,
+            params.task,
+            cwd,
+            structuredResult.text,
+            emptyUsage,
+          );
+          const consumed = await autoCloseConsumedSubagent(
+            pi,
+            cli,
+            spawned.id,
+            completed,
+            params.keepOpen === true,
+            signal,
+          );
           return {
             content: [
               {
                 type: "text" as const,
-                text: `${getResultSummaryText(completed)}\n\nSubagent ID: ${spawned.id} (use this ID, not the display name, for control commands such as close).`,
+                text: `${getResultSummaryText(consumed.result)}\n\n${retentionReport(consumed.retention)}`,
               },
             ],
-            details: { id: spawned.id, name: subterminalName, results: [completed] },
+            details: {
+              id: spawned.id,
+              name: subterminalName,
+              results: [consumed.result],
+              retention: consumed.retention,
+            },
           };
         } finally {
           removeTempDir(prompt.dir);
@@ -543,11 +589,12 @@ export default async function (pi: ExtensionAPI) {
     name: "termarc_subagent",
     label: "Control Termarc Subagents",
     description:
-      'Run the Termarc subagent CLI and return its output to this session. Every control command takes a subagent ID (for example, subagent-1), not the display name. Call with arguments: ["skill"] for agent-oriented workflow guidance, ["close", "subagent-1"] to stop and close a child terminal, or ["result", "subagent-1"] for a clean Pi response. Wait automatically returns when a result is already available. Use output only for diagnostics or generic processes.',
+      'Run the Termarc subagent CLI and return its output to this session. Every control command takes a subagent ID (for example, subagent-1), not the display name. A successful direct ["result", "subagent-1"] retrieval auto-closes that child unless keepOpen is true; status, output, wait, process, and other workflows never auto-close. Failed or unavailable results remain open for diagnostics.',
     promptSnippet: "Control Termarc subagents and retrieve their terminal output",
     promptGuidelines: [
       'Use termarc_subagent with arguments ["skill"] when you need the Termarc subagent workflow.',
       "When a Pi Termarc subagent completion triggers a parent turn, call termarc_subagent result directly. Do not call wait, status, or output first.",
+      "Leave keepOpen false by default. Set it only when the user needs later terminal interaction, a retained transcript, or follow-up work.",
       "Pass the subagent ID (such as subagent-1) as the second argument to result, close, status, output, wait, stop, or other control commands; display names are not valid IDs.",
     ],
     parameters: Type.Object({
@@ -558,6 +605,12 @@ export default async function (pi: ExtensionAPI) {
       }),
       json: Type.Optional(
         Type.Boolean({ description: "Request structured JSON output from the Termarc CLI" }),
+      ),
+      keepOpen: Type.Optional(
+        Type.Boolean({
+          description:
+            "Keep a Pi child open after a successful direct result retrieval. Defaults to false and does not affect other commands.",
+        }),
       ),
     }),
     async execute(_toolCallId, params, signal) {
@@ -576,9 +629,28 @@ export default async function (pi: ExtensionAPI) {
         timeout: SUBAGENT_WAIT_EXEC_TIMEOUT_MS,
       });
       if (result.code !== 0) throw new Error(result.stderr || "Termarc subagent command failed");
+
+      const output = result.stdout || "(no output)";
+      const directResult = isDirectSubagentResultCommand(commandArguments);
+      const consumed = shouldAutoCloseDirectResult(commandArguments, params.keepOpen === true)
+        ? await autoCloseConsumedSubagent(pi, cli, commandArguments[1], output, false, signal)
+        : directResult && params.keepOpen === true
+          ? await autoCloseConsumedSubagent(pi, cli, commandArguments[1], output, true, signal)
+          : undefined;
       return {
-        content: [{ type: "text" as const, text: result.stdout || "(no output)" }],
-        details: { arguments: params.arguments, json: params.json ?? false },
+        content: [
+          {
+            type: "text" as const,
+            text: consumed
+              ? `${consumed.result}\n\n${retentionReport(consumed.retention)}`
+              : output,
+          },
+        ],
+        details: {
+          arguments: params.arguments,
+          json: params.json ?? false,
+          ...(consumed ? { retention: consumed.retention } : {}),
+        },
       };
     },
     renderResult(result, { expanded }, theme, context) {

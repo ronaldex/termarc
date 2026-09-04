@@ -100,15 +100,36 @@ export function createSubagentSpawnService(dependencies: SubagentSpawnDependenci
   let started = false;
   let disposed = false;
   let latestTerminals: TopLevelTerminalMetadata[] = [];
-  let registration = Promise.resolve();
+  let registrationInFlight = false;
+  let registrationPending = false;
+
+  function registerLatestTerminals(): void {
+    registrationInFlight = true;
+    const terminals = latestTerminals.map((terminal) => ({ ...terminal }));
+    void Promise.resolve()
+      .then(() => {
+        if (disposed || !started) return;
+        return registerTopLevelTerminals(terminals);
+      })
+      .catch((error) => console.error("Could not register top-level terminals", error))
+      .finally(() => {
+        registrationInFlight = false;
+        if (!registrationPending || disposed || !started) {
+          registrationPending = false;
+          return;
+        }
+        registrationPending = false;
+        registerLatestTerminals();
+      });
+  }
 
   function queueRegistration(): void {
     if (!started || disposed) return;
-    const terminals = latestTerminals.map((terminal) => ({ ...terminal }));
-    registration = registration
-      .catch(() => undefined)
-      .then(() => registerTopLevelTerminals(terminals))
-      .catch((error) => console.error("Could not register top-level terminals", error));
+    if (registrationInFlight) {
+      registrationPending = true;
+      return;
+    }
+    registerLatestTerminals();
   }
 
   return {
@@ -145,6 +166,7 @@ export function createSubagentSpawnService(dependencies: SubagentSpawnDependenci
     dispose(): void {
       disposed = true;
       started = false;
+      registrationPending = false;
       unlistenSpawn?.();
       unlistenClose?.();
       unlistenSpawn = undefined;

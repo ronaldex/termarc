@@ -58,13 +58,17 @@ export function useProjects() {
   let saveTimer: number | undefined;
   let savePromise: Promise<void> = Promise.resolve();
   let treeStateSaveTimer: number | undefined;
+  let treeStateSaveInFlight = false;
+  let treeStateSavePending = false;
 
   async function load(): Promise<void> {
-    const saved = await loadProjects();
-    const savedTreeState = await loadProjectTreeState().catch((error) => {
-      console.error("Could not load project tree state", error);
-      return {} as Record<string, ProjectTreeState>;
-    });
+    const [saved, savedTreeState] = await Promise.all([
+      loadProjects(),
+      loadProjectTreeState().catch((error) => {
+        console.error("Could not load project tree state", error);
+        return {} as Record<string, ProjectTreeState>;
+      }),
+    ]);
     if (saved.length) {
       projects.value = saved.map(normalizeProject);
       for (const project of saved) {
@@ -399,14 +403,31 @@ export function useProjects() {
     scheduleTreeStateSave();
   }
 
+  function persistLatestTreeState(): void {
+    if (treeStateSaveInFlight) {
+      treeStateSavePending = true;
+      return;
+    }
+    treeStateSaveInFlight = true;
+    const snapshot = Object.fromEntries(
+      Object.entries(treeState).map(([id, state]) => [id, { ...state }]),
+    );
+    void saveProjectTreeState(snapshot)
+      .catch((error) => console.error("Could not save project tree state", error))
+      .finally(() => {
+        treeStateSaveInFlight = false;
+        if (!treeStateSavePending) return;
+        treeStateSavePending = false;
+        persistLatestTreeState();
+      });
+  }
+
   function scheduleTreeStateSave(): void {
     if (!loaded.value) return;
     if (treeStateSaveTimer !== undefined) window.clearTimeout(treeStateSaveTimer);
     treeStateSaveTimer = window.setTimeout(() => {
       treeStateSaveTimer = undefined;
-      void saveProjectTreeState(treeState).catch((error) =>
-        console.error("Could not save project tree state", error),
-      );
+      persistLatestTreeState();
     }, 200);
   }
 

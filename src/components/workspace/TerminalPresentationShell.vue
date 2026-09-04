@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, useAttrs } from "vue";
+import { defineAsyncComponent, nextTick, ref, useAttrs } from "vue";
 import type { ExternalEditor } from "../../types/settings";
 import type { RightSidebarMode } from "../../types/rightSidebar";
 import type { TerminalTab } from "../../types/terminal";
 import type { GitDiffSummary } from "../../utils/gitDiff";
 import type { SidebarPresentation } from "../../composables/useSidebarVisibility";
-import GitDiffViewer from "../git/GitDiffViewer.vue";
 import RightSidebar from "../sidebar/RightSidebar.vue";
 import SubterminalSidebar from "../terminal/SubterminalSidebar.vue";
 import WorkspaceMain from "./WorkspaceMain.vue";
 
 defineOptions({ inheritAttrs: false });
+const GitDiffViewer = defineAsyncComponent(() => import("../git/GitDiffViewer.vue"));
 const props = withDefaults(
   defineProps<{
     workspaceReady?: boolean;
@@ -60,8 +60,16 @@ function focusContent(): void {
 function hasContentFocus(): boolean {
   return workspaceMain.value?.hasContentFocus() ?? false;
 }
-function focusPanel(): void {
-  void rightSidebar.value?.focusPanel();
+async function focusPanel(): Promise<void> {
+  // Let mode changes render before choosing a target. RightSidebar's generic
+  // lookup selects the first terminal pane, so subterminals need their
+  // focused-pane-aware owner instead.
+  await nextTick();
+  if (props.rightSidebarMode === "subterminals") {
+    await subterminalSidebar.value?.focusPanel();
+    return;
+  }
+  await rightSidebar.value?.focusPanel();
 }
 function hasPanelFocus(): boolean {
   return rightSidebar.value?.hasPanelFocus() ?? false;
@@ -137,10 +145,12 @@ defineExpose({
       @layout="emit('terminalLayout')"
     />
     <GitDiffViewer
+      v-if="workspaceReady"
       :hidden="rightSidebarMode !== 'git'"
       data-mode-content
       :directory="selectedProjectDirectory"
       :active="rightSidebarOpen && rightSidebarMode === 'git'"
+      :enabled="workspaceReady"
       :font-size="terminalFontSize"
       :external-editor="externalEditor"
       @available="emit('gitAvailable', $event)"

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SubagentSpawnRequest } from "../api/subagentSpawns";
+import type { SubagentSpawnRequest, TopLevelTerminalMetadata } from "../api/subagentSpawns";
 
 const transport = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: any }) => void>(),
-  register: vi.fn(async () => undefined),
+  register: vi.fn<(terminals: TopLevelTerminalMetadata[]) => Promise<void>>(async () => undefined),
   unlisten: vi.fn(),
 }));
 
@@ -74,6 +74,58 @@ describe("top-level terminal registration", () => {
     expect(topLevelTerminalMetadata([...tabs, shellChild])).toEqual([
       { terminalId: "shell-1", projectId: "project-1" },
     ]);
+  });
+
+  it("does not dispatch an update disposed before its registration microtask", async () => {
+    const service = createSubagentSpawnService({
+      createTab: async () => undefined,
+      startTab: async () => ({ outcome: "cancelled" as const }),
+      closeTab: async () => undefined,
+    });
+
+    await service.start();
+    await vi.waitFor(() => expect(transport.register).toHaveBeenCalledTimes(1));
+    service.update([
+      { id: "shell-1", projectId: "project-1", launch: { kind: "shell" } },
+    ] as TerminalTabState[]);
+    service.dispose();
+    await Promise.resolve();
+
+    expect(transport.register).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces updates received while a registration is in flight", async () => {
+    let resolveRegistration!: () => void;
+    const registration = new Promise<void>((resolve) => {
+      resolveRegistration = resolve;
+    });
+    transport.register.mockImplementationOnce(() => registration);
+    const service = createSubagentSpawnService({
+      createTab: async () => undefined,
+      startTab: async () => ({ outcome: "cancelled" as const }),
+      closeTab: async () => undefined,
+    });
+
+    service.update([
+      { id: "shell-1", projectId: "project-1", launch: { kind: "shell" } },
+    ] as TerminalTabState[]);
+    await service.start();
+    await vi.waitFor(() => expect(transport.register).toHaveBeenCalledTimes(1));
+
+    service.update([
+      { id: "shell-2", projectId: "project-1", launch: { kind: "shell" } },
+    ] as TerminalTabState[]);
+    service.update([
+      { id: "shell-3", projectId: "project-1", launch: { kind: "shell" } },
+    ] as TerminalTabState[]);
+    expect(transport.register).toHaveBeenCalledTimes(1);
+
+    resolveRegistration();
+    await vi.waitFor(() => expect(transport.register).toHaveBeenCalledTimes(2));
+    expect(transport.register).toHaveBeenNthCalledWith(2, [
+      { terminalId: "shell-3", projectId: "project-1" },
+    ]);
+    service.dispose();
   });
 });
 

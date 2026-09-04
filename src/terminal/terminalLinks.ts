@@ -2,7 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { IDisposable, ILink, IMarker } from "@xterm/xterm";
 import { resolveTerminalPath, type TerminalPath } from "../api/paths";
 import type { ShortcutModifier } from "../types/settings";
-import type { TerminalTab } from "../types/terminal";
+import type { InitializedTerminalTab } from "../types/terminal";
 
 type PendingLink = {
   marker: IMarker;
@@ -19,7 +19,7 @@ const MAX_PENDING_PATH_RESOLUTIONS = 128;
 const MAX_PENDING_PROVIDER_REQUESTS = 32;
 
 export function installTerminalLinks(
-  tab: TerminalTab,
+  tab: InitializedTerminalTab,
   modifierPressed: () => boolean,
   activationModifierPressed: (event: MouseEvent) => boolean,
   openPath: (path: string) => Promise<void>,

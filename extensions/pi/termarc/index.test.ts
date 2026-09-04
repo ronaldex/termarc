@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   assistantText,
+  autoCloseConsumedSubagent,
   listSubagents,
   notificationKey,
   parseControlResponse,
@@ -21,8 +22,10 @@ import {
   SettledResultCollector,
   SubagentWatchers,
   SUBAGENT_NOTIFICATION_OPTIONS,
+  shouldAutoCloseDirectResult,
   shouldNotifySubagentWait,
   shouldReportPiStatus,
+  subagentCloseArguments,
   subagentListArguments,
   subagentNotification,
   subagentPiSpawnArguments,
@@ -44,7 +47,7 @@ const fixtures = JSON.parse(
   extensionPayloads: Record<string, unknown>;
 };
 
-describe("Pi status extension modes", () => {
+describe("Termarc extension modes", () => {
   beforeEach(() => resetProcessWatcherStateForTests());
   it("emits OSC only in interactive TUI mode without corrupting structured stdout", () => {
     expect(shouldReportPiStatus("tui")).toBe(true);
@@ -192,7 +195,71 @@ describe("Pi status extension modes", () => {
       "--timeout",
       "300",
     ]);
+    expect(subagentCloseArguments("subagent-1")).toEqual([
+      "--json",
+      "subagents",
+      "close",
+      "subagent-1",
+    ]);
     expect(SUBAGENT_NOTIFICATION_OPTIONS).toEqual({ deliverAs: "followUp", triggerTurn: true });
+  });
+
+  it("auto-closes only a successful direct result workflow", async () => {
+    expect(shouldAutoCloseDirectResult(["result", "subagent-1"])).toBe(true);
+    expect(shouldAutoCloseDirectResult(["result", "subagent-1"], true)).toBe(false);
+    for (const command of ["status", "output", "wait", "process", "stop"]) {
+      expect(shouldAutoCloseDirectResult([command, "subagent-1"]), command).toBe(false);
+    }
+    expect(shouldAutoCloseDirectResult(["result"])).toBe(false);
+    expect(shouldAutoCloseDirectResult(["result", "subagent-1", "--extra"])).toBe(false);
+
+    const calls: string[][] = [];
+    const result = { text: "important result" };
+    const consumed = await autoCloseConsumedSubagent(
+      {
+        exec: async (_cli, args) => {
+          calls.push(args);
+          return { code: 0, stdout: "{}", stderr: "" };
+        },
+      } as never,
+      "/termarc",
+      "subagent-1",
+      result,
+    );
+    expect(calls).toEqual([["--json", "subagents", "close", "subagent-1"]]);
+    expect(consumed).toEqual({
+      result,
+      retention: { status: "closed", id: "subagent-1" },
+    });
+  });
+
+  it("keeps requested results open and preserves results when close fails", async () => {
+    const calls: string[][] = [];
+    const result = { text: "do not lose this" };
+    const pi = {
+      exec: async (_cli: string, args: string[]) => {
+        calls.push(args);
+        return { code: 1, stdout: "", stderr: "close unavailable" };
+      },
+    };
+
+    expect(
+      await autoCloseConsumedSubagent(pi as never, "/termarc", "subagent-2", result, true),
+    ).toEqual({
+      result,
+      retention: { status: "kept-open", id: "subagent-2" },
+    });
+    expect(calls).toEqual([]);
+
+    expect(await autoCloseConsumedSubagent(pi as never, "/termarc", "subagent-2", result)).toEqual({
+      result,
+      retention: {
+        status: "close-failed",
+        id: "subagent-2",
+        error: "close unavailable",
+      },
+    });
+    expect(calls).toEqual([["--json", "subagents", "close", "subagent-2"]]);
   });
 
   it("iterates bounded list pages and rejects malformed or repeated cursors", async () => {
@@ -828,6 +895,7 @@ describe("Pi status extension modes", () => {
       "result",
       "input",
       "stop",
+      "close",
     ]) {
       const response = parseControlResponse(fixtures.responses[operation]);
       expect(response.ok, operation).toBe(true);
@@ -855,6 +923,7 @@ describe("Pi status extension modes", () => {
     expect(parseSubagentResult(successful.result)).toMatchObject({ text: "finished" });
     expect(parseEmptyResponse(successful.input)).toEqual({});
     expect(parseEmptyResponse(successful.stop)).toEqual({});
+    expect(parseEmptyResponse(successful.close)).toEqual({});
   });
 
   it("resolves subagent models only from the parent session model set", () => {

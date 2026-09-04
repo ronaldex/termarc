@@ -17,17 +17,28 @@ export function useSidebarLayout() {
 
     const startX = event.clientX;
     const startWidth = side === "left" ? leftWidth.value : rightWidth.value;
+    let resizeFrame: number | undefined;
+    let pendingWidth = startWidth;
+    const applyWidth = () => {
+      resizeFrame = undefined;
+      if (side === "left") leftWidth.value = pendingWidth;
+      else rightWidth.value = pendingWidth;
+    };
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX;
-      if (side === "left") leftWidth.value = clamp(startWidth + delta, 190, 420);
-      else {
-        const deltaPercent = (delta / window.innerWidth) * 100;
-        rightWidth.value = clamp(startWidth - deltaPercent, 20, 50);
-      }
+      pendingWidth =
+        side === "left"
+          ? clamp(startWidth + delta, 190, 420)
+          : clamp(startWidth - (delta / window.innerWidth) * 100, 20, 50);
+      if (resizeFrame === undefined) resizeFrame = requestAnimationFrame(applyWidth);
     };
     const stop = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", stop);
+      if (resizeFrame !== undefined) {
+        cancelAnimationFrame(resizeFrame);
+        applyWidth();
+      }
       stopResize = undefined;
     };
 

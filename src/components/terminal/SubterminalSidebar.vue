@@ -15,6 +15,8 @@ const emit = defineEmits<{
   layout: [];
 }>();
 const panel = ref<HTMLElement>();
+const labelVisibleFor = ref<string>();
+let labelHideTimer: ReturnType<typeof setTimeout> | undefined;
 const visibleTabs = computed(() =>
   props.tabIds.flatMap((id) => {
     const tab = props.tabs.find((candidate) => candidate.id === id);
@@ -24,13 +26,35 @@ const visibleTabs = computed(() =>
 let observer: ResizeObserver | undefined;
 
 function terminalLabel(tab: TerminalTab): string {
-  return tab.title || `Terminal ${tab.number}`;
+  if (tab.customTitle) return tab.customTitle;
+  if (tab.launch.kind === "subagent" && tab.launch.name) return tab.launch.name;
+  return tab.launchTitle || tab.terminalTitle || tab.title || `Terminal ${tab.number}`;
+}
+function paneLabel(tab: TerminalTab): string {
+  const number = visibleTabs.value.findIndex((candidate) => candidate.id === tab.id) + 1;
+  return tab.customTitle || `Terminal ${number}`;
+}
+function revealPaneLabel(tabId?: string): void {
+  if (!tabId) return;
+  labelVisibleFor.value = tabId;
+  if (labelHideTimer) clearTimeout(labelHideTimer);
+  labelHideTimer = setTimeout(() => {
+    labelVisibleFor.value = undefined;
+  }, 1500);
+}
+function scrollFocusedPane(): void {
+  const focused =
+    visibleTabs.value.find((tab) => tab.id === props.focusedTerminalId) ?? visibleTabs.value[0];
+  panel.value
+    ?.querySelector<HTMLElement>(`[data-pane-id="${CSS.escape(focused?.id ?? "")}"]`)
+    ?.scrollIntoView({ block: "nearest" });
 }
 async function focusPanel(): Promise<void> {
   await nextTick();
+  scrollFocusedPane();
   const focused =
     visibleTabs.value.find((tab) => tab.id === props.focusedTerminalId) ?? visibleTabs.value[0];
-  if (focused?.status === "running" || focused?.status === "starting") focused.terminal.focus();
+  if (focused?.status === "running" || focused?.status === "starting") focused.terminal?.focus();
   else
     panel.value
       ?.querySelector<HTMLElement>(
@@ -43,6 +67,12 @@ function hasPanelFocus(): boolean {
 }
 defineExpose({ focusPanel, hasPanelFocus });
 
+watch(() => props.focusedTerminalId, revealPaneLabel);
+watch(
+  [() => props.focusedTerminalId, () => props.tabIds.join(",")],
+  () => void nextTick(scrollFocusedPane),
+  { flush: "post", immediate: true },
+);
 watch(
   () => props.tabIds.join(","),
   () => void nextTick(() => emit("layout")),
@@ -53,7 +83,10 @@ onMounted(() => {
   observer = new ResizeObserver(() => emit("layout"));
   observer.observe(panel.value);
 });
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  if (labelHideTimer) clearTimeout(labelHideTimer);
+});
 </script>
 
 <template>
@@ -62,10 +95,14 @@ onBeforeUnmount(() => observer?.disconnect());
       v-for="tab in visibleTabs"
       :key="tab.id"
       class="subterminal-pane"
+      :class="{ 'fills-sidebar': visibleTabs.length < 3 }"
       :data-pane-id="tab.id"
       @focusin="emit('focus', tab.id)"
       @pointerdown="emit('focus', tab.id)"
     >
+      <span v-if="labelVisibleFor === tab.id" class="terminal-pane-label" aria-hidden="true">
+        {{ paneLabel(tab) }}
+      </span>
       <button
         class="maximize-button"
         type="button"
@@ -95,20 +132,45 @@ onBeforeUnmount(() => observer?.disconnect());
   height: 100%;
   flex-direction: column;
   overflow: auto;
+  scrollbar-width: none;
   background: var(--color-app-bg);
+}
+.subterminal-sidebar::-webkit-scrollbar {
+  display: none;
 }
 .subterminal-pane {
   position: relative;
   display: flex;
-  min-height: 14rem;
-  flex: 1 0 14rem;
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 0 0 calc(100% / 3);
   flex-direction: column;
   overflow: hidden;
   padding: var(--terminal-surface-padding, 0.375rem);
   background: var(--color-app-bg);
 }
+.subterminal-pane.fills-sidebar {
+  flex: 1 1 0;
+}
 .subterminal-pane + .subterminal-pane {
   border-top: 1px solid var(--color-border-muted);
+}
+.terminal-pane-label {
+  position: absolute;
+  z-index: 5;
+  right: 0.5rem;
+  bottom: 0.375rem;
+  max-width: calc(100% - 1rem);
+  overflow: hidden;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.1875rem;
+  color: var(--color-text-subtle);
+  background: color-mix(in srgb, var(--color-app-bg) 75%, transparent);
+  font-size: 0.625rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .subterminal-pane::before,
 .subterminal-pane::after {

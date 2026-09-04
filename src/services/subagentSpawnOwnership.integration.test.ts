@@ -2,7 +2,7 @@
 
 import { effectScope, nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import fixture from "../../extensions/pi/fixtures/subagent-spawn-ipc.json";
+import fixture from "../../extensions/pi/termarc/fixtures/subagent-spawn-ipc.json";
 import type { PtyEvent, PtyStarted, TerminalTab } from "../types/terminal";
 
 const native = vi.hoisted(() => ({
@@ -48,7 +48,7 @@ function disposable() {
   return { dispose: vi.fn() };
 }
 
-function fakeTerminal(): TerminalTab["terminal"] {
+function fakeTerminal(): NonNullable<TerminalTab["terminal"]> {
   const terminal = {
     rows: 24,
     cols: 80,
@@ -72,7 +72,7 @@ function fakeTerminal(): TerminalTab["terminal"] {
     registerMarker: () => undefined,
     registerLinkProvider: () => disposable(),
   };
-  return terminal as unknown as TerminalTab["terminal"];
+  return terminal as unknown as NonNullable<TerminalTab["terminal"]>;
 }
 
 async function setup(mode: typeof native.mode) {

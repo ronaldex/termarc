@@ -1,52 +1,59 @@
 use serde::Serialize;
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    sync::{Mutex, MutexGuard},
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const LEGACY_PI_ENTRYPOINTS: &[&str] = &["termarc.ts", "index.ts"];
+const LEGACY_PI_MODULE_DIRECTORY: &str = "termarc-status";
+static EXTENSION_LOCK: Mutex<()> = Mutex::new(());
 
 const PI_EXTENSION_FILES: &[(&str, &str)] = &[
     (
-        "index.ts",
-        include_str!("../../extensions/pi/index.ts"),
+        "termarc/index.ts",
+        include_str!("../../extensions/pi/termarc/index.ts"),
     ),
     (
-        "termarc-status/cli.ts",
-        include_str!("../../extensions/pi/termarc-status/cli.ts"),
+        "termarc/cli.ts",
+        include_str!("../../extensions/pi/termarc/cli.ts"),
     ),
     (
-        "termarc-status/environment.ts",
-        include_str!("../../extensions/pi/termarc-status/environment.ts"),
+        "termarc/environment.ts",
+        include_str!("../../extensions/pi/termarc/environment.ts"),
     ),
     (
-        "termarc-status/osc.ts",
-        include_str!("../../extensions/pi/termarc-status/osc.ts"),
+        "termarc/osc.ts",
+        include_str!("../../extensions/pi/termarc/osc.ts"),
     ),
     (
-        "termarc-status/results.ts",
-        include_str!("../../extensions/pi/termarc-status/results.ts"),
+        "termarc/results.ts",
+        include_str!("../../extensions/pi/termarc/results.ts"),
     ),
     (
-        "termarc-status/watchers.ts",
-        include_str!("../../extensions/pi/termarc-status/watchers.ts"),
+        "termarc/watchers.ts",
+        include_str!("../../extensions/pi/termarc/watchers.ts"),
     ),
     (
-        "termarc-status/subagent/agents.ts",
-        include_str!("../../extensions/pi/termarc-status/subagent/agents.ts"),
+        "termarc/subagent/agents.ts",
+        include_str!("../../extensions/pi/termarc/subagent/agents.ts"),
     ),
     (
-        "termarc-status/subagent/render.ts",
-        include_str!("../../extensions/pi/termarc-status/subagent/render.ts"),
+        "termarc/subagent/render.ts",
+        include_str!("../../extensions/pi/termarc/subagent/render.ts"),
     ),
     (
-        "termarc-status/subagent/runner-events.ts",
-        include_str!("../../extensions/pi/termarc-status/subagent/runner-events.ts"),
+        "termarc/subagent/runner-events.ts",
+        include_str!("../../extensions/pi/termarc/subagent/runner-events.ts"),
     ),
     (
-        "termarc-status/subagent/settings.ts",
-        include_str!("../../extensions/pi/termarc-status/subagent/settings.ts"),
+        "termarc/subagent/settings.ts",
+        include_str!("../../extensions/pi/termarc/subagent/settings.ts"),
     ),
     (
-        "termarc-status/subagent/types.ts",
-        include_str!("../../extensions/pi/termarc-status/subagent/types.ts"),
+        "termarc/subagent/types.ts",
+        include_str!("../../extensions/pi/termarc/subagent/types.ts"),
     ),
 ];
 
@@ -71,7 +78,7 @@ impl AgentExtension {
         match id {
             "pi" => Ok(Self {
                 directory: ".pi/agent/extensions",
-                filename: "index.ts",
+                filename: "termarc/index.ts",
                 files: PI_EXTENSION_FILES,
             }),
             _ => Err(format!("unsupported agent extension: {id}")),
@@ -80,23 +87,40 @@ impl AgentExtension {
 }
 
 #[tauri::command]
-pub fn install_agent_extension(agent: String) -> Result<String, String> {
-    install(&agent, home_directory()?)
+pub async fn install_agent_extension(agent: String) -> Result<String, String> {
+    let home = home_directory()?;
+    run_blocking_extension("install extension", move || install(&agent, home)).await
 }
 
 #[tauri::command]
-pub fn is_agent_extension_installed(agent: String) -> Result<bool, String> {
-    Ok(extension_status(&agent, home_directory()?)?.current)
+pub async fn is_agent_extension_installed(agent: String) -> Result<bool, String> {
+    let home = home_directory()?;
+    run_blocking_extension("inspect extension", move || {
+        Ok(extension_status(&agent, home)?.current)
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn get_agent_extension_status(agent: String) -> Result<AgentExtensionStatus, String> {
-    extension_status(&agent, home_directory()?)
+pub async fn get_agent_extension_status(agent: String) -> Result<AgentExtensionStatus, String> {
+    let home = home_directory()?;
+    run_blocking_extension("inspect extension", move || extension_status(&agent, home)).await
 }
 
 #[tauri::command]
-pub fn remove_agent_extension(agent: String) -> Result<String, String> {
-    remove(&agent, home_directory()?)
+pub async fn remove_agent_extension(agent: String) -> Result<String, String> {
+    let home = home_directory()?;
+    run_blocking_extension("remove extension", move || remove(&agent, home)).await
+}
+
+async fn run_blocking_extension<T, F>(operation: &'static str, task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("{operation} task failed: {error}"))?
 }
 
 fn home_directory() -> Result<PathBuf, String> {
@@ -112,12 +136,17 @@ fn extension_path(agent: &str, home: PathBuf) -> Result<PathBuf, String> {
 
 fn extension_status(agent: &str, home: PathBuf) -> Result<AgentExtensionStatus, String> {
     let extension = AgentExtension::for_id(agent)?;
+    let _guard = extension_lock()?;
+    let directory = home.join(extension.directory);
     let destination = extension_path(agent, home.clone())?;
-    let installed = destination.symlink_metadata().is_ok();
-    let current = extension.files.iter().all(|(relative, source)| {
-        fs::read_to_string(home.join(extension.directory).join(relative))
-            .is_ok_and(|installed| installed == *source)
-    });
+    let legacy_installed = legacy_entrypoints(&directory)
+        .iter()
+        .any(|path| is_termarc_entrypoint(path));
+    let installed = destination.symlink_metadata().is_ok() || legacy_installed;
+    let current = !legacy_installed
+        && extension.files.iter().all(|(relative, source)| {
+            fs::read_to_string(directory.join(relative)).is_ok_and(|installed| installed == *source)
+        });
     Ok(AgentExtensionStatus {
         path: destination.to_string_lossy().into_owned(),
         installed,
@@ -129,6 +158,7 @@ fn extension_status(agent: &str, home: PathBuf) -> Result<AgentExtensionStatus, 
 
 fn install(agent: &str, home: PathBuf) -> Result<String, String> {
     let extension = AgentExtension::for_id(agent)?;
+    let _guard = extension_lock()?;
     let directory = home.join(extension.directory);
     fs::create_dir_all(&directory)
         .map_err(|error| format!("could not create {}: {error}", directory.display()))?;
@@ -137,6 +167,7 @@ fn install(agent: &str, home: PathBuf) -> Result<String, String> {
     if extension.files.iter().all(|(relative, source)| {
         fs::read_to_string(directory.join(relative)).is_ok_and(|contents| contents == *source)
     }) {
+        remove_legacy_entrypoints(&directory)?;
         return Ok(destination.to_string_lossy().into_owned());
     }
 
@@ -170,21 +201,72 @@ fn install(agent: &str, home: PathBuf) -> Result<String, String> {
         }
     }
 
+    remove_legacy_entrypoints(&directory)?;
     Ok(destination.to_string_lossy().into_owned())
 }
 
 fn remove(agent: &str, home: PathBuf) -> Result<String, String> {
+    let extension = AgentExtension::for_id(agent)?;
+    let _guard = extension_lock()?;
+    let directory = home.join(extension.directory);
     let destination = extension_path(agent, home)?;
-    let module_directory = destination.with_extension("");
+    let module_directory = destination
+        .parent()
+        .ok_or_else(|| format!("extension path has no parent: {}", destination.display()))?;
     if destination.symlink_metadata().is_ok() {
         fs::remove_file(&destination)
             .map_err(|error| format!("could not remove {}: {error}", destination.display()))?;
     }
     if module_directory.is_dir() {
-        fs::remove_dir_all(&module_directory)
+        fs::remove_dir_all(module_directory)
             .map_err(|error| format!("could not remove {}: {error}", module_directory.display()))?;
     }
+    remove_legacy_entrypoints(&directory)?;
     Ok(destination.to_string_lossy().into_owned())
+}
+
+fn extension_lock() -> Result<MutexGuard<'static, ()>, String> {
+    EXTENSION_LOCK
+        .lock()
+        .map_err(|_| "agent extension lock is poisoned".to_string())
+}
+
+fn legacy_entrypoints(directory: &Path) -> Vec<PathBuf> {
+    LEGACY_PI_ENTRYPOINTS
+        .iter()
+        .map(|filename| directory.join(filename))
+        .collect()
+}
+
+fn is_termarc_entrypoint(path: &Path) -> bool {
+    fs::read_to_string(path).is_ok_and(|source| {
+        source.contains("termarc-subagent-watcher-ledger") && source.contains("termarc_subagent")
+    })
+}
+
+fn remove_legacy_entrypoints(directory: &Path) -> Result<(), String> {
+    let mut recognized_legacy_extension = false;
+    for path in legacy_entrypoints(directory) {
+        if !is_termarc_entrypoint(&path) {
+            continue;
+        }
+        recognized_legacy_extension = true;
+        fs::remove_file(&path)
+            .map_err(|error| format!("could not remove legacy {}: {error}", path.display()))?;
+    }
+
+    if recognized_legacy_extension {
+        let module_directory = directory.join(LEGACY_PI_MODULE_DIRECTORY);
+        if module_directory.is_dir() {
+            fs::remove_dir_all(&module_directory).map_err(|error| {
+                format!(
+                    "could not remove legacy {}: {error}",
+                    module_directory.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -206,7 +288,7 @@ mod tests {
     fn installs_pi_extension_and_creates_directories() {
         let home = temporary_home();
         let installed = install("pi", home.clone()).expect("extension should install");
-        let destination = home.join(".pi/agent/extensions/index.ts");
+        let destination = home.join(".pi/agent/extensions/termarc/index.ts");
 
         assert_eq!(PathBuf::from(installed), destination);
         assert_eq!(
@@ -227,7 +309,7 @@ mod tests {
     #[test]
     fn installed_status_requires_the_current_extension_source() {
         let home = temporary_home();
-        let destination = home.join(".pi/agent/extensions/index.ts");
+        let destination = home.join(".pi/agent/extensions/termarc/index.ts");
         fs::create_dir_all(
             destination
                 .parent()
@@ -248,7 +330,7 @@ mod tests {
         assert!(!current.update_available);
         assert_eq!(current.bundled_version, VERSION);
 
-        let helper = home.join(".pi/agent/extensions/termarc-status/watchers.ts");
+        let helper = home.join(".pi/agent/extensions/termarc/watchers.ts");
         fs::write(&helper, "outdated helper").expect("helper should be replaceable");
         let outdated_helper = extension_status("pi", home.clone()).expect("status should load");
         assert!(!outdated_helper.current);
@@ -265,7 +347,7 @@ mod tests {
     #[test]
     fn replaces_an_outdated_termarc_extension() {
         let home = temporary_home();
-        let destination = home.join(".pi/agent/extensions/index.ts");
+        let destination = home.join(".pi/agent/extensions/termarc/index.ts");
         fs::create_dir_all(
             destination
                 .parent()
@@ -284,6 +366,38 @@ mod tests {
     }
 
     #[test]
+    fn migrates_recognized_legacy_entrypoints_without_touching_unrelated_extensions() {
+        let home = temporary_home();
+        let directory = home.join(".pi/agent/extensions");
+        fs::create_dir_all(&directory).expect("extension directory should be created");
+        let legacy = directory.join("index.ts");
+        let unrelated = directory.join("custom.ts");
+        let legacy_modules = directory.join(LEGACY_PI_MODULE_DIRECTORY);
+        fs::create_dir_all(&legacy_modules).expect("legacy module directory should be created");
+        fs::write(legacy_modules.join("watchers.ts"), "legacy helper")
+            .expect("legacy module should be writable");
+        fs::write(
+            &legacy,
+            "const marker = 'termarc-subagent-watcher-ledger'; const tool = 'termarc_subagent';",
+        )
+        .expect("legacy extension should be writable");
+        fs::write(&unrelated, "export default () => undefined;")
+            .expect("unrelated extension should be writable");
+
+        let outdated = extension_status("pi", home.clone()).expect("status should load");
+        assert!(outdated.installed);
+        assert!(outdated.update_available);
+
+        install("pi", home.clone()).expect("extension should migrate");
+        assert!(!legacy.exists());
+        assert!(unrelated.exists());
+        assert!(!directory.join(LEGACY_PI_MODULE_DIRECTORY).exists());
+        assert!(directory.join("termarc/index.ts").exists());
+
+        fs::remove_dir_all(home).expect("temporary home should be removable");
+    }
+
+    #[test]
     fn removes_an_installed_extension() {
         let home = temporary_home();
         let destination =
@@ -293,7 +407,12 @@ mod tests {
 
         assert_eq!(PathBuf::from(removed), destination);
         assert!(!destination.exists());
-        assert!(!destination.with_extension("").exists());
+        assert!(
+            !destination
+                .parent()
+                .expect("destination should have a parent")
+                .exists()
+        );
         fs::remove_dir_all(home).expect("temporary home should be removable");
     }
 

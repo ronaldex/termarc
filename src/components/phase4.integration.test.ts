@@ -152,7 +152,7 @@ describe("Phase 4 application-level mounted integration", () => {
       selectTab: (id) => {
         activeTabId.value = id;
       },
-      focusTerminal: () => tabs.find((tab) => tab.id === activeTabId.value)?.terminal.focus(),
+      focusTerminal: () => tabs.find((tab) => tab.id === activeTabId.value)?.terminal?.focus(),
       focusWorkspaceContent: () => shell.value?.focusContent(),
       focusSidebarPanel: () => shell.value?.focusSubterminalPanel(),
       fitAfterLayout: vi.fn(),
@@ -298,16 +298,37 @@ describe("Phase 4 application-level mounted integration", () => {
 
     click(host.querySelector('[aria-label="Stop subagent"]')!);
     expect(stopped).toHaveBeenCalledWith("child");
+
+    const newestChild = runtimeTab("child-2", "Newest agent", parent.id, {
+      kind: "subagent",
+      subagentId: "agent-2",
+      parentTerminalId: parent.id,
+      name: "Newest agent",
+      commandLine: "pi",
+      processKind: "pi",
+    });
+    tabs.push(newestChild);
+    activeTabId.value = newestChild.id;
+    controller.openAndFocus("subterminals");
+    flushFocus();
+    await renderSettled();
+
+    expect(document.activeElement).toBe(newestChild.mount.root.querySelector("textarea"));
   });
 
-  it("mounts the terminal-close dialog, focuses it, and emits every close choice", async () => {
+  it("mounts the terminal-close dialog, focuses Cancel, and emits every close choice", async () => {
     const choose = vi.fn();
     mount(h(ParentCloseDialog, { childCount: 2, runningProcessCount: 1, onChoose: choose }));
     await renderSettled();
 
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(document.activeElement).toBe(dialog);
+    const [cancel, close] = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"));
+    expect(document.activeElement).toBe(cancel);
     expect(dialog.textContent).toContain("2 subterminals");
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(document.activeElement).toBe(close);
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(document.activeElement).toBe(cancel);
     dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     click(
       [...document.querySelectorAll("button")].find((button) =>

@@ -1,7 +1,11 @@
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import { flattenProjectTreeModel, projectTreeModel } from "./projectTreeModel";
+import {
+  flattenProjectTreeModel,
+  projectTreeModel,
+  type ProjectTreeDisplayProject,
+} from "./projectTreeModel";
 
 export type SidebarShortcutSelection =
   | Extract<SidebarSelection, { kind: "terminal" | "subagent" }>
@@ -17,6 +21,13 @@ export function numberedSidebarShortcuts(
   tabs: readonly TerminalTabState[],
   filter = "",
 ): NumberedSidebarShortcut[] {
+  return numberedSidebarShortcutsFromModel(projectTreeModel(projects, tabs, filter));
+}
+
+/** Derives shortcuts from an already-built display model without rescanning every tab. */
+export function numberedSidebarShortcutsFromModel(
+  projects: readonly ProjectTreeDisplayProject[],
+): NumberedSidebarShortcut[] {
   const shortcutProjects = projects.map((project) => ({
     ...project,
     projectOpen: true,
@@ -24,9 +35,7 @@ export function numberedSidebarShortcuts(
     terminalOpen: true,
     commandsOpen: true,
   }));
-  const selections = flattenProjectTreeModel(
-    projectTreeModel(shortcutProjects, tabs, filter),
-  ).filter(
+  const selections = flattenProjectTreeModel(shortcutProjects).filter(
     (selection): selection is SidebarShortcutSelection =>
       selection.kind === "agent" ||
       selection.kind === "subagent" ||
