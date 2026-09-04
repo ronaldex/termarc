@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PtyStatus, TerminalTab } from "../types/terminal";
 import { createTerminalActivityMonitor } from "./terminalActivityMonitor";
@@ -90,6 +92,37 @@ describe("terminal activity monitor", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(loadStatuses).toHaveBeenCalledOnce();
     monitor.dispose();
+  });
+
+  it("pauses polling while hidden and refreshes once when visible again", async () => {
+    vi.useFakeTimers();
+    let hidden = false;
+    vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+    const loadStatuses = vi.fn(async () => ({}));
+    const monitor = createTerminalActivityMonitor({
+      tabs: tabs(),
+      loadStatuses,
+      pollIntervalMs: 1_500,
+    });
+
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(loadStatuses).toHaveBeenCalledTimes(1);
+
+    hidden = true;
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(loadStatuses).toHaveBeenCalledTimes(1);
+
+    hidden = false;
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.runAllTicks();
+    expect(loadStatuses).toHaveBeenCalledTimes(2);
+
+    monitor.dispose();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.runAllTicks();
+    expect(loadStatuses).toHaveBeenCalledTimes(2);
   });
 
   it("queues one follow-up when a refresh is already pending", async () => {

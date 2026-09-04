@@ -23,11 +23,20 @@ function handleKeydown(event: KeyboardEvent): void {
     emit("cancel");
     return;
   }
-  if (event.key !== "Tab") return;
-
   const focusable = Array.from(
     modal.value?.querySelectorAll<HTMLElement>("input, button:not(:disabled)") ?? [],
   );
+  const buttons = focusable.filter((element) => element instanceof HTMLButtonElement);
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (currentIndex === -1) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    buttons[(currentIndex + direction + buttons.length) % buttons.length]?.focus();
+    return;
+  }
+  if (event.key !== "Tab") return;
+
   if (!focusable.length) return;
   const first = focusable[0];
   const last = focusable[focusable.length - 1];

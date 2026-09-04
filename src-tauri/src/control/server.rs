@@ -9,7 +9,7 @@ mod unix {
         },
         path::{Path, PathBuf},
         sync::{
-            Arc,
+            Arc, Mutex,
             atomic::{AtomicBool, AtomicUsize, Ordering},
             mpsc::{self, TrySendError},
         },
@@ -29,6 +29,7 @@ mod unix {
         shutdown: Arc<AtomicBool>,
         listener_thread: Option<JoinHandle<()>>,
         dispatcher: ControlDispatcher,
+        _worker_count: Arc<AtomicUsize>,
     }
 
     impl ControlServer {
@@ -63,6 +64,8 @@ mod unix {
             let shutdown = Arc::new(AtomicBool::new(false));
             let listener_shutdown = Arc::clone(&shutdown);
             let listener_dispatcher = dispatcher.clone();
+            let worker_count = Arc::new(AtomicUsize::new(0));
+            let listener_worker_count = Arc::clone(&worker_count);
             let listener_thread = thread::Builder::new()
                 .name("termarc-control-listener".into())
                 .spawn(move || {
@@ -71,6 +74,7 @@ mod unix {
                         listener_shutdown,
                         listener_dispatcher,
                         concurrency,
+                        listener_worker_count,
                     )
                 })?;
             Ok(Self {
@@ -78,7 +82,15 @@ mod unix {
                 shutdown,
                 listener_thread: Some(listener_thread),
                 dispatcher,
+                _worker_count: worker_count,
             })
+        }
+    }
+
+    #[cfg(test)]
+    impl ControlServer {
+        fn worker_count(&self) -> usize {
+            self._worker_count.load(Ordering::Acquire)
         }
     }
 
@@ -122,39 +134,38 @@ mod unix {
         shutdown: Arc<AtomicBool>,
         dispatcher: ControlDispatcher,
         concurrency: usize,
+        worker_count: Arc<AtomicUsize>,
     ) {
         let (connections, receiver) = mpsc::sync_channel::<UnixStream>(concurrency);
-        let receiver = Arc::new(std::sync::Mutex::new(receiver));
+        let receiver = Arc::new(Mutex::new(receiver));
         let active_connections = Arc::new(AtomicUsize::new(0));
-        let workers = (0..concurrency)
-            .filter_map(|index| {
-                let receiver = Arc::clone(&receiver);
-                let shutdown = Arc::clone(&shutdown);
-                let dispatcher = dispatcher.clone();
-                let active_connections = Arc::clone(&active_connections);
-                thread::Builder::new()
-                    .name(format!("termarc-control-worker-{index}"))
-                    .spawn(move || {
-                        loop {
-                            let stream = receiver
-                                .lock()
-                                .ok()
-                                .and_then(|receiver| receiver.recv().ok());
-                            let Some(stream) = stream else { break };
-                            handle_connection(stream, Arc::clone(&shutdown), &dispatcher);
-                            active_connections.fetch_sub(1, Ordering::AcqRel);
-                        }
-                    })
-                    .ok()
-            })
-            .collect::<Vec<_>>();
+        let mut workers = Vec::with_capacity(concurrency);
 
         while !shutdown.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
-                    if active_connections.load(Ordering::Acquire) >= concurrency {
+                    let active = active_connections.load(Ordering::Acquire);
+                    if active >= concurrency {
                         reject_busy(&mut stream);
                         continue;
+                    }
+                    if active >= workers.len() {
+                        match spawn_worker(
+                            workers.len(),
+                            Arc::clone(&receiver),
+                            Arc::clone(&shutdown),
+                            dispatcher.clone(),
+                            Arc::clone(&active_connections),
+                        ) {
+                            Ok(worker) => {
+                                workers.push(worker);
+                                worker_count.store(workers.len(), Ordering::Release);
+                            }
+                            Err(_) => {
+                                reject_busy(&mut stream);
+                                continue;
+                            }
+                        }
                     }
                     active_connections.fetch_add(1, Ordering::AcqRel);
                     match connections.try_send(stream) {
@@ -179,6 +190,28 @@ mod unix {
         for worker in workers {
             let _ = worker.join();
         }
+    }
+
+    fn spawn_worker(
+        index: usize,
+        receiver: Arc<Mutex<mpsc::Receiver<UnixStream>>>,
+        shutdown: Arc<AtomicBool>,
+        dispatcher: ControlDispatcher,
+        active_connections: Arc<AtomicUsize>,
+    ) -> io::Result<JoinHandle<()>> {
+        thread::Builder::new()
+            .name(format!("termarc-control-worker-{index}"))
+            .spawn(move || {
+                loop {
+                    let stream = receiver
+                        .lock()
+                        .ok()
+                        .and_then(|receiver| receiver.recv().ok());
+                    let Some(stream) = stream else { break };
+                    handle_connection(stream, Arc::clone(&shutdown), &dispatcher);
+                    active_connections.fetch_sub(1, Ordering::AcqRel);
+                }
+            })
     }
 
     fn reject_busy(stream: &mut UnixStream) {
@@ -329,6 +362,26 @@ mod unix {
         fn dispatcher() -> ControlDispatcher {
             let registry = SubagentRegistry::default();
             ControlDispatcher::new(registry.clone(), SpawnRouter::new(registry, |_, _| Ok(())))
+        }
+
+        #[test]
+        fn workers_are_created_lazily() {
+            let socket = TestSocket::new();
+            let path = socket.path.clone();
+            let server = ControlServer::start_at(path.clone(), dispatcher(), 4).unwrap();
+
+            assert_eq!(server.worker_count(), 0);
+            assert!(matches!(
+                request_at(&path, &ControlRequest::status(), Duration::from_secs(1)).unwrap(),
+                ControlResult::Status(_)
+            ));
+            for _ in 0..100 {
+                if server.worker_count() == 1 {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            assert_eq!(server.worker_count(), 1);
         }
 
         #[test]

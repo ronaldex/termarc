@@ -41,6 +41,7 @@ import { isTerminalFamilyRoot } from "../utils/terminalHierarchy";
 import { useAppSettings } from "./useAppSettings";
 import type { ExternalEditor } from "../types/settings";
 import type {
+  InitializedTerminalTab,
   TerminalLaunch,
   TerminalStartResult,
   TerminalStatus,
@@ -77,37 +78,41 @@ export function useTerminalTabs(configuration: {
   let defaultProject = { projectId: "home", cwd: "~" };
   const activityMonitor = createTerminalActivityMonitor({ tabs });
   const terminalContainerRefs = new Map<string, (element: Element | null) => void>();
+  const runtimeInitializations = new Map<
+    TerminalTab,
+    Promise<InitializedTerminalTab | undefined>
+  >();
+  let fontPreparation: Promise<void> | undefined;
 
-  async function createTab(
+  type TabOptions = {
+    id?: string;
+    launch?: TerminalLaunch;
+    launchTitle?: string;
+    customTitle?: string;
+    /** Groups this terminal beneath another terminal-like tab in the sidebar. */
+    parentTerminalId?: string;
+    start?: boolean;
+    activate?: boolean;
+  };
+
+  function createTabDescriptor(
     projectId: string,
     cwd: string,
-    options: {
-      id?: string;
-      launch?: TerminalLaunch;
-      launchTitle?: string;
-      customTitle?: string;
-      /** Groups this terminal beneath another terminal-like tab in the sidebar. */
-      parentTerminalId?: string;
-      start?: boolean;
-      activate?: boolean;
-    } = {},
-  ): Promise<TerminalTab | undefined> {
-    if (disposed) return undefined;
-    await (configuration.prepareFonts ?? prepareTerminalFonts)();
-    if (disposed) return undefined;
-
+    options: TabOptions,
+    availableTabs: readonly TerminalTab[] = tabs,
+  ): TerminalTab {
     const number = nextTabNumber++;
     const startImmediately = options.start !== false;
     const launch = options.launch ?? { kind: "shell" as const };
     const requestedParent = options.parentTerminalId
-      ? tabs.find((tab) => tab.id === options.parentTerminalId)
+      ? availableTabs.find((tab) => tab.id === options.parentTerminalId)
       : undefined;
-    const parentTerminalId = isTerminalFamilyRoot(tabs, requestedParent, projectId)
+    const parentTerminalId = isTerminalFamilyRoot(availableTabs, requestedParent, projectId)
       ? requestedParent.id
       : undefined;
     let id = options.id?.trim() || createTerminalId();
-    while (tabs.some((tab) => tab.id === id)) id = createTerminalId();
-    const tab = reactive({
+    while (availableTabs.some((tab) => tab.id === id)) id = createTerminalId();
+    return reactive({
       id,
       number,
       shortcutNumber: number,
@@ -125,14 +130,6 @@ export function useTerminalTabs(configuration: {
       parentTerminalId,
       launch,
       status: (startImmediately ? "starting" : "stopped") as TerminalStatus,
-      terminal: markRaw(
-        (configuration.createTerminal ?? createTerminal)({
-          fontFamily: settings.terminalFontFamily,
-          fontSize: settings.terminalFontSize,
-          colorTheme: settings.colorTheme,
-        }),
-      ),
-      fitAddon: markRaw(new FitAddon()),
       webglFailed: false,
       mount: markRaw(createTerminalMount()),
       startGeneration: 0,
@@ -143,30 +140,104 @@ export function useTerminalTabs(configuration: {
       disposed: false,
       restartAttempts: [],
     }) as TerminalTab;
+  }
+
+  function prepareFontsOnce(): Promise<void> {
+    if (!fontPreparation) {
+      fontPreparation = (configuration.prepareFonts ?? prepareTerminalFonts)().catch((error) => {
+        fontPreparation = undefined;
+        throw error;
+      });
+    }
+    return fontPreparation;
+  }
+
+  async function initializeRuntime(tab: TerminalTab): Promise<InitializedTerminalTab | undefined> {
+    if (tab.disposed) return undefined;
+    if (tab.terminal && tab.fitAddon) return tab as InitializedTerminalTab;
+    const pending = runtimeInitializations.get(tab);
+    if (pending) return pending;
+
+    const initialization = (async () => {
+      await prepareFontsOnce();
+      if (disposed || tab.disposed || tab.status === "stopped") return undefined;
+      tab.terminal = markRaw(
+        (configuration.createTerminal ?? createTerminal)({
+          fontFamily: settings.terminalFontFamily,
+          fontSize: settings.terminalFontSize,
+          colorTheme: settings.colorTheme,
+        }),
+      );
+      tab.fitAddon = markRaw(new FitAddon());
+      const initialized = tab as InitializedTerminalTab;
+      await nextTick();
+      if (disposed || tab.disposed) {
+        tab.terminal.dispose();
+        tab.terminal = undefined;
+        tab.fitAddon = undefined;
+        return undefined;
+      }
+      initialized.terminal.loadAddon(initialized.fitAddon);
+      initialized.terminal.open(initialized.mount.root);
+      initialized.copyDisposable = markRaw(
+        installTerminalCopy(initialized.mount.root, initialized.terminal, (result) =>
+          configuration.onCopy?.(result),
+        ),
+      );
+      initialized.linkDisposable = markRaw(
+        installTerminalLinks(
+          initialized,
+          () => linkModifierPressed,
+          (event) => isTerminalLinkModifierPressed(event, settings.shortcutModifier),
+          (path) => openPath(path, configuration.externalEditorForProject(initialized.projectId)),
+        ),
+      );
+      installTerminalTitle(initialized);
+      installTerminalAgentStatus(initialized);
+      installTerminalInput(initialized);
+      enableWebgl(initialized);
+      fitTab(initialized);
+      return initialized;
+    })().finally(() => runtimeInitializations.delete(tab));
+    runtimeInitializations.set(tab, initialization);
+    return initialization;
+  }
+
+  async function createTab(
+    projectId: string,
+    cwd: string,
+    options: TabOptions = {},
+  ): Promise<TerminalTab | undefined> {
+    if (disposed) return undefined;
+    const tab = createTabDescriptor(projectId, cwd, options);
     tabs.push(tab);
     if (options.activate !== false) activeTabId.value = tab.id;
-    await nextTick();
-    if (tab.disposed) return tab;
-    tab.terminal.loadAddon(tab.fitAddon);
-    tab.terminal.open(tab.mount.root);
-    tab.copyDisposable = markRaw(
-      installTerminalCopy(tab.mount.root, tab.terminal, (result) => configuration.onCopy?.(result)),
-    );
-    tab.linkDisposable = markRaw(
-      installTerminalLinks(
-        tab,
-        () => linkModifierPressed,
-        (event) => isTerminalLinkModifierPressed(event, settings.shortcutModifier),
-        (path) => openPath(path, configuration.externalEditorForProject(tab.projectId)),
-      ),
-    );
-    installTerminalTitle(tab);
-    installTerminalAgentStatus(tab);
-    installTerminalInput(tab);
-    enableWebgl(tab);
-    fitTab(tab);
-    if (startImmediately) void startTab(tab);
+    if (options.start !== false) {
+      if (!(await initializeRuntime(tab))) return tab;
+      void startTab(tab);
+    }
     return tab;
+  }
+
+  function restoreTabs(
+    descriptors: readonly (TabOptions & { projectId: string; cwd: string })[],
+  ): TerminalTab[] {
+    if (disposed) return [];
+    const restored: TerminalTab[] = [];
+    const availableTabs = [...tabs];
+    for (const descriptor of descriptors) {
+      const tab = createTabDescriptor(
+        descriptor.projectId,
+        descriptor.cwd,
+        { ...descriptor, start: false, activate: false },
+        availableTabs,
+      );
+      restored.push(tab);
+      availableTabs.push(tab);
+    }
+    // A single array mutation coalesces sidebar, persistence, and registration effects.
+    tabs.push(...restored);
+    return restored;
   }
 
   function setTabShortcutOrder(orderedTabIds: readonly string[]): void {
@@ -211,19 +282,22 @@ export function useTerminalTabs(configuration: {
     const key = `${tab.id}\0${ownerId}`;
     let owner = terminalContainerRefs.get(key);
     if (owner) return owner;
-    owner = createTerminalMountRef(tab.mount, scheduleFit);
+    owner = createTerminalMountRef(tab.mount, (target) => {
+      if (target && tab.status !== "stopped") void initializeRuntime(tab);
+      scheduleFit();
+    });
     terminalContainerRefs.set(key, owner);
     return owner;
   }
 
-  function installTerminalTitle(tab: TerminalTab): void {
+  function installTerminalTitle(tab: InitializedTerminalTab): void {
     tab.terminal.onTitleChange((title) => {
       tab.terminalTitle = normalizeTerminalTitle(title);
       activityMonitor.trigger();
     });
   }
 
-  function installTerminalAgentStatus(tab: TerminalTab): void {
+  function installTerminalAgentStatus(tab: InitializedTerminalTab): void {
     tab.terminal.parser.registerOscHandler(TERMARC_AGENT_OSC, (data) => {
       const agentMarker = parseTerminalAgentMarker(data);
       if (agentMarker) {
@@ -263,7 +337,7 @@ export function useTerminalTabs(configuration: {
     });
   }
 
-  function installTerminalInput(tab: TerminalTab): void {
+  function installTerminalInput(tab: InitializedTerminalTab): void {
     tab.terminal.attachCustomKeyEventHandler((event) => {
       const modifierPressed = settings.shortcutModifier === "ctrl" ? event.ctrlKey : event.metaKey;
       const otherModifierPressed =
@@ -312,7 +386,7 @@ export function useTerminalTabs(configuration: {
     });
   }
 
-  function enableWebgl(tab: TerminalTab): void {
+  function enableWebgl(tab: InitializedTerminalTab): void {
     try {
       const addon = new WebglAddon();
       addon.onContextLoss(() => {
@@ -333,7 +407,13 @@ export function useTerminalTabs(configuration: {
     scheduleFit();
     // Capture the requested tab instead of reading activeTab at callback time;
     // a subsequent selection change must not focus the wrong terminal.
-    requestAnimationFrame(() => tabs.find((tab) => tab.id === id)?.terminal.focus());
+    requestAnimationFrame(() => {
+      const tab = tabs.find((candidate) => candidate.id === id);
+      if (!tab || tab.status === "stopped") return;
+      void initializeRuntime(tab).then((initialized) => {
+        if (initialized && activeTabId.value === initialized.id) initialized.terminal.focus();
+      });
+    });
   }
 
   function scheduleAutoRestart(tab: TerminalTab): void {
@@ -362,16 +442,16 @@ export function useTerminalTabs(configuration: {
   }
 
   function fitTab(tab: TerminalTab): void {
-    if (tab.disposed) return;
-    const fitted = fitTerminalToContainer(tab.mount.target, tab.terminal, () => tab.fitAddon.fit());
-    if (fitted && tab.session)
-      void resizeTerminal(tab.session.id, tab.terminal.rows, tab.terminal.cols).catch(
-        console.error,
-      );
+    if (tab.disposed || !tab.mount.target?.isConnected || !tab.terminal || !tab.fitAddon) return;
+    // FitAddon emits xterm's resize event when dimensions actually change;
+    // installTerminalInput owns the single corresponding PTY resize call.
+    fitTerminalToContainer(tab.mount.target, tab.terminal, () => tab.fitAddon?.fit());
   }
 
   function fitVisibleTerminals(): void {
-    for (const tab of tabs) fitTab(tab);
+    for (const tab of tabs) {
+      if (tab.mount.target?.isConnected) fitTab(tab);
+    }
   }
 
   function scheduleFit(): void {
@@ -383,19 +463,12 @@ export function useTerminalTabs(configuration: {
   }
 
   async function fitActiveTerminalAfterLayout(): Promise<void> {
-    // Explicit layout transitions can otherwise leave xterm one paint behind.
     await nextTick();
-    fitVisibleTerminals();
+    scheduleFit();
   }
 
   function fitHostResize(): void {
-    // ResizeObserver runs after layout and before paint. Fit synchronously so
-    // xterm's renderer cannot paint at the terminal host's previous width.
-    if (resizeFrame !== undefined) {
-      cancelAnimationFrame(resizeFrame);
-      resizeFrame = undefined;
-    }
-    fitVisibleTerminals();
+    scheduleFit();
   }
 
   function sendBytes(tab: TerminalTab, bytes: Uint8Array): void {
@@ -435,7 +508,7 @@ export function useTerminalTabs(configuration: {
   async function copyTerminal(id: string): Promise<TerminalCopyResult> {
     const tab = tabs.find((item) => item.id === id);
     if (!tab) return "empty";
-    return copyTerminalSelection(tab.terminal);
+    return tab.terminal ? copyTerminalSelection(tab.terminal) : "empty";
   }
 
   async function pasteTerminal(id: string): Promise<"pasted" | "failed" | "empty"> {
@@ -444,6 +517,7 @@ export function useTerminalTabs(configuration: {
     try {
       const text = await readClipboardText();
       if (!text) return "empty";
+      if (!tab.terminal) return "failed";
       tab.terminal.paste(text);
       tab.terminal.focus();
       return "pasted";
@@ -453,6 +527,8 @@ export function useTerminalTabs(configuration: {
   }
 
   async function startTab(tab: TerminalTab): Promise<TerminalStartResult> {
+    // Claim this start before waiting for fonts/runtime construction. A stop or
+    // newer start increments the generation and cancels this pending operation.
     const generation = ++tab.startGeneration;
     tab.session = undefined;
     tab.terminalTitle = undefined;
@@ -464,14 +540,29 @@ export function useTerminalTabs(configuration: {
     const isFixedProcess = tab.launch.kind !== "shell";
     const isCommand = tab.launch.kind === "command";
     setTabStatus(tab, "starting", isFixedProcess ? "Starting command…" : "Starting shell…");
-    tab.terminal.reset();
+
+    let initialized: InitializedTerminalTab | undefined;
+    try {
+      initialized = await initializeRuntime(tab);
+    } catch (error) {
+      if (generation === tab.startGeneration && !tab.disposed) {
+        setTabStatus(tab, "error", String(error));
+      }
+      throw error;
+    }
+    if (!initialized || tab.disposed || tab.stopRequested || generation !== tab.startGeneration) {
+      return { outcome: "cancelled" };
+    }
+    tab = initialized;
+    const terminal = initialized.terminal;
+    terminal.reset();
     await nextTick();
     fitTab(tab);
     const result = await startWithTerminalEventRace(
       (onEvent) =>
         startTerminal({
-          rows: tab.terminal.rows,
-          cols: tab.terminal.cols,
+          rows: terminal.rows,
+          cols: terminal.cols,
           cwd: tab.cwd,
           launch:
             tab.launch.kind === "shell"
@@ -490,7 +581,7 @@ export function useTerminalTabs(configuration: {
               : undefined,
           onOutput: (data) => {
             if (!tab.disposed && generation === tab.startGeneration)
-              tab.terminal.write(new Uint8Array(data));
+              terminal.write(new Uint8Array(data));
           },
           onEvent,
         }),
@@ -532,7 +623,7 @@ export function useTerminalTabs(configuration: {
     }
     if (result.outcome === "failed") {
       setTabStatus(tab, "error", result.error);
-      tab.terminal.write(`\r\n\x1b[31mFailed to start PTY: ${result.error}\x1b[0m\r\n`);
+      terminal.write(`\r\n\x1b[31mFailed to start PTY: ${result.error}\x1b[0m\r\n`);
       if (isCommand && !tab.stopRequested) scheduleAutoRestart(tab);
       return result;
     }
@@ -544,7 +635,7 @@ export function useTerminalTabs(configuration: {
       `${started.shell} · ${started.pid ? `PID ${started.pid}` : "running"}`,
     );
     void activityMonitor.refresh();
-    if (tab.id === activeTabId.value) tab.terminal.focus();
+    if (tab.id === activeTabId.value) terminal.focus();
     return result;
   }
 
@@ -592,24 +683,24 @@ export function useTerminalTabs(configuration: {
     tab.linkDisposable = undefined;
     tab.copyDisposable?.dispose();
     tab.copyDisposable = undefined;
-    tab.terminal.dispose();
+    tab.terminal?.dispose();
     if (tab.mount.target) unmountTerminalRoot(tab.mount, tab.mount.target);
     for (const key of terminalContainerRefs.keys()) {
       if (key.startsWith(`${tab.id}\0`)) terminalContainerRefs.delete(key);
     }
     tabs.splice(index, 1);
     if (session) await stopTerminal(session.id).catch(console.error);
-    if (wasActive) activeTabId.value = nextId;
+    if (wasActive && activeTabId.value === id) activeTabId.value = nextId;
     await nextTick();
     scheduleFit();
     if (wasActive && nextId) {
-      requestAnimationFrame(() => activeTab.value?.terminal.focus());
+      requestAnimationFrame(() => activeTab.value?.terminal?.focus());
     }
   }
 
   function clearActiveTab(): void {
-    activeTab.value?.terminal.clear();
-    activeTab.value?.terminal.focus();
+    activeTab.value?.terminal?.clear();
+    activeTab.value?.terminal?.focus();
   }
 
   watch(activeTabId, scheduleFit, { flush: "post" });
@@ -617,7 +708,7 @@ export function useTerminalTabs(configuration: {
   watch(
     () => settings.terminalFontFamily,
     (fontFamily) => {
-      for (const tab of tabs) tab.terminal.options.fontFamily = fontFamily;
+      for (const tab of tabs) if (tab.terminal) tab.terminal.options.fontFamily = fontFamily;
       scheduleFit();
     },
   );
@@ -625,7 +716,7 @@ export function useTerminalTabs(configuration: {
   watch(
     () => settings.terminalFontSize,
     (fontSize) => {
-      for (const tab of tabs) tab.terminal.options.fontSize = fontSize;
+      for (const tab of tabs) if (tab.terminal) tab.terminal.options.fontSize = fontSize;
       scheduleFit();
     },
   );
@@ -633,7 +724,7 @@ export function useTerminalTabs(configuration: {
   watch(
     () => settings.colorTheme,
     (theme) => {
-      for (const tab of tabs) tab.terminal.options.theme = terminalTheme(theme);
+      for (const tab of tabs) if (tab.terminal) tab.terminal.options.theme = terminalTheme(theme);
     },
   );
 
@@ -738,7 +829,11 @@ export function useTerminalTabs(configuration: {
     return tabs.some((tab) => tab.mount.root.contains(document.activeElement));
   }
   function focusActiveTerminal(): void {
-    activeTab.value?.terminal.focus();
+    const tab = activeTab.value;
+    if (!tab || tab.status === "stopped") return;
+    void initializeRuntime(tab).then((initialized) => {
+      if (initialized && activeTabId.value === initialized.id) initialized.terminal.focus();
+    });
   }
   function start(projectId: string, cwd: string): void {
     if (disposed || started) return;
@@ -775,7 +870,7 @@ export function useTerminalTabs(configuration: {
       tab.linkDisposable = undefined;
       tab.copyDisposable?.dispose();
       tab.copyDisposable = undefined;
-      tab.terminal.dispose();
+      tab.terminal?.dispose();
       if (tab.mount.target) unmountTerminalRoot(tab.mount, tab.mount.target);
       if (tab.session) void stopTerminal(tab.session.id);
     }
@@ -788,6 +883,7 @@ export function useTerminalTabs(configuration: {
     activeTab,
     isEmpty,
     createTab,
+    restoreTabs,
     startTab,
     selectTab,
     closeTab,

@@ -21,8 +21,7 @@ export const AGENT_EXTENSION_OPTIONS: readonly AgentExtensionOption[] = [
   {
     id: "pi",
     name: "Pi",
-    description:
-      "Install the Termarc status extension so Pi can report when it is processing or waiting.",
+    description: "Install the Termarc extension so Pi can report when it is processing or waiting.",
     reloadHint: "Restart Pi or run /reload to activate it.",
   },
 ];

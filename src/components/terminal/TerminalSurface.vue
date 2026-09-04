@@ -22,7 +22,7 @@ const host = ref<HTMLElement>();
 const contextMenu = ref<{ x: number; y: number }>();
 const mainTab = computed(() => props.tabs.find((tab) => tab.id === props.mainTerminalId));
 const contextMenuItems = computed<ContextMenuItem[]>(() => [
-  { id: "copy", label: "Copy", disabled: !mainTab.value?.terminal.hasSelection() },
+  { id: "copy", label: "Copy", disabled: !mainTab.value?.terminal?.hasSelection() },
   {
     id: "paste",
     label: "Paste",

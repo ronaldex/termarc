@@ -8,6 +8,10 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
 import "./styles/forms.css";
+import { markStartup, measureStartup } from "./utils/startupPerformance";
+
+markStartup("entry");
+measureStartup("document-to-entry", "document", "entry");
 
 // Production uses only Termarc's contextual actions. Keep the WebView menu in
 // development so `tauri dev` still exposes Reload and Inspect Element.
@@ -16,3 +20,4 @@ if (!import.meta.env.DEV) {
 }
 
 createApp(App).mount("#app");
+markStartup("vue-mounted");

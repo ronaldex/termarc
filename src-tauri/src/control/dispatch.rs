@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn shared_extension_protocol_fixtures_cover_all_operations_and_envelopes() {
         let fixtures: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../extensions/pi/fixtures/control-protocol.json"
+            "../../../extensions/pi/termarc/fixtures/control-protocol.json"
         ))
         .unwrap();
         assert_eq!(fixtures["protocolVersion"], PROTOCOL_VERSION);

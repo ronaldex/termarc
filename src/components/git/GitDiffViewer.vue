@@ -15,10 +15,11 @@ const props = withDefaults(
   defineProps<{
     directory?: string;
     active: boolean;
+    enabled?: boolean;
     fontSize?: number;
     externalEditor: ExternalEditor;
   }>(),
-  { fontSize: 13 },
+  { enabled: true, fontSize: 13 },
 );
 const emit = defineEmits<{
   available: [value: boolean];
@@ -27,7 +28,11 @@ const emit = defineEmits<{
 const { settings } = useAppSettings();
 const panelElement = ref<HTMLElement>();
 const expandedView = ref<InstanceType<typeof ExpandedGitDiff>>();
-const { state, loading, refresh } = useGitDiff(toRef(props, "directory"), toRef(props, "active"));
+const { state, loading, refresh } = useGitDiff(
+  toRef(props, "directory"),
+  toRef(props, "active"),
+  toRef(props, "enabled"),
+);
 
 const files = computed(() => {
   const result = state.value;
@@ -111,7 +116,7 @@ watch(
     // A mode or polling transition may temporarily clear the result while a
     // refresh is in flight. Keep the last known availability until the selected
     // project changes (App.vue resets it there) or a new result arrives.
-    if (result) emit("available", Boolean(result.error || files.value.length));
+    if (result) emit("available", Boolean(result.repository || result.error));
     void revealPendingFile();
   },
   { immediate: true },

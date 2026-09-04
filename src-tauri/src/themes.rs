@@ -60,7 +60,13 @@ pub(crate) struct ThemeDefinition {
 }
 
 #[tauri::command]
-pub(crate) fn load_custom_themes() -> Vec<ThemeDefinition> {
+pub(crate) async fn load_custom_themes() -> Vec<ThemeDefinition> {
+    tauri::async_runtime::spawn_blocking(load_custom_themes_blocking)
+        .await
+        .unwrap_or_default()
+}
+
+fn load_custom_themes_blocking() -> Vec<ThemeDefinition> {
     let directory = crate::paths::themes_directory();
     let Ok(entries) = fs::read_dir(directory) else {
         return Vec::new();

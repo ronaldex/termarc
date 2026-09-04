@@ -2,7 +2,11 @@ import { watch, type Ref } from "vue";
 import type { ProjectTreeProject } from "../types/project";
 import type { SidebarSelection } from "../types/sidebar";
 import type { TerminalTabState } from "../types/terminal";
-import { numberedSidebarShortcuts } from "../utils/sidebarShortcuts";
+import {
+  numberedSidebarShortcuts,
+  sidebarShortcutKey,
+  type SidebarShortcutSelection,
+} from "../utils/sidebarShortcuts";
 import { normalizedTerminalFamilyModel } from "../utils/terminalFamily";
 
 export function terminalCycleNeedsWorkspaceFocus(
@@ -24,12 +28,35 @@ export function terminalSelectionAfterRemoval(
   previousTabs: readonly TerminalTabState[],
   currentTabs: readonly TerminalTabState[],
   selection: SidebarSelection,
+  projects: readonly ProjectTreeProject[],
 ): SidebarSelection | undefined {
   if (
     (selection.kind !== "terminal" && selection.kind !== "subagent") ||
     currentTabs.some((tab) => tab.id === selection.tabId)
   ) {
     return;
+  }
+
+  const previousShortcuts = numberedSidebarShortcuts(projects, previousTabs).map(
+    ({ selection: shortcutSelection }) => shortcutSelection,
+  );
+  const removedIndex = previousShortcuts.findIndex(
+    (shortcutSelection) =>
+      (shortcutSelection.kind === "terminal" || shortcutSelection.kind === "subagent") &&
+      shortcutSelection.tabId === selection.tabId,
+  );
+  const preceding = removedIndex > 0 ? previousShortcuts[removedIndex - 1] : undefined;
+  const currentShortcutKeys = new Set(
+    numberedSidebarShortcuts(projects, currentTabs).map(({ selection: shortcutSelection }) =>
+      sidebarShortcutKey(shortcutSelection),
+    ),
+  );
+  if (
+    preceding &&
+    isCloseFocusTarget(preceding) &&
+    currentShortcutKeys.has(sidebarShortcutKey(preceding))
+  ) {
+    return preceding;
   }
 
   if (selection.kind === "subagent") {
@@ -102,6 +129,14 @@ export function terminalSelectionAfterRemoval(
         kind: "add-terminal",
         projectId: selection.projectId,
       };
+}
+
+function isCloseFocusTarget(
+  selection: SidebarShortcutSelection,
+): selection is Extract<SidebarShortcutSelection, { kind: "agent" | "subagent" | "terminal" }> {
+  return (
+    selection.kind === "agent" || selection.kind === "subagent" || selection.kind === "terminal"
+  );
 }
 
 function normalizedProjectShellIds(tabs: readonly TerminalTabState[], projectId: string): string[] {
@@ -242,11 +277,10 @@ export function useWorkspaceTerminalNavigation(options: {
         previousTabs,
         options.tabs,
         options.selection.value,
+        options.projects.value,
       );
-      if (nextSelection?.kind === "terminal") {
-        options.selectTerminal(nextSelection.projectId, nextSelection.tabId);
-        requestAnimationFrame(options.focusSidebarTree);
-      } else if (
+      if (
+        nextSelection?.kind === "terminal" ||
         nextSelection?.kind === "subagent" ||
         nextSelection?.kind === "agent" ||
         nextSelection?.kind === "command"

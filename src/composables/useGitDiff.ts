@@ -9,11 +9,11 @@ import {
 export type GitDiffState = GitDiff | GitDiffSummaryResult;
 
 const EXPANDED_POLL_INTERVAL = 2_000;
-const COLLAPSED_POLL_INTERVAL = 10_000;
 
 export function useGitDiff(
   directory: Readonly<Ref<string | undefined>>,
   active: Readonly<Ref<boolean>>,
+  enabled: Readonly<Ref<boolean>> = active,
 ) {
   const state = ref<GitDiffState>();
   const loading = ref(false);
@@ -30,6 +30,9 @@ export function useGitDiff(
   async function requestRefresh(queueIfBusy: boolean): Promise<void> {
     const requestedDirectory = directory.value;
     const requestedActive = active.value;
+    // Probe once after workspace restoration so Git availability is known, but
+    // reserve continuous polling and full diffs for the visible panel.
+    if (!enabled.value || document.hidden) return;
     if (!requestedDirectory) {
       directoryGeneration += 1;
       refreshQueued = false;
@@ -78,17 +81,14 @@ export function useGitDiff(
     }
   }
 
-  function restartPolling(expanded: boolean): void {
+  function restartPolling(): void {
     if (timer !== undefined) {
       window.clearInterval(timer);
       timer = undefined;
     }
-    if (!directory.value || document.hidden) return;
+    if (!active.value || !directory.value || document.hidden) return;
 
-    timer = window.setInterval(
-      () => void requestRefresh(false),
-      expanded ? EXPANDED_POLL_INTERVAL : COLLAPSED_POLL_INTERVAL,
-    );
+    timer = window.setInterval(() => void requestRefresh(false), EXPANDED_POLL_INTERVAL);
   }
 
   watch(
@@ -96,8 +96,8 @@ export function useGitDiff(
     () => {
       directoryGeneration += 1;
       state.value = undefined;
-      void refresh();
-      restartPolling(active.value);
+      if (enabled.value) void refresh();
+      restartPolling();
     },
     { immediate: true },
   );
@@ -105,8 +105,8 @@ export function useGitDiff(
   watch(
     active,
     (isActive, wasActive) => {
-      restartPolling(isActive);
-      if (wasActive !== undefined && isActive !== wasActive) {
+      restartPolling();
+      if (isActive && wasActive !== undefined && isActive !== wasActive) {
         directoryGeneration += 1;
         // Preserve the last result while refreshing. Clearing it here makes a
         // conditionally available Git sidebar remove its own active mode.
@@ -116,9 +116,14 @@ export function useGitDiff(
     { immediate: true },
   );
 
+  watch(enabled, (isEnabled, wasEnabled) => {
+    restartPolling();
+    if (isEnabled && !wasEnabled) void refresh();
+  });
+
   function handleVisibilityChange(): void {
-    restartPolling(active.value);
-    if (!document.hidden) void refresh();
+    restartPolling();
+    if (!document.hidden && enabled.value) void refresh();
   }
 
   onMounted(() => document.addEventListener("visibilitychange", handleVisibilityChange));

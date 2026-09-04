@@ -86,8 +86,9 @@ export type TerminalTabState = TerminalActivity & {
 
 /** Runtime-only resources owned by the terminal tabs facade. */
 export type TerminalRuntime = {
-  terminal: Terminal;
-  fitAddon: FitAddon;
+  /** Created only when a terminal is started or has a visible runtime mount. */
+  terminal?: Terminal;
+  fitAddon?: FitAddon;
   webglAddon?: WebglAddon;
   linkDisposable?: IDisposable;
   copyDisposable?: IDisposable;
@@ -106,3 +107,9 @@ export type TerminalRuntime = {
 };
 
 export type TerminalTab = TerminalTabState & TerminalRuntime;
+
+/** A tab whose xterm resources have been initialized. */
+export type InitializedTerminalTab = TerminalTab & {
+  terminal: Terminal;
+  fitAddon: FitAddon;
+};

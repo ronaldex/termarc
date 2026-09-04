@@ -61,6 +61,70 @@ export function subagentWaitArguments(id: string, returnOnResult = true): string
   ];
 }
 
+export function subagentCloseArguments(id: string): string[] {
+  return ["--json", "subagents", "close", id];
+}
+
+export function isDirectSubagentResultCommand(
+  commandArguments: readonly string[],
+): commandArguments is readonly ["result", string] {
+  return (
+    commandArguments.length === 2 &&
+    commandArguments[0] === "result" &&
+    commandArguments[1].length > 0
+  );
+}
+
+export function shouldAutoCloseDirectResult(
+  commandArguments: readonly string[],
+  keepOpen = false,
+): boolean {
+  return !keepOpen && isDirectSubagentResultCommand(commandArguments);
+}
+
+export type ConsumedSubagentResult<T> = {
+  result: T;
+  retention:
+    | { status: "closed"; id: string }
+    | { status: "kept-open"; id: string }
+    | { status: "close-failed"; id: string; error: string };
+};
+
+export async function autoCloseConsumedSubagent<T>(
+  pi: Pick<ExtensionAPI, "exec">,
+  cli: string,
+  id: string,
+  result: T,
+  keepOpen = false,
+  signal?: AbortSignal,
+): Promise<ConsumedSubagentResult<T>> {
+  if (keepOpen) return { result, retention: { status: "kept-open", id } };
+
+  try {
+    const closed = await pi.exec(cli, subagentCloseArguments(id), { signal, timeout: 5_000 });
+    if (closed.code !== 0) {
+      return {
+        result,
+        retention: {
+          status: "close-failed",
+          id,
+          error: closed.stderr || "Termarc subagent close failed",
+        },
+      };
+    }
+    return { result, retention: { status: "closed", id } };
+  } catch (error) {
+    return {
+      result,
+      retention: {
+        status: "close-failed",
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
 export function subagentPiSpawnArguments(name: string, piArguments: string[]): string[] {
   return ["--json", "subagents", "spawn", "--name", name, "--kind", "pi", "--", ...piArguments];
 }

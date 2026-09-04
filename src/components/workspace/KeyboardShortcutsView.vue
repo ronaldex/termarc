@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { useAppSettings } from "../../composables/useAppSettings";
 
 const { settings } = useAppSettings();
 const emit = defineEmits<{ close: [] }>();
 const modal = ref<HTMLElement>();
+const closeButton = ref<HTMLButtonElement>();
 const modifier = computed(() => (settings.shortcutModifier === "meta" ? "⌘" : "Ctrl"));
 const shortcuts = [
   ["Open settings", ","],
@@ -29,14 +30,26 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     modal.value?.scrollBy({ top: event.key === "ArrowDown" ? 48 : -48 });
+    return;
+  }
+  if (event.key !== "Tab") return;
+
+  const focusable = Array.from(
+    modal.value?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? [],
+  );
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
   }
 }
 
-onMounted(() => {
-  window.addEventListener("keydown", handleKeydown);
-  void nextTick(() => modal.value?.focus());
-});
-onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
+onMounted(() => void nextTick(() => closeButton.value?.focus()));
 </script>
 
 <template>
@@ -48,10 +61,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
       aria-modal="true"
       aria-labelledby="shortcuts-title"
       tabindex="-1"
+      @keydown="handleKeydown"
     >
       <header>
         <span id="shortcuts-title">Keyboard shortcuts</span
-        ><button type="button" aria-label="Close" @click="emit('close')">×</button>
+        ><button ref="closeButton" type="button" aria-label="Close" @click="emit('close')">
+          ×
+        </button>
       </header>
       <h2>Shortcuts</h2>
       <div class="shortcut-list">

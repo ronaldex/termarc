@@ -8,14 +8,24 @@ export type TerminalAppearance = {
   colorTheme: ColorTheme;
 };
 
-export async function prepareTerminalFonts(): Promise<void> {
-  // xterm measures its cell size when it opens. Load both bundled weights
-  // first so text and Nerd Font icons always use the same monospace metrics.
-  await Promise.all([
-    document.fonts.load('400 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
-    document.fonts.load('600 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
-  ]);
-  await document.fonts.ready;
+let fontPreparation: Promise<void> | undefined;
+
+export function prepareTerminalFonts(): Promise<void> {
+  // xterm measures its cell size when it opens. Share this work across every
+  // terminal; a failed attempt is cleared so a later activation can retry.
+  if (!fontPreparation) {
+    fontPreparation = Promise.all([
+      document.fonts.load('400 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
+      document.fonts.load('600 13px "Termarc JetBrainsMono Nerd Font"', "termarc \u{f07c}"),
+      document.fonts.ready,
+    ])
+      .then(() => undefined)
+      .catch((error) => {
+        fontPreparation = undefined;
+        throw error;
+      });
+  }
+  return fontPreparation;
 }
 
 export function createTerminal(appearance: TerminalAppearance): Terminal {

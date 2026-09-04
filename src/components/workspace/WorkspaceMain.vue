@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, ref } from "vue";
 import type { Project } from "../../types/project";
 import type { SidebarSelection } from "../../types/sidebar";
 import type { TerminalTab } from "../../types/terminal";
-import ProjectManagementView from "../settings/views/ProjectManagementView.vue";
-import ProjectSettingsView from "../settings/views/ProjectSettingsView.vue";
-import AppSettingsView from "../settings/views/AppSettingsView.vue";
-import CommandRunView from "./CommandRunView.vue";
-import ProcessSettingsView from "../settings/views/ProcessSettingsView.vue";
 import TerminalStoppedView from "../terminal/TerminalStoppedView.vue";
 import TerminalSurface from "../terminal/TerminalSurface.vue";
+
+const ProjectManagementView = defineAsyncComponent(
+  () => import("../settings/views/ProjectManagementView.vue"),
+);
+const ProjectSettingsView = defineAsyncComponent(
+  () => import("../settings/views/ProjectSettingsView.vue"),
+);
+const AppSettingsView = defineAsyncComponent(() => import("../settings/views/AppSettingsView.vue"));
+const CommandRunView = defineAsyncComponent(() => import("./CommandRunView.vue"));
+const ProcessSettingsView = defineAsyncComponent(
+  () => import("../settings/views/ProcessSettingsView.vue"),
+);
 
 const props = withDefaults(
   defineProps<{
@@ -103,13 +110,38 @@ function createTerminal(): void {
 }
 
 const mainPanel = ref<HTMLElement>();
+let contentObserver: MutationObserver | undefined;
 
 function focusContent(): void {
   const panel = mainPanel.value;
   if (!panel) return;
+  contentObserver?.disconnect();
   const action = panel.querySelector<HTMLElement>("button.primary");
   (action ?? panel).focus({ preventScroll: true });
+  const lazyViewExpected =
+    props.selection.kind !== "terminal" &&
+    props.selection.kind !== "subagent" &&
+    !(props.selection.kind === "command" && commandTab.value) &&
+    !(props.selection.kind === "agent" && agentTab.value);
+  if (action || !lazyViewExpected) return;
+
+  // A restored lazy view may resolve after startup focus routing. Hand focus
+  // to its primary action only while the workspace panel still owns focus.
+  contentObserver = new MutationObserver(() => {
+    if (document.activeElement !== panel) {
+      contentObserver?.disconnect();
+      contentObserver = undefined;
+      return;
+    }
+    const loadedAction = panel.querySelector<HTMLElement>("button.primary");
+    if (!loadedAction) return;
+    contentObserver?.disconnect();
+    contentObserver = undefined;
+    loadedAction.focus({ preventScroll: true });
+  });
+  contentObserver.observe(panel, { childList: true, subtree: true });
 }
+onBeforeUnmount(() => contentObserver?.disconnect());
 
 function activateFocusedContent(event: KeyboardEvent): void {
   if (event.key !== "Enter" || event.target !== mainPanel.value) return;

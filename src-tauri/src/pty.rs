@@ -709,7 +709,7 @@ mod tests {
     #[test]
     fn shared_ipc_fixture_overlaps_spawn_event_ack_and_start_pty_ownership() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../extensions/pi/fixtures/subagent-spawn-ipc.json"
+            "../../extensions/pi/termarc/fixtures/subagent-spawn-ipc.json"
         ))
         .unwrap();
         let event: SubagentSpawnEvent = serde_json::from_value(fixture["event"].clone()).unwrap();
