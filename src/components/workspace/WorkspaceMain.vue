@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref } from "vue";
 import type { Project } from "../../types/project";
+import type { RightSidebarMode } from "../../types/rightSidebar";
 import type { SidebarSelection } from "../../types/sidebar";
 import type { TerminalTab } from "../../types/terminal";
 import TerminalStoppedView from "../terminal/TerminalStoppedView.vue";
 import TerminalSurface from "../terminal/TerminalSurface.vue";
+import WorkspaceShortcutHints from "./WorkspaceShortcutHints.vue";
 
 const ProjectManagementView = defineAsyncComponent(
   () => import("../settings/views/ProjectManagementView.vue"),
@@ -27,6 +29,10 @@ const props = withDefaults(
     tabs: TerminalTab[];
     mainTerminalId?: string;
     isEmpty: boolean;
+    shortcutModifier: "meta" | "ctrl";
+    rightSidebarAvailable: boolean;
+    rightSidebarMode?: RightSidebarMode;
+    rightSidebarModes: RightSidebarMode[];
     terminalContainerRef: (tab: TerminalTab, ownerId: string) => (element: Element | null) => void;
   }>(),
   { workspaceReady: true },
@@ -289,7 +295,13 @@ defineExpose({ focusContent, hasContentFocus });
       </section>
     </template>
     <div v-else class="startup-blank" aria-hidden="true"></div>
-    <footer class="workspace-footer" aria-hidden="true"></footer>
+    <WorkspaceShortcutHints
+      :selection="selection"
+      :shortcut-modifier="shortcutModifier"
+      :right-sidebar-available="rightSidebarAvailable"
+      :right-sidebar-mode="rightSidebarMode"
+      :right-sidebar-modes="rightSidebarModes"
+    />
   </main>
 </template>
 
@@ -313,13 +325,6 @@ defineExpose({ focusContent, hasContentFocus });
 .main-panel > .terminal-shell {
   min-height: 0;
   height: 100%;
-}
-.workspace-footer {
-  min-width: 0;
-  grid-column: 1;
-  grid-row: 2;
-  border-top: 1px solid var(--color-border);
-  background: var(--panel-footer-background);
 }
 .main-stub {
   display: flex;

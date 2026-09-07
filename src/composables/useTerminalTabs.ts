@@ -505,6 +505,12 @@ export function useTerminalTabs(configuration: {
     if (tab) updateTerminalTitleOverride(tab, title);
   }
 
+  function sendTerminalText(id: string, text: string): void {
+    const tab = tabs.find((item) => item.id === id);
+    if (!tab || tab.status !== "running") throw new Error(`terminal is not running: ${id}`);
+    sendBytes(tab, new TextEncoder().encode(`${text}\r`));
+  }
+
   async function copyTerminal(id: string): Promise<TerminalCopyResult> {
     const tab = tabs.find((item) => item.id === id);
     if (!tab) return "empty";
@@ -889,6 +895,7 @@ export function useTerminalTabs(configuration: {
     closeTab,
     copyTerminal,
     pasteTerminal,
+    sendTerminalText,
     setTerminalTitleOverride,
     setTabShortcutOrder,
     reorderProjectTerminals,

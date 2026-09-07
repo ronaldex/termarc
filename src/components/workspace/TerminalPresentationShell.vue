@@ -98,6 +98,8 @@ defineExpose({
     :workspace-ready="workspaceReady"
     :tabs="tabs"
     :main-terminal-id="mainTerminalId"
+    :right-sidebar-mode="rightSidebarMode"
+    :right-sidebar-modes="rightSidebarModes"
     :terminal-container-ref="terminalContainerRef"
     @focus-terminal="emit('focusTerminal', $event)"
     @start-terminal="emit('startTerminal', $event)"

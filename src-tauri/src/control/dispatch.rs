@@ -11,6 +11,7 @@ use crate::{
     subagents::{
         DEFAULT_LIST_LIMIT, DEFAULT_OUTPUT_LIMIT, MAX_LIST_LIMIT, MAX_OUTPUT_READ, SubagentRegistry,
     },
+    workspace_router::WorkspaceRouter,
 };
 
 use super::protocol::{
@@ -26,6 +27,7 @@ type DispatchError = (&'static str, String);
 pub(crate) struct ControlDispatcher {
     subagents: SubagentRegistry,
     spawn_router: SpawnRouter,
+    workspace_router: Option<WorkspaceRouter>,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -34,8 +36,14 @@ impl ControlDispatcher {
         Self {
             subagents,
             spawn_router,
+            workspace_router: None,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub(crate) fn with_workspace_router(mut self, workspace_router: WorkspaceRouter) -> Self {
+        self.workspace_router = Some(workspace_router);
+        self
     }
 
     /// Cancels in-flight control requests before the server joins its workers.
@@ -190,6 +198,17 @@ impl ControlDispatcher {
                 .spawn_router
                 .close(&id)
                 .map(|()| ControlResult::Empty(EmptyResponse {})),
+            ControlRequest::Workspace { action, .. } => self
+                .workspace_router
+                .as_ref()
+                .ok_or((
+                    "workspace_unavailable",
+                    "workspace control is not available".into(),
+                ))
+                .and_then(|router| router.route(PROTOCOL_VERSION, action))
+                .map(|workspace| {
+                    ControlResult::Workspace(super::protocol::WorkspaceResponse { workspace })
+                }),
         };
 
         match result {
