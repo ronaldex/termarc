@@ -13,6 +13,7 @@ mod spawn_router;
 mod subagents;
 mod themes;
 mod windows;
+mod workspace_router;
 
 #[cfg(target_os = "macos")]
 use plugins::mac_rounded_corners;
@@ -75,9 +76,23 @@ pub fn run() {
                         .map_err(|error| format!("could not route close to window: {error}"))
                 });
             app.manage(spawn_router.clone());
+            let workspace_app_handle = app.handle().clone();
+            let workspace_router =
+                workspace_router::WorkspaceRouter::new(move |window_label, event| {
+                    let window = workspace_app_handle
+                        .get_webview_window(window_label)
+                        .ok_or_else(|| format!("Termarc window is unavailable: {window_label}"))?;
+                    window
+                        .emit(workspace_router::WORKSPACE_CONTROL_EVENT, event)
+                        .map_err(|error| {
+                            format!("could not route workspace control request: {error}")
+                        })
+                });
+            app.manage(workspace_router.clone());
             #[cfg(unix)]
             app.manage(control::ControlServer::start(
-                control::ControlDispatcher::new(subagents, spawn_router),
+                control::ControlDispatcher::new(subagents, spawn_router)
+                    .with_workspace_router(workspace_router),
             )?);
             Ok(())
         })
@@ -87,6 +102,8 @@ pub fn run() {
             spawn_router::acknowledge_subagent_spawn,
             spawn_router::detach_subagents,
             spawn_router::update_subagent_pi_state,
+            workspace_router::register_workspace,
+            workspace_router::acknowledge_workspace_control,
             notifications::notify_agent_ready,
             notifications::play_agent_ready_sound,
             paths::resolve_terminal_path,
@@ -128,6 +145,9 @@ pub fn run() {
                 window.state::<AppState>().stop_for_window(window.label());
                 window
                     .state::<spawn_router::SpawnRouter>()
+                    .unregister_window(window.label());
+                window
+                    .state::<workspace_router::WorkspaceRouter>()
                     .unregister_window(window.label());
             }
         })

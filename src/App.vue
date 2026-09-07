@@ -24,6 +24,7 @@ import { resolveExternalEditor } from "./settings/options";
 import { applyAppTheme, registerCustomThemes } from "./themes/themeCatalog";
 import { configurePlatformWindowStyle } from "./services/platformWindowStyle";
 import { createSubagentSpawnService } from "./services/subagentSpawns";
+import { createWorkspaceControlService } from "./services/workspaceControl";
 import {
   loadWorkspaceSelection,
   resolveWorkspaceSelection,
@@ -126,6 +127,7 @@ const {
   closeTab,
   copyTerminal,
   pasteTerminal,
+  sendTerminalText,
   setTerminalTitleOverride,
   setTabShortcutOrder,
   reorderProjectTerminals: reorderTerminalTabs,
@@ -164,6 +166,20 @@ const {
 });
 const commandRuns = useCommandRuns({ tabs, createTab, restartTab, stopTab, closeTab });
 const subagentSpawns = createSubagentSpawnService({ createTab, startTab, closeTab });
+const workspaceControl = createWorkspaceControlService({
+  projects,
+  tabs,
+  createTerminal: (projectId, cwd, parentTerminalId) =>
+    createTab(projectId, cwd, { parentTerminalId }),
+  startTerminal: startTab,
+  stopTerminal: stopTab,
+  closeTerminal: closeProjectTerminal,
+  sendTerminalText,
+  runCommand: (projectId, id, source) =>
+    source === "agent" ? runAgent(projectId, id) : runCommand(projectId, id),
+  stopCommand: (projectId, id, source) =>
+    source === "agent" ? stopAgent(projectId, id) : stopCommand(projectId, id),
+});
 watch(
   () => tabs.map((tab) => ({ id: tab.id, projectId: tab.projectId, launch: tab.launch })),
   () => subagentSpawns.update(tabs),
@@ -178,6 +194,7 @@ let appDisposed = false;
 const workspaceStateReady = ref(false);
 let closeInProgress = false;
 let unlistenCloseRequested: (() => void) | undefined;
+let unlistenWorkspaceControl: (() => void) | undefined;
 const {
   leftOpen: leftSidebarOpen,
   leftPresentation: leftSidebarPresentation,
@@ -706,6 +723,13 @@ useWorkspaceShortcuts({
 onMounted(async () => {
   markStartup("app-mounted");
   configurePlatformWindowStyle();
+  void workspaceControl
+    .start()
+    .then((unlisten) => {
+      if (appDisposed) unlisten();
+      else unlistenWorkspaceControl = unlisten;
+    })
+    .catch((error) => console.error("Could not listen for workspace control requests", error));
   void subagentSpawns
     .start()
     .catch((error) => console.error("Could not listen for subagent spawn requests", error));
@@ -784,6 +808,9 @@ onMounted(async () => {
     selectTab(restoredSelection.tabId);
   }
   workspaceStateReady.value = true;
+  await workspaceControl
+    .update()
+    .catch((error) => console.error("Could not register workspace", error));
   markStartup("workspace-ready");
   measureStartup("entry-to-workspace", "entry", "workspace-ready");
   saveWorkspaceSelection(sidebarSelection.value);
@@ -803,6 +830,18 @@ onMounted(async () => {
   // partial terminal list.
   persistOpenTerminals();
 });
+watch(
+  () => [
+    projects.value.map((project) => project.id),
+    tabs.map((tab) => `${tab.id}:${tab.projectId}`),
+  ],
+  () => {
+    void workspaceControl
+      .update()
+      .catch((error) => console.error("Could not update workspace registration", error));
+  },
+  { deep: true },
+);
 watch(
   () => settings.terminalFontSize,
   (fontSize) => {
@@ -854,6 +893,8 @@ onBeforeUnmount(() => {
   if (toastTimeout !== undefined) window.clearTimeout(toastTimeout);
   unlistenCloseRequested?.();
   unlistenCloseRequested = undefined;
+  unlistenWorkspaceControl?.();
+  unlistenWorkspaceControl = undefined;
   persistOpenTerminals();
   void flushPersistence().catch((error) => console.error("Could not flush projects", error));
   subagentSpawns.dispose();
@@ -959,6 +1000,8 @@ onBeforeUnmount(() => {
       :tabs="tabs"
       :main-terminal-id="mainTerminalId"
       :is-empty="isEmpty"
+      :shortcut-modifier="settings.shortcutModifier"
+      :right-sidebar-available="rightSidebarModes.length > 0"
       :terminal-container-ref="terminalContainerRef"
       :subterminal-ids="subterminalIds"
       :terminal-family-id="terminalFamily?.rootTabId"

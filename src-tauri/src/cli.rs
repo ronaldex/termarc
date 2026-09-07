@@ -224,6 +224,14 @@ fn execute_with_control(
         [group, rest @ ..] if group == "subagents" => {
             execute_subagents_with_control(rest, json, control_request)
         }
+        [group, rest @ ..]
+            if matches!(
+                group.as_str(),
+                "terminals" | "subterminals" | "agents" | "commands"
+            ) =>
+        {
+            execute_workspace_with_control(group, rest, json, control_request)
+        }
         [command] if matches!(command.as_str(), "launch" | "open") => launch(),
         [group, command] if group == "projects" && command == "list" => {
             let projects = load_projects()?;
@@ -307,6 +315,142 @@ struct ParsedSubagentCommand {
     request: crate::control::ControlRequest,
     timeout: Duration,
     output_mode: SubagentOutputMode,
+}
+
+fn execute_workspace_with_control(
+    group: &str,
+    arguments: &[String],
+    json: bool,
+    control_request: &dyn Fn(
+        crate::control::ControlRequest,
+        Duration,
+    )
+        -> Result<crate::control::ControlResult, crate::control::ClientError>,
+) -> Result<(), String> {
+    let resource = match group {
+        "terminals" => crate::workspace_router::WorkspaceResource::Terminals,
+        "subterminals" => crate::workspace_router::WorkspaceResource::Subterminals,
+        "agents" => crate::workspace_router::WorkspaceResource::Agents,
+        "commands" => crate::workspace_router::WorkspaceResource::Commands,
+        _ => unreachable!(),
+    };
+    if arguments
+        .first()
+        .is_some_and(|value| matches!(value.as_str(), "help" | "--help"))
+    {
+        print_workspace_help(group);
+        return Ok(());
+    }
+    let action = parse_workspace_action(resource, arguments)?;
+    let timeout = Duration::from_millis(action.timeout_ms.unwrap_or(5_000).saturating_add(5_000));
+    let result = control_request(
+        crate::control::ControlRequest::Workspace {
+            protocol_version: crate::control::PROTOCOL_VERSION,
+            action,
+        },
+        timeout,
+    )
+    .map_err(|error| error.to_string())?;
+    let crate::control::ControlResult::Workspace(result) = result else {
+        return Err("control service returned invalid workspace data".into());
+    };
+    print_value(&result.workspace, json);
+    Ok(())
+}
+
+fn parse_workspace_action(
+    resource: crate::workspace_router::WorkspaceResource,
+    arguments: &[String],
+) -> Result<crate::workspace_router::WorkspaceAction, String> {
+    let operation = match arguments.first().map(String::as_str) {
+        Some("list") => crate::workspace_router::WorkspaceOperation::List,
+        Some("status") => crate::workspace_router::WorkspaceOperation::Status,
+        Some("create") => crate::workspace_router::WorkspaceOperation::Create,
+        Some("run") => crate::workspace_router::WorkspaceOperation::Run,
+        Some("send") => crate::workspace_router::WorkspaceOperation::Send,
+        Some("wait") => crate::workspace_router::WorkspaceOperation::Wait,
+        Some("stop") => crate::workspace_router::WorkspaceOperation::Stop,
+        Some("close") => crate::workspace_router::WorkspaceOperation::Close,
+        _ => return Err("invalid workspace command; run `termarc --help`".into()),
+    };
+    let mut action = crate::workspace_router::WorkspaceAction {
+        resource,
+        action: operation,
+        id: None,
+        project_id: None,
+        parent_terminal_id: None,
+        cwd: None,
+        name: None,
+        text: None,
+        timeout_ms: None,
+    };
+    let mut index = 1;
+    if matches!(
+        operation,
+        crate::workspace_router::WorkspaceOperation::Status
+            | crate::workspace_router::WorkspaceOperation::Run
+            | crate::workspace_router::WorkspaceOperation::Send
+            | crate::workspace_router::WorkspaceOperation::Wait
+            | crate::workspace_router::WorkspaceOperation::Stop
+            | crate::workspace_router::WorkspaceOperation::Close
+    ) && arguments
+        .get(index)
+        .is_some_and(|value| !value.starts_with('-'))
+    {
+        action.id = Some(arguments[index].clone());
+        index += 1;
+    }
+    while index < arguments.len() {
+        let flag = arguments[index].as_str();
+        index += 1;
+        let value = arguments
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value"))?
+            .clone();
+        match flag {
+            "--project" => action.project_id = Some(value),
+            "--parent" => action.parent_terminal_id = Some(value),
+            "--cwd" => action.cwd = Some(value),
+            "--name" => action.name = Some(value),
+            "--text" => action.text = Some(value),
+            "--timeout" => {
+                action.timeout_ms = Some(value.parse().map_err(|_| "invalid value for --timeout")?)
+            }
+            _ => return Err(format!("unknown workspace option: {flag}")),
+        }
+        index += 1;
+    }
+    if matches!(
+        operation,
+        crate::workspace_router::WorkspaceOperation::Create
+    ) && !matches!(
+        resource,
+        crate::workspace_router::WorkspaceResource::Terminals
+            | crate::workspace_router::WorkspaceResource::Subterminals
+    ) {
+        return Err("create is only supported for terminals and subterminals".into());
+    }
+    if matches!(
+        operation,
+        crate::workspace_router::WorkspaceOperation::Create
+    ) && action.project_id.is_none()
+        && action.parent_terminal_id.is_none()
+    {
+        return Err("create requires --project (or --parent for a subterminal)".into());
+    }
+    if matches!(
+        operation,
+        crate::workspace_router::WorkspaceOperation::Run
+            | crate::workspace_router::WorkspaceOperation::Status
+            | crate::workspace_router::WorkspaceOperation::Send
+            | crate::workspace_router::WorkspaceOperation::Wait
+            | crate::workspace_router::WorkspaceOperation::Stop
+            | crate::workspace_router::WorkspaceOperation::Close
+    ) && action.id.is_none()
+    {
+        return Err("command requires an ID".into());
+    }
+    Ok(action)
 }
 
 fn execute_subagents_with_control(
@@ -948,7 +1092,8 @@ fn print_value(value: &impl Serialize, json: bool) {
 mod tests {
     use super::{
         Project, SUBAGENT_SKILL, SubagentOutputMode, clear_subagent_result, execute_with_control,
-        parse_subagent_command, report_subagent_result, split_global_options,
+        parse_subagent_command, parse_workspace_action, report_subagent_result,
+        split_global_options,
     };
     use std::{
         fs,
@@ -1099,6 +1244,33 @@ mod tests {
 
     fn request_value(request: &crate::control::ControlRequest) -> serde_json::Value {
         serde_json::to_value(request).expect("request should serialize")
+    }
+
+    #[test]
+    fn workspace_commands_parse_into_typed_actions() {
+        let action = parse_workspace_action(
+            crate::workspace_router::WorkspaceResource::Subterminals,
+            &arguments(&["create", "--parent", "terminal-1", "--cwd", "/tmp"]),
+        )
+        .unwrap();
+        assert_eq!(
+            action.action,
+            crate::workspace_router::WorkspaceOperation::Create
+        );
+        assert_eq!(action.parent_terminal_id.as_deref(), Some("terminal-1"));
+        assert_eq!(action.cwd.as_deref(), Some("/tmp"));
+
+        let action = parse_workspace_action(
+            crate::workspace_router::WorkspaceResource::Commands,
+            &arguments(&["run", "build", "--project", "project-1"]),
+        )
+        .unwrap();
+        assert_eq!(
+            action.action,
+            crate::workspace_router::WorkspaceOperation::Run
+        );
+        assert_eq!(action.id.as_deref(), Some("build"));
+        assert_eq!(action.project_id.as_deref(), Some("project-1"));
     }
 
     #[test]
@@ -1335,7 +1507,13 @@ mod tests {
 
 fn print_help() {
     println!(
-        "Termarc command line interface\n\nUsage:\n  termarc [--json] <command> ...\n  termarc --help\n  termarc --version\n\nCommands:\n  launch | open                 Launch the Termarc macOS app.\n  status                        Show local Termarc configuration status.\n  subagents                     Verify the running subagent control service.\n  subagents help                Show subagent command grammar.\n  subagents skill               Show agent-oriented workflow guidance.\n  projects list                 List configured projects.\n  projects get <id>             Show a project.\n  projects create <name> <path> Add an existing directory as a project.\n  projects rename <id> <name>   Rename a project.\n  projects delete <id>          Delete a project (cannot delete the last one).\n\nOptions:\n  --help                        Show this help.\n  --version                     Print the CLI version.\n  --json                        Emit JSON output (before a spawn command's `--`)."
+        "Termarc command line interface\n\nUsage:\n  termarc [--json] <command> ...\n  termarc --help\n  termarc --version\n\nCommands:\n  launch | open                 Launch the Termarc macOS app.\n  status                        Show local Termarc configuration status.\n  subagents                     Verify the running subagent control service.\n  subagents help                Show subagent command grammar.\n  subagents skill               Show agent-oriented workflow guidance.\n  terminals <action>            Manage running shell terminals.\n  subterminals <action>         Manage child shell terminals.\n  commands <action>             Run and stop configured commands.\n  agents <action>               Run and stop configured agents.\n  projects list                 List configured projects.\n  projects get <id>             Show a project.\n  projects create <name> <path> Add an existing directory as a project.\n  projects rename <id> <name>   Rename a project.\n  projects delete <id>          Delete a project (cannot delete the last one).\n\nOptions:\n  --help                        Show this help.\n  --version                     Print the CLI version.\n  --json                        Emit JSON output (before a spawn command's `--`)."
+    );
+}
+
+fn print_workspace_help(group: &str) {
+    println!(
+        "Usage:\n  termarc {group} list [--project <project-id>] [--parent <terminal-id>]\n  termarc {group} status <id> [--project <project-id>]\n  termarc {group} create --project <project-id> [--cwd <path>] [--name <name>]\n  termarc {group} run <id> --project <project-id>\n  termarc {group} send <terminal-id> --text <text>\n  termarc {group} wait <id> [--timeout <milliseconds>]\n  termarc {group} stop <id> [--project <project-id>]\n  termarc {group} close <id> [--project <project-id>]\n\nTerminal creation is available for terminals and subterminals. Command and agent operations require --project."
     );
 }
 

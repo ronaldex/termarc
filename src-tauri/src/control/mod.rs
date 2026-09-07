@@ -8,7 +8,7 @@ mod socket;
 pub(crate) use client::request_at;
 pub(crate) use client::{ClientError, request, request_status};
 pub(crate) use dispatch::ControlDispatcher;
-pub(crate) use protocol::{ControlRequest, ControlResult, PROTOCOL_VERSION};
+pub(crate) use protocol::{ControlRequest, ControlResult, MAX_WAIT_MS, PROTOCOL_VERSION};
 #[cfg(test)]
 pub(crate) use protocol::{ControlResponse, MAX_MESSAGE_BYTES};
 #[cfg(unix)]

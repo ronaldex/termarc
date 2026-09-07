@@ -5,6 +5,7 @@ use crate::subagents::{
     SubagentProgressUpdate, SubagentResult, SubagentResultClear, SubagentResultUpdate,
     SubagentStatus, WaitResult,
 };
+use crate::workspace_router::WorkspaceAction;
 
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
 pub(crate) const MAX_MESSAGE_BYTES: usize = 64 * 1024;
@@ -96,6 +97,12 @@ pub(crate) enum ControlRequest {
         protocol_version: u32,
         id: String,
     },
+    Workspace {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u32,
+        #[serde(flatten)]
+        action: WorkspaceAction,
+    },
 }
 
 impl ControlRequest {
@@ -137,6 +144,9 @@ impl ControlRequest {
             }
             | Self::SubagentClose {
                 protocol_version, ..
+            }
+            | Self::Workspace {
+                protocol_version, ..
             } => *protocol_version,
         }
     }
@@ -168,6 +178,13 @@ pub(crate) struct SpawnResponse {
 #[serde(deny_unknown_fields)]
 pub(crate) struct EmptyResponse {}
 
+/// Deliberately tagged so arbitrary frontend workspace data cannot decode as another result.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceResponse {
+    pub(crate) workspace: serde_json::Value,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub(crate) enum ControlResult {
@@ -178,6 +195,7 @@ pub(crate) enum ControlResult {
     Output(OutputChunk),
     SubagentResult(SubagentResult),
     Wait(WaitResult),
+    Workspace(WorkspaceResponse),
     Empty(EmptyResponse),
 }
 
